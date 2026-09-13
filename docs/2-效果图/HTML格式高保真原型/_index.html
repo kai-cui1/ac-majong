@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>AC 麻将俱乐部 — UI 原型导航</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    body { background: var(--color-bg-wood); display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+    .index-container {
+      width: 480px; max-width: 92vw;
+      text-align: center;
+      padding: 40px 24px;
+    }
+    .index-logo {
+      width: 80px; height: 80px; border-radius: 20px;
+      background: linear-gradient(145deg, #d4a537 0%, #a07d1c 50%, #8b6820 100%);
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 42px; box-shadow: 0 8px 32px rgba(212,165,55,0.3);
+      border: 2px solid #e8c76b; margin-bottom: 20px;
+    }
+    .index-title { font-size: 26px; font-weight: 900; color: var(--color-gold); letter-spacing: 6px; margin-bottom: 6px; }
+    .index-subtitle { font-size: 13px; color: var(--color-text-muted); letter-spacing: 2px; margin-bottom: 36px; }
+
+    .page-list { display: flex; flex-direction: column; gap: 12px; width: 100%; }
+    .page-card {
+      display: flex; align-items: center; gap: 16px;
+      padding: 18px 20px; border-radius: 14px;
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(212,165,55,0.15);
+      color: var(--color-text-primary); text-decoration: none;
+      transition: all var(--transition-normal);
+      text-align: left;
+    }
+    .page-card:hover {
+      background: linear-gradient(135deg, rgba(212,165,55,0.08), transparent);
+      border-color: var(--color-gold-dark); transform: translateX(4px);
+    }
+    .page-icon {
+      width: 44px; height: 44px; border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px; flex-shrink: 0;
+      background: linear-gradient(135deg, rgba(212,165,55,0.12), rgba(212,165,55,0.03));
+    }
+    .page-info { flex: 1; text-align: left; }
+    .page-name { font-size: 17px; font-weight: 700; color: var(--color-text-primary); margin-bottom: 2px; }
+    .page-desc { font-size: 12px; color: var(--color-text-muted); line-height: 1.5; }
+    .page-tag {
+      display: inline-block; padding: 2px 10px; border-radius: 10px;
+      font-size: 10px; font-weight: 600; margin-top: 4px;
+    }
+    .tag-p0 { background: rgba(76,175,80,0.15); color: #4caf50; }
+    .tag-p1 { background: rgba(255,152,0,0.12); color: #ff9800; }
+    .tag-p2 { background: rgba(158,158,158,0.1); color: #9e9e9e; }
+
+    .divider { height: 1px; background: linear-gradient(to right, transparent, rgba(212,165,55,0.15), transparent); margin: 28px auto; width: 60%; }
+    .footer-note { font-size: 11px; color: var(--color-text-muted); margin-top: 32px; line-height: 1.7; }
+  </style>
+</head>
+<body>
+
+  <div class="index-container">
+
+    <div class="index-logo">🀄</div>
+    <div class="index-title">AC 麻将俱乐部</div>
+    <div class="index-subtitle">UI 原型 v1.0 · 设计稿</div>
+
+    <div class="page-list">
+
+      <!-- 首页 -->
+      <a class="page-card" href="home.html">
+        <div class="page-icon">🏠</div>
+        <div class="page-info">
+          <div class="page-name">首页</div>
+          <div class="page-desc">大厅入口、开始游戏、最近对局<br>Tab 1 · 竖屏</div>
+          <span class="tag tag-p0">P0 核心</span>
+        </div>
+      </a>
+
+      <!-- 游戏桌面（横屏） -->
+      <a class="page-card" href="game.html">
+        <div class="page-icon">🀄</div>
+        <div class="page-info">
+          <div class="page-name">游戏桌面</div>
+          <div class="page-desc">4人座位、手牌、弃牌堆、操作按钮、台数侧栏<br>Tab 2 · 横屏 Landscape</div>
+          <span class="tag tag-p0">P0 核心</span>
+        </div>
+      </a>
+
+      <!-- 结算页 -->
+      <a class="page-card" href="result.html">
+        <div class="page-icon">🏆</div>
+        <div class="page-info">
+          <div class="page-name">结算页</div>
+          <div class="page-desc">胜利展示、逐人结算、台数详情展开<br>独立页（非 Tab）</div>
+          <span class="tag tag-p0">P0 核心</span>
+        </div>
+      </a>
+
+      <!-- 规则说明 -->
+      <a class="page-card" href="rules.html">
+        <div class="page-icon">📖</div>
+        <div class="page-info">
+          <div class="page-name">规则说明</div>
+          <div class="page-desc">台数速查表(1~60)、算账公式、特殊规则、牌型示例<br>Tab 3 · 竖屏</div>
+          <span class="tag tag-p0">P0 核心</span>
+        </div>
+      </a>
+
+      <!-- 我的 -->
+      <a class="page-card" href="profile.html">
+        <div class="page-icon">👤</div>
+        <div class="page-info">
+          <div class="page-name">我的</div>
+          <div class="page-desc">个人信息、统计数据、设置菜单、版本信息<br>Tab 4 · 竖屏</div>
+          <span class="tag tag-p1">P1 增强</span>
+        </div>
+      </a>
+
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="footer-note">
+      设计风格：传统中式（红木质感 / 金色边框）<br>
+      保真度：高保真（颜色 / 字体 / 间距 / 牌面样式）<br><br>
+      📁 文件清单：<br>
+      · style.css — 设计系统 (CSS 变量 / 组件)<br>
+      · home.html — 首页<br>
+      · game.html — 游戏桌面（横版）<br>
+      · result.html — 结算页<br>
+      · rules.html — 规则说明<br>
+      · profile.html — 我的
+    </div>
+
+  </div>
+
+</body>
+</html>

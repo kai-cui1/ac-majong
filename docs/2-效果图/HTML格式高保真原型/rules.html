@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>AC 麻将俱乐部 — 规则说明</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .rules-page { padding-bottom: calc(var(--tab-height) + 20px); }
+
+    /* 搜索/筛选栏 */
+    .rules-filter {
+      position: sticky; top: 0;
+      background: linear-gradient(to bottom, var(--color-bg-table) 85%, transparent);
+      z-index: 50;
+      padding: var(--spacing-md) var(--spacing-lg) var(--spacing-lg);
+    }
+    .filter-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+    .filter-chip {
+      padding: 5px 12px; border-radius: var(--radius-full);
+      font-size: 12px; color: var(--color-text-secondary); cursor: pointer;
+      border: 1px solid rgba(212,165,55,0.15); background: rgba(0,0,0,0.2);
+      transition: all var(--transition-fast); white-space: nowrap;
+    }
+    .filter-chip.active { color: var(--color-bg-wood-dark); background: var(--color-gold); border-color: var(--color-gold); font-weight: 600; }
+    .filter-chip:hover:not(.active) { border-color: var(--color-gold-dark); color: var(--color-gold); }
+
+    /* 台数表卡片 */
+    .score-card {
+      margin: 0 var(--spacing-lg) var(--spacing-lg);
+      background: var(--color-bg-card);
+      border: 1px solid rgba(212,165,55,0.12);
+      border-radius: var(--radius-xl);
+      overflow: hidden;
+    }
+    .score-card-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: var(--spacing-md) var(--spacing-lg);
+      background: linear-gradient(135deg, rgba(212,165,55,0.12), transparent);
+      border-bottom: 1px solid rgba(212,165,55,0.1);
+    }
+    .score-card-title {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 15px; font-weight: 700; color: var(--color-gold);
+    }
+    .score-card-count {
+      font-size: 11px; color: var(--color-text-muted);
+      background: rgba(255,255,255,0.05); padding: 2px 8px; border-radius: 10px;
+    }
+    .score-card-body { padding: 4px 0; overflow-x: auto; }
+    /* 紧凑型台数行 */
+    .score-row-compact {
+      display: grid; grid-template-columns: 36px 1fr 40px;
+      gap: 4px; padding: 7px var(--spacing-lg);
+      align-items: center; border-bottom: 1px solid rgba(255,255,255,0.03);
+      transition: background var(--transition-fast);
+    }
+    .score-row-compact:last-child { border-bottom: none; }
+    .score-row-compact:hover { background: rgba(255,255,255,0.02); }
+    .src-num { font-size: 14px; font-weight: 900; font-family: var(--font-mono); color: var(--color-gold); text-align: center; }
+    .src-name { font-size: 13px; color: var(--color-text-primary); font-weight: 500; }
+    .src-desc { font-size: 10px; color: var(--color-text-muted); margin-top: 1px; }
+    .src-tag { text-align: right; }
+
+    /* 公式卡片 */
+    .formula-card {
+      margin: 0 var(--spacing-lg) var(--spacing-lg);
+      background: var(--color-bg-card);
+      border: 1px solid rgba(212,165,55,0.12);
+      border-radius: var(--radius-xl);
+      padding: var(--spacing-lg);
+    }
+    .formula-box {
+      background: rgba(0,0,0,0.3); border: 1px solid rgba(212,165,55,0.1);
+      border-radius: var(--radius-md); padding: var(--spacing-md);
+      font-family: var(--font-mono); font-size: 13px; color: var(--color-gold-light);
+      text-align: center; letter-spacing: 1px; margin: var(--spacing-sm) 0;
+    }
+    .formula-note { font-size: 11px; color: var(--color-text-muted); line-height: 1.7; }
+
+    /* 特殊规则卡片 */
+    .special-rule-item {
+      margin: 0 var(--spacing-lg) var(--spacing-sm);
+      background: var(--color-bg-panel);
+      border-left: 3px solid var(--color-gold-dark);
+      border-radius: 0 var(--radius-md) var(--radius-md) 0;
+      padding: var(--spacing-md) var(--spacing-lg);
+    }
+    .special-rule-title { font-size: 13px; font-weight: 700; color: var(--color-gold); margin-bottom: 4px; }
+    .special-rule-desc { font-size: 12px; color: var(--color-text-secondary); line-height: 1.6; }
+
+    /* 示例牌型展示 */
+    .example-section { margin: var(--spacing-xl) var(--spacing-lg) 0; }
+    .example-card {
+      background: var(--color-bg-card);
+      border: 1px solid rgba(212,165,55,0.1);
+      border-radius: var(--radius-lg);
+      padding: var(--spacing-lg);
+      margin-bottom: var(--spacing-md);
+    }
+    .example-title { font-size: 14px; font-weight: 700; color: var(--color-text-primary); margin-bottom: var(--spacing-md); }
+    .example-tiles-row { display: flex; gap: 2px; flex-wrap: wrap; justify-content: center; margin: var(--spacing-md) 0; }
+    .example-tiles-row .tile { width: 34px; height: 48px; font-size: 16px; margin: 0; }
+    .example-result { display: flex; align-items: center; justify-content: center; gap: 8px; padding-top: var(--spacing-md); border-top: 1px solid rgba(212,165,55,0.08); }
+    .example-result-score { font-size: 22px; font-weight: 900; color: var(--color-gold); font-family: var(--font-mono); }
+    .example-result-breakdown { font-size: 11px; color: var(--color-text-muted); }
+
+    /* Tab 切换（台数分类） */
+    .score-tabs { display: flex; gap: 0; margin: 0 var(--spacing-lg) var(--spacing-md); background: rgba(0,0,0,0.25); border-radius: var(--radius-md); overflow: hidden; }
+    .score-tab {
+      flex: 1; padding: 8px 4px; text-align: center; font-size: 12px; color: var(--color-text-muted);
+      cursor: pointer; transition: all var(--transition-fast); border-bottom: 2px solid transparent;
+      font-weight: 600;
+    }
+    .score-tab.active { color: var(--color-gold); border-bottom-color: var(--color-gold); background: rgba(212,165,55,0.06); }
+    .score-tab:hover:not(.active) { color: var(--color-text-secondary); }
+
+    /* 段落标题 */
+    .section-title-bar {
+      display: flex; align-items: center; gap: 8px;
+      padding: var(--spacing-xl) var(--spacing-lg) var(--spacing-md);
+    }
+    .section-title-bar::after {
+      content: ''; flex: 1; height: 1px;
+      background: linear-gradient(to right, rgba(212,165,55,0.2), transparent);
+    }
+    .section-title-text { font-size: 17px; font-weight: 700; color: var(--color-gold); white-space: nowrap; }
+  </style>
+</head>
+<body class="bg-table">
+  <div class="rules-page page-container">
+
+    <!-- 页面标题 -->
+    <div class="page-header">
+      <span class="page-header-title">📖 规则说明</span>
+    </div>
+
+    <!-- 筛选标签 -->
+    <div class="rules-filter">
+      <div class="filter-chips">
+        <span class="filter-chip active">全部</span>
+        <span class="filter-chip">基础 (1台)</span>
+        <span class="filter-chip">中级 (2-5)</span>
+        <span class="filter-chip">高级 (8-15)</span>
+        <span class="filter-chip">顶级 (30+)</span>
+        <span class="filter-chip">算账</span>
+        <span class="filter-chip">特例</span>
+      </div>
+    </div>
+
+    <!-- ====== 基础台数 (1台) ====== -->
+    <div class="score-tabs">
+      <span class="score-tab active">基础 1台</span>
+      <span class="score-tab">中级 2-5台</span>
+      <span class="score-tab">高级 8-15台</span>
+      <span class="score-tab">顶级 30+台</span>
+    </div>
+
+    <div class="score-card">
+      <div class="score-card-header">
+        <span class="score-card-title"><span>⭐</span> 基础台数 — 1 台</span>
+        <span class="score-card-count">9 种</span>
+      </div>
+      <div class="score-card-body">
+        <div class="score-row-compact"><span class="src-num">1</span><div><div class="src-name">见花</div><div class="src-desc">每摸到 1 只花 = 1 台（累加）</div></div><span class="src-tag badge badge-gold">1台</span></div>
+        <div class="score-row-compact"><span class="src-num">1</span><div><div class="src-name">无花</div><div class="src-desc">没摸到花也有 1 台</div></div><span class="src-tag badge badge-gold">1台</span></div>
+        <div class="score-row-compact"><span class="src-num">1</span><div><div class="src-name">见字</div><div class="src-desc">有字刻子（东南西北中发白任一 3 张）</div></div><span class="src-tag badge badge-gold">1台</span></div>
+        <div class="score-row-compact"><span class="src-num">1</span><div><div class="src-name">无字</div><div class="src-desc">一个字没有也有 1 台</div></div><span class="src-tag badge badge-gold">1台</span></div>
+        <div class="score-row-compact"><span class="src-num">1</span><div><div class="src-name">1 独</div><div class="src-desc">听牌只剩一种选择（但非独独）</div></div><span class="src-tag badge badge-gold">1台</span></div>
+        <div class="score-row-compact"><span class="src-num">1</span><div><div class="src-name">明杠</div><div class="src-desc">明杠一次 = 1 台</div></div><span class="src-tag badge badge-gold">1台</span></div>
+        <div class="score-row-compact"><span class="src-num">1</span><div><div class="src-name">门清</div><div class="src-desc">没有吃碰杠，全暗牌</div></div><span class="src-tag badge badge-gold">1台</span></div>
+        <div class="score-row-compact"><span class="src-num">1</span><div><div class="src-name">对碰</div><div class="src-desc">碰牌胡 = 1 台</div></div><span class="src-tag badge badge-gold">1台</span></div>
+        <div class="score-row-compact"><span class="src-num">1</span><div><div class="src-name">自摸</div><div class="src-desc">自己摸到胡牌 = 1 台</div></div><span class="src-tag badge badge-gold">1台</span></div>
+      </div>
+    </div>
+
+    <!-- 中级台数 -->
+    <div style="height: 8px;"></div>
+    <div class="score-card">
+      <div class="score-card-header">
+        <span class="score-card-title"><span>⭐⭐</span> 中级台数 — 2~5 台</span>
+        <span class="score-card-count">11 种</span>
+      </div>
+      <div class="score-card-body">
+        <div class="score-row-compact"><span class="src-num">2</span><div><div class="src-name">小平</div><div class="src-desc">无字、无坎、至少 1 花、其余 5 副皆顺子</div></div><span class="src-tag badge badge-gold">2台</span></div>
+        <div class="score-row-compact"><span class="src-num">2</span><div><div class="src-name">独独</div><div class="src-desc">只能胡唯一一张牌（单吊 / 卡窿）</div></div><span class="src-tag badge badge-gold">2台</span></div>
+        <div class="score-row-compact"><span class="src-num">2</span><div><div class="src-name">东风字(非庄)</div><div class="src-desc">庄家外的东风刻子</div></div><span class="src-tag badge badge-gold">2台</span></div>
+        <div class="score-row-compact"><span class="src-num">2</span><div><div class="src-name">1 暗杠</div><div class="src-desc">暗杠一次 = 2 台</div></div><span class="src-tag badge badge-gold">2台</span></div>
+        <div class="score-row-compact"><span class="src-num">2</span><div><div class="src-name">2 暗坎</div><div class="src-desc">2 个暗刻 = 2 台</div></div><span class="src-tag badge badge-gold">2台</span></div>
+        <div class="score-row-compact"><span class="src-num">3</span><div><div class="src-name">东风字(庄家)</div><div class="src-desc">庄家的东风刻子</div></div><span class="src-tag badge badge-gold">3台</span></div>
+        <div class="score-row-compact"><span class="src-num">3</span><div><div class="src-name">门清自摸</div><div class="src-desc">门清 + 自摸（一摸三）</div></div><span class="src-tag badge badge-gold">3台</span></div>
+        <div class="score-row-compact"><span class="src-num">3</span><div><div class="src-name">无花无字</div><div class="src-desc">既无花也无字的胡牌</div></div><span class="src-tag badge badge-gold">3台</span></div>
+        <div class="score-row-compact"><span class="src-num">4</span><div><div class="src-name">缺一门</div><div class="src-desc">只含条筒万其中两门</div></div><span class="src-tag badge badge-gold">4台</span></div>
+        <div class="score-row-compact"><span class="src-num">4</span><div><div class="src-name">抢杠胡</div><div class="src-desc">别人杠时胡牌</div></div><span class="src-tag badge badge-gold">4台</span></div>
+        <div class="score-row-compact"><span class="src-num">5</span><div><div class="src-name">胡九筒/九万 / 杠开/花开</div><div class="src-desc">含九筒九万的胡牌或特殊胡法</div></div><span class="src-tag badge badge-gold">5台</span></div>
+      </div>
+    </div>
+
+    <!-- 高级 & 顶级 -->
+    <div style="height: 8px;"></div>
+    <div class="score-card">
+      <div class="score-card-header">
+        <span class="score-card-title"><span>⭐⭐⭐</span> 高级台数 — 8~15 台</span>
+        <span class="score-card-count">14 种</span>
+      </div>
+      <div class="score-card-body">
+        <div class="score-row-compact"><span class="src-num">8</span><div><div class="src-name">大平 / 一条龙 / 三相逢 / 小三风</div><div class="src-desc">高级组合牌型</div></div><span class="src-tag badge badge-gold">8台</span></div>
+        <div class="score-row-compact"><span class="src-num">8</span><div><div class="src-name">全求人 / 三暗坎 / 海底捞</div><div class="src-desc">特殊达成条件</div></div><span class="src-tag badge badge-gold">8台</span></div>
+        <div class="score-row-compact"><span class="src-num">10</span><div><div class="src-name">明杠/自摸 九筒九万</div><div class="src-desc">九筒九万的特殊加成</div></div><span class="src-tag badge badge-gold">10台</span></div>
+        <div class="score-row-compact"><span class="src-num">15</span><div><div class="src-name">混一色 / 碰碰胡 / 三姊妹 / 大三风</div><div class="src-desc">高难度牌型</div></div><span class="src-tag badge badge-gold">15台</span></div>
+        <div class="score-row-compact"><span class="src-num">15</span><div><div class="src-name">小三元 / 四暗坎 / 暗杠九筒九万</div><div class="src-desc">稀有组合</div></div><span class="src-tag badge badge-gold">15台</span></div>
+      </div>
+    </div>
+
+    <div style="height: 8px;"></div>
+    <div class="score-card">
+      <div class="score-card-header">
+        <span class="score-card-title"><span>👑</span> 顶级台数 — 30~60 台</span>
+        <span class="score-card-count">9 种</span>
+      </div>
+      <div class="score-card-body">
+        <div class="score-row-compact"><span class="src-num">30</span><div><div class="src-name">八对半 / 四姊妹 / 大三元</div></div><span class="src-tag badge badge-red">30台</span></div>
+        <div class="score-row-compact"><span class="src-num">40</span><div><div class="src-name">小四喜 / 将一色 / 清一色 / 十三幺 / 八只花</div></div><span class="src-tag badge badge-red">40台</span></div>
+        <div class="score-row-compact"><span class="src-num">50</span><div><div class="src-name">五暗坎</div></div><span class="src-tag badge badge-red">50台</span></div>
+        <div class="score-row-compact"><span class="src-num">60</span><div><div class="src-name">大四喜 / 风一色</div></div><span class="src-tag badge badge-red">60台</span></div>
+      </div>
+    </div>
+
+    <!-- ====== 算账公式 ====== -->
+    <div class="section-title-bar">
+      <span class="section-title-text">💰 算账公式</span>
+    </div>
+
+    <div class="formula-card">
+      <div style="font-size:14px;font-weight:600;color:var(--color-gold);margin-bottom:var(--spacing-md);">基础信息</div>
+      <div class="formula-note">
+        • 一台 = 20 元<br>
+        • 最低胡牌：6 台（否则诈胡）<br>
+        • N = 胡牌方桌上子数 + 点炮方桌上子数
+      </div>
+
+      <div style="font-size:14px;font-weight:600;color:var(--color-gold);margin:var(--spacing-md) 0 var(--spacing-sm);">点炮胡（单一结算）</div>
+      <div class="formula-box">胡牌台数 + 3×(N+1) + dealerBonus?</div>
+      <div class="formula-note">
+        • 非庄胡 + 非庄炮：无 dealerBonus<br>
+        • 庄家胡 或 庄家被炮：有 dealerBonus<br>
+        • dealerBonus：连庄第1次+1台、第2次+3台、第3次+5台...
+      </div>
+
+      <div style="font-size:14px;font-weight:600;color:var(--color-gold);margin:var(--spacing-md) 0 var(--spacing-sm);">自摸胡（逐人结算）</div>
+      <div class="formula-box">每个输家 i 单独计算 Nᵢ</div>
+      <div class="formula-note">
+        • Nᵢ = 胡牌子数 + 输家i桌上子数<br>
+        • 各输家应付金额可能不同<br>
+        • 被自摸者桌上子数清零
+      </div>
+    </div>
+
+    <!-- ====== 特殊规则 ====== -->
+    <div class="section-title-bar">
+      <span class="section-title-text">⚠️ 特殊规则</span>
+    </div>
+
+    <div class="special-rule-item">
+      <div class="special-rule-title">最后 8 张牌限制</div>
+      <div class="special-rule-desc">牌墙剩余 ≤8 张时，不能吃、不能碰、不能碰杠，只能摸杠。</div>
+    </div>
+    <div class="special-rule-item">
+      <div class="special-rule-title">诈胡罚</div>
+      <div class="special-rule-desc">向每家支付 300 元。如庄家被诈胡，连庄部分照算（防恶意诈胡）。</div>
+    </div>
+    <div class="special-rule-item">
+      <div class="special-rule-title">连庄机制</div>
+      <div class="special-rule-desc">上庄默认 +1 子(+3台)，连庄追加奇数序列。首次坐庄的 +3 来自 base zi（zi初始化为1），不属于 dealerBonus。</div>
+    </div>
+    <div class="special-rule-item">
+      <div class="special-rule-title">九筒/九万特殊加成</div>
+      <div class="special-rule-desc">自摸九筒/九万 = 10台，明杠 = 10台，暗杠 = 15台。与普通台数叠加时有特殊计算规则。</div>
+    </div>
+
+    <!-- ====== 牌型示例 ====== -->
+    <div class="section-title-bar">
+      <span class="section-title-text">🎯 牌型示例</span>
+    </div>
+
+    <div class="example-section">
+      <div class="example-card">
+        <div class="example-title">示例 1：一条龙（8台）</div>
+        <div class="example-tiles-row">
+          <div class="tile"><img src="res/tiles/wan_1.png" alt="一萬"/></div><div class="tile"><img src="res/tiles/wan_2.png" alt="二萬"/></div><div class="tile"><img src="res/tiles/wan_3.png" alt="三萬"/></div>
+          <div class="tile"><img src="res/tiles/wan_4.png" alt="四萬"/></div><div class="tile"><img src="res/tiles/wan_5.png" alt="五萬"/></div><div class="tile"><img src="res/tiles/wan_6.png" alt="六萬"/></div>
+          <div class="tile"><img src="res/tiles/wan_7.png" alt="七萬"/></div><div class="tile"><img src="res/tiles/wan_8.png" alt="八萬"/></div><div class="tile"><img src="res/tiles/wan_9.png" alt="九萬"/></div>
+          <span style="color:var(--color-text-muted);align-self:center;">+ 其他牌组</span>
+        </div>
+        <div class="example-result">
+          <span class="example-result-score">8台</span>
+          <span class="example-result-breakdown">同花色 1-9 顺子</span>
+        </div>
+      </div>
+
+      <div class="example-card">
+        <div class="example-title">示例 2：混一色（15台）</div>
+        <div class="example-tiles-row">
+          <div class="tile"><img src="res/tiles/tong_blue_1.png" alt="1筒"/></div><div class="tile"><img src="res/tiles/tong_blue_2.png" alt="2筒"/></div><div class="tile"><img src="res/tiles/tong_blue_3.png" alt="3筒"/></div>
+          <div class="tile"><img src="res/tiles/tong_blue_5.png" alt="5筒"/></div><div class="tile"><img src="res/tiles/tong_blue_6.png" alt="6筒"/></div><div class="tile"><img src="res/tiles/tong_blue_7.png" alt="7筒"/></div>
+          <div class="tile"><img src="res/tiles/wind_east.png" alt="东"/></div><div class="tile"><img src="res/tiles/wind_east.png" alt="东"/></div><div class="tile"><img src="res/tiles/wind_east.png" alt="东"/></div>
+          <div class="tile"><img src="res/tiles/dragon_zhong.png" alt="中"/></div><div class="tile"><img src="res/tiles/dragon_zhong.png" alt="中"/></div>
+        </div>
+        <div class="example-result">
+          <span class="example-result-score">15台</span>
+          <span class="example-result-breakdown">只有一门数牌 + 字牌</span>
+        </div>
+      </div>
+
+      <div class="example-card">
+        <div class="example-title">示例 3：八对半（30台）— 7对 + 1刻 = 17张</div>
+        <div class="example-tiles-row">
+          <div class="tile"><img src="res/tiles/wan_1.png" alt="一萬"/></div><div class="tile"><img src="res/tiles/wan_1.png" alt="一萬"/></div>
+          <div class="tile"><img src="res/tiles/tong_blue_3.png" alt="3筒"/></div><div class="tile"><img src="res/tiles/tong_blue_3.png" alt="3筒"/></div>
+          <div class="tile"><img src="res/tiles/tiao_green_5.png" alt="5条"/></div><div class="tile"><img src="res/tiles/tiao_green_5.png" alt="5条"/></div>
+          <div class="tile"><img src="res/tiles/wind_south.png" alt="南"/></div><div class="tile"><img src="res/tiles/wind_south.png" alt="南"/></div>
+          <div class="tile"><img src="res/tiles/dragon_bai.png" alt="白"/></div><div class="tile"><img src="res/tiles/dragon_bai.png" alt="白"/></div>
+          <div class="tile"><img src="res/tiles/dragon_zhong.png" alt="中"/></div><div class="tile"><img src="res/tiles/dragon_zhong.png" alt="中"/></div>
+          <div class="tile"><img src="res/tiles/dragon_zhong.png" alt="中"/></div>
+        </div>
+        <div class="example-result">
+          <span class="example-result-score">30台</span>
+          <span class="example-result-breakdown">7 对(14张) + 1 刻(3张) = 17张</span>
+        </div>
+      </div>
+    </div>
+
+    <div style="height: 16px;"></div>
+
+  </div>
+
+  <!-- Tab 栏 -->
+  <nav class="tab-bar">
+    <a class="tab-item" href="home.html">
+      <span class="tab-icon">🏠</span>
+      <span>首页</span>
+    </a>
+    <a class="tab-item" href="game.html">
+      <span class="tab-icon">🀄</span>
+      <span>游戏</span>
+    </a>
+    <a class="tab-item active" href="rules.html">
+      <span class="tab-icon">📖</span>
+      <span>规则</span>
+    </a>
+    <a class="tab-item" href="profile.html">
+      <span class="tab-icon">👤</span>
+      <span>我的</span>
+    </a>
+  </nav>
+</body>
+</html>

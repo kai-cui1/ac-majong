@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>AC 麻将俱乐部 — 我的</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .profile-page { padding-bottom: calc(var(--tab-height) + 20px); }
+
+    /* 个人信息头部 */
+    .profile-hero {
+      display: flex; flex-direction: column; align-items: center;
+      padding: var(--spacing-xxl) var(--spacing-lg) var(--spacing-xl);
+      background:
+        radial-gradient(ellipse at top center, rgba(212,165,55,0.08) 0%, transparent 60%),
+        linear-gradient(to bottom, var(--color-bg-wood), transparent);
+    }
+    .profile-avatar-large {
+      width: 82px; height: 82px; border-radius: 50%;
+      background: linear-gradient(145deg, var(--color-gold), var(--color-gold-dark));
+      display: flex; align-items: center; justify-content: center;
+      font-size: 36px; border: 3px solid var(--color-gold-light);
+      box-shadow: 0 6px 24px rgba(212,165,55,0.3);
+      margin-bottom: var(--spacing-md);
+      position: relative;
+    }
+    .profile-avatar-large::after {
+      content: '✓';
+      position: absolute; bottom: 2px; right: 2px;
+      width: 18px; height: 18px; border-radius: 50%;
+      background: var(--color-success); color: white;
+      font-size: 10px; display: flex; align-items: center; justify-content: center;
+      border: 2px solid var(--color-bg-table);
+    }
+    .profile-name-large { font-size: 20px; font-weight: 700; color: var(--color-text-primary); }
+    .profile-id-text { font-size: 12px; color: var(--color-text-muted); margin-top: 2px; }
+
+    /* 统计卡片 */
+    .stats-row {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: var(--spacing-md); margin: 0 var(--spacing-lg) var(--spacing-xl);
+    }
+    .stat-card {
+      background: var(--color-bg-card);
+      border: 1px solid rgba(212,165,55,0.1);
+      border-radius: var(--radius-lg);
+      padding: var(--spacing-md) var(--spacing-sm);
+      text-align: center;
+    }
+    .stat-value { font-size: 22px; font-weight: 900; color: var(--color-gold); font-family: var(--font-mono); line-height: 1.2; }
+    .stat-label { font-size: 11px; color: var(--color-text-muted); margin-top: 2px; }
+
+    /* 菜单列表 */
+    .menu-section { margin-bottom: var(--spacing-sm); }
+    .menu-section-title {
+      font-size: 12px; color: var(--color-text-muted); text-transform: uppercase;
+      letter-spacing: 2px; padding: var(--spacing-lg) var(--spacing-lg) var(--spacing-sm);
+    }
+    .menu-list { margin: 0 var(--spacing-lg); }
+    .menu-item {
+      display: flex; align-items: center; gap: var(--spacing-md);
+      padding: var(--spacing-md) var(--spacing-lg);
+      background: var(--color-bg-card);
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      cursor: pointer; transition: background var(--transition-fast);
+      text-decoration: none; color: inherit;
+    }
+    .menu-item:first-child { border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
+    .menu-item:last-child { border-radius: 0 0 var(--radius-lg) var(--radius-lg); border-bottom: none; }
+    .menu-item:only-of-type { border-radius: var(--radius-lg); }
+    .menu-item:hover { background: linear-gradient(135deg, rgba(212,165,55,0.06), transparent); }
+    .menu-icon {
+      width: 32px; height: 32px; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px; flex-shrink: 0;
+      background: linear-gradient(135deg, rgba(212,165,55,0.12), rgba(212,165,55,0.03));
+    }
+    .menu-text { flex: 1; font-size: 15px; color: var(--color-text-primary); font-weight: 500; }
+    .menu-arrow { color: var(--color-text-muted); font-size: 14px; }
+    .menu-badge-new {
+      background: var(--color-danger); color: white;
+      font-size: 10px; padding: 1px 7px; border-radius: 10px; font-weight: 600;
+    }
+    .menu-badge-tag {
+      background: rgba(212,165,55,0.15); color: var(--color-gold);
+      font-size: 10px; padding: 2px 8px; border-radius: 8px; font-weight: 600;
+    }
+    .menu-subtext { font-size: 11px; color: var(--color-text-muted); margin-top: 1px; }
+
+    /* 版本信息 */
+    .version-footer {
+      text-align: center; padding: var(--spacing-xxl) var(--spacing-lg) var(--spacing-lg);
+      color: var(--color-text-muted); font-size: 11px;
+    }
+    .version-footer .logo-small { font-size: 18px; margin-bottom: 4px; opacity: 0.4; }
+    .version-footer .ver { color: var(--color-text-muted); }
+    .version-footer .copyright { margin-top: 4px; opacity: 0.5; }
+
+    /* 分割线 */
+    .divider-h { height: 1px; background: linear-gradient(to right, transparent, rgba(212,165,55,0.1), transparent); margin: var(--spacing-lg) 0; }
+  </style>
+</head>
+<body class="bg-table">
+  <div class="profile-page page-container">
+
+    <!-- 页面标题 -->
+    <div class="page-header">
+      <span class="page-header-title">我的</span>
+    </div>
+
+    <!-- 个人信息 -->
+    <div class="profile-hero">
+      <div class="profile-avatar-large">🀄</div>
+      <div class="profile-name-large">kaicui</div>
+      <div class="profile-id-text">微信号: kaicui_2026</div>
+    </div>
+
+    <!-- 统计数据 -->
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-value">28</div>
+        <div class="stat-label">总对局</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" style="color:var(--color-success);">+1,240</div>
+        <div class="stat-label">累计赢取</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">62%</div>
+        <div class="stat-label">胜率</div>
+      </div>
+    </div>
+
+    <div class="divider-h"></div>
+
+    <!-- 菜单：游戏相关 -->
+    <div class="menu-section">
+      <div class="menu-section-title">游戏</div>
+      <div class="menu-list">
+        <a class="menu-item" href="#">
+          <div class="menu-icon">📊</div>
+          <div>
+            <div class="menu-text">我的对局记录</div>
+            <div class="menu-subtext">查看历史对局详情和回放</div>
+          </div>
+          <span class="menu-arrow">›</span>
+        </a>
+        <a class="menu-item" href="#">
+          <div class="menu-icon">🏆</div>
+          <div>
+            <div class="menu-text">排行榜</div>
+            <div class="menu-subtext">月度 / 赛季积分排名</div>
+          </div>
+          <span class="menu-badge-tag" style="background:rgba(212,165,55,0.08);color:var(--color-text-muted);">即将上线</span>
+          <span class="menu-arrow">›</span>
+        </a>
+      </div>
+    </div>
+
+    <!-- 菜单：设置 -->
+    <div class="menu-section">
+      <div class="menu-section-title">设置</div>
+      <div class="menu-list">
+        <a class="menu-item" href="#">
+          <div class="menu-icon">🎨</div>
+          <div>
+            <div class="menu-text">桌面背景</div>
+            <div class="menu-subtext">深绿桌布</div>
+          </div>
+          <span class="menu-arrow">›</span>
+        </a>
+        <a class="menu-item" href="#">
+          <div class="menu-icon">🔊</div>
+          <div>
+            <div class="menu-text">音效 & 音乐</div>
+            <div class="menu-subtext">已开启</div>
+          </div>
+          <span class="menu-arrow">›</span>
+        </a>
+        <a class="menu-item" href="#">
+          <div class="menu-icon">⚙️</div>
+          <div>
+            <div class="menu-text">AI 难度</div>
+            <div class="menu-subtext">基础策略</div>
+          </div>
+          <span class="menu-arrow">›</span>
+        </a>
+        <a class="menu-item" href="#">
+          <div class="menu-icon">👤</div>
+          <div class="menu-text">个人信息</div>
+          <div class="menu-menu-subtext">v2.0 可编辑昵称头像</div>
+          <span class="menu-badge-new">新</span>
+          <span class="menu-arrow">›</span>
+        </a>
+      </div>
+    </div>
+
+    <!-- 菜单：其他 -->
+    <div class="menu-section">
+      <div class="menu-section-title">更多</div>
+      <div class="menu-list">
+        <a class="menu-item" href="rules.html">
+          <div class="menu-icon">📖</div>
+          <div class="menu-text">规则说明</div>
+          <span class="menu-arrow">›</span>
+        </a>
+        <a class="menu-item" href="#">
+          <div class="menu-icon">💬</div>
+          <div class="menu-text">意见反馈</div>
+          <span class="menu-arrow">›</span>
+        </a>
+        <a class="menu-item" href="#">
+          <div class="menu-icon">ℹ️</div>
+          <div class="menu-text">关于 AC 麻将</div>
+          <span class="menu-arrow">›</span>
+        </a>
+      </div>
+    </div>
+
+    <!-- 版本信息 -->
+    <div class="version-footer">
+      <div class="logo-small">🀄</div>
+      <div class="ver">AC 麻将俱乐部 v1.0.0</div>
+      <div class="copyright">© 2026 AC 麻将俱乐部 · Made with Claude Code</div>
+    </div>
+
+  </div>
+
+  <!-- Tab 栏 -->
+  <nav class="tab-bar">
+    <a class="tab-item" href="home.html">
+      <span class="tab-icon">🏠</span>
+      <span>首页</span>
+    </a>
+    <a class="tab-item" href="game.html">
+      <span class="tab-icon">🀄</span>
+      <span>游戏</span>
+    </a>
+    <a class="tab-item" href="rules.html">
+      <span class="tab-icon">📖</span>
+      <span>规则</span>
+    </a>
+    <a class="tab-item active" href="profile.html">
+      <span class="tab-icon">👤</span>
+      <span>我的</span>
+    </a>
+  </nav>
+</body>
+</html>

@@ -1,0 +1,191 @@
+<h2>麻将牌面 v4 — 独立图片裁切（精确像素定位）</h2>
+<p class="subtitle">从参考素材 PNG 逐张精确裁切，使用 &lt;img&gt; 标签渲染，无 CSS 精灵图</p>
+
+<style>
+/* 牌面基础 */
+.tile {
+  background-color: #fffdf5;
+  border: 1px solid #a08050;
+  border-radius: 3px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.tile img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* 展示尺寸 */
+.suit-row { margin-bottom: 18px; }
+.suit-label { font-size:13px;font-weight:700;color:#d4a537;padding:5px 0 6px;border-bottom:1px solid rgba(212,165,55,0.25);margin-bottom:8px;}
+.tile-grid { display:flex; gap:3px; flex-wrap:wrap; align-items:flex-end; }
+
+.sz-lg { width:60px;height:76px; }
+.sz-md { width:44px;height:56px; }
+.sz-sm { width:28px;height:36px; }
+.sz-xs { width:20px;height:26px; }
+
+/* 选中态 */
+.tile.selected {
+  border: 2px solid #d4a537;
+  transform: translateY(-12px);
+  box-shadow: 0 6px 14px rgba(0,0,0,0.4);
+  z-index: 2;
+}
+
+/* 预览区专用 class */
+.preview-hand .tile { width:38px;height:48px; }
+.preview-meld .tile { width:26px;height:34px; }
+.preview-discard .tile { width:20px;height:26px; }
+</style>
+
+<!-- ========== 万字牌 ========== -->
+<div class="suit-row">
+  <div class="suit-label">万字牌 一萬 ~ 九萬（行0，y=38~196）</div>
+  <div class="tile-grid">
+    <div class="tile sz-md" title="一萬" data-suit="wan" data-rank="1"><img src="res/tiles/wan_1.png" alt="一萬"/></div>
+    <div class="tile sz-md" title="二萬" data-suit="wan" data-rank="2"><img src="res/tiles/wan_2.png" alt="二萬"/></div>
+    <div class="tile sz-md" title="三萬" data-suit="wan" data-rank="3"><img src="res/tiles/wan_3.png" alt="三萬"/></div>
+    <div class="tile sz-md" title="四萬" data-suit="wan" data-rank="4"><img src="res/tiles/wan_4.png" alt="四萬"/></div>
+    <div class="tile sz-md" title="五萬" data-suit="wan" data-rank="5"><img src="res/tiles/wan_5.png" alt="五萬"/></div>
+    <div class="tile sz-md" title="六萬" data-suit="wan" data-rank="6"><img src="res/tiles/wan_6.png" alt="六萬"/></div>
+    <div class="tile sz-md" title="七萬" data-suit="wan" data-rank="7"><img src="res/tiles/wan_7.png" alt="七萬"/></div>
+    <div class="tile sz-md" title="八萬" data-suit="wan" data-rank="8"><img src="res/tiles/wan_8.png" alt="八萬"/></div>
+    <div class="tile sz-md" title="九萬" data-suit="wan" data-rank="9"><img src="res/tiles/wan_9.png" alt="九萬"/></div>
+  </div>
+</div>
+
+<!-- ========== 筒子牌（蓝色）========== -->
+<div class="suit-row">
+  <div class="suit-label">筒子牌 1筒 ~ 9筒 — 蓝色（行1，y=236~407）</div>
+  <div class="tile-grid">
+    <div class="tile sz-md" title="1筒" data-suit="tong" data-rank="1"><img src="res/tiles/tong_blue_1.png" alt="1筒"/></div>
+    <div class="tile sz-md" title="2筒" data-suit="tong" data-rank="2"><img src="res/tiles/tong_blue_2.png" alt="2筒"/></div>
+    <div class="tile sz-md" title="3筒" data-suit="tong" data-rank="3"><img src="res/tiles/tong_blue_3.png" alt="3筒"/></div>
+    <div class="tile sz-md" title="4筒" data-suit="tong" data-rank="4"><img src="res/tiles/tong_blue_4.png" alt="4筒"/></div>
+    <div class="tile sz-md" title="5筒" data-suit="tong" data-rank="5"><img src="res/tiles/tong_blue_5.png" alt="5筒"/></div>
+    <div class="tile sz-md" title="6筒" data-suit="tong" data-rank="6"><img src="res/tiles/tong_blue_6.png" alt="6筒"/></div>
+    <div class="tile sz-md" title="7筒" data-suit="tong" data-rank="7"><img src="res/tiles/tong_blue_7.png" alt="7筒"/></div>
+    <div class="tile sz-md" title="8筒" data-suit="tong" data-rank="8"><img src="res/tiles/tong_blue_8.png" alt="8筒"/></div>
+    <div class="tile sz-md" title="9筒" data-suit="tong" data-rank="9"><img src="res/tiles/tong_blue_9.png" alt="9筒"/></div>
+  </div>
+</div>
+
+<!-- ========== 条子牌（绿色）========== -->
+<div class="suit-row">
+  <div class="suit-label">条子牌 1条 ~ 9条 — 绿色（行3，y=655~829）</div>
+  <div class="tile-grid">
+    <div class="tile sz-md" title="1条" data-suit="tiao" data-rank="1"><img src="res/tiles/tiao_green_1.png" alt="1条"/></div>
+    <div class="tile sz-md" title="2条" data-suit="tiao" data-rank="2"><img src="res/tiles/tiao_green_2.png" alt="2条"/></div>
+    <div class="tile sz-md" title="3条" data-suit="tiao" data-rank="3"><img src="res/tiles/tiao_green_3.png" alt="3条"/></div>
+    <div class="tile sz-md" title="4条" data-suit="tiao" data-rank="4"><img src="res/tiles/tiao_green_4.png" alt="4条"/></div>
+    <div class="tile sz-md" title="5条" data-suit="tiao" data-rank="5"><img src="res/tiles/tiao_green_5.png" alt="5条"/></div>
+    <div class="tile sz-md" title="6条" data-suit="tiao" data-rank="6"><img src="res/tiles/tiao_green_6.png" alt="6条"/></div>
+    <div class="tile sz-md" title="7条" data-suit="tiao" data-rank="7"><img src="res/tiles/tiao_green_7.png" alt="7条"/></div>
+    <div class="tile sz-md" title="8条" data-suit="tiao" data-rank="8"><img src="res/tiles/tiao_green_8.png" alt="8条"/></div>
+    <div class="tile sz-md" title="9条" data-suit="tiao" data-rank="9"><img src="res/tiles/tiao_green_9.png" alt="9条"/></div>
+  </div>
+</div>
+
+<!-- ========== 字牌 ========== -->
+<div class="suit-row">
+  <div class="suit-label">字牌（行5，y=1085~1220）— 東南西北 + 白(空框) + 發(绿) + 中(红)</div>
+  <div class="tile-grid">
+    <div class="tile sz-md" title="东" data-suit="wind" data-rank="east"><img src="res/tiles/wind_east.png" alt="东"/></div>
+    <div class="tile sz-md" title="南" data-suit="wind" data-rank="south"><img src="res/tiles/wind_south.png" alt="南"/></div>
+    <div class="tile sz-md" title="西" data-suit="wind" data-rank="west"><img src="res/tiles/wind_west.png" alt="西"/></div>
+    <div class="tile sz-md" title="北" data-suit="wind" data-rank="north"><img src="res/tiles/wind_north.png" alt="北"/></div>
+    <div class="tile sz-md" title="發" data-suit="dragon" data-rank="fa"><img src="res/tiles/dragon_fa.png" alt="發"/></div>
+    <div class="tile sz-md" title="中" data-suit="dragon" data-rank="zhong"><img src="res/tiles/dragon_zhong.png" alt="中"/></div>
+    <div class="tile sz-md" title="白" data-suit="dragon" data-rank="bai"><img src="res/tiles/dragon_bai.png" alt="白"/></div>
+  </div>
+</div>
+
+<!-- ========== 花牌 ========== -->
+<div class="suit-row">
+  <div class="suit-label">花牌（行6，y=1304~1453）— 梅兰竹菊 + 春夏秋冬</div>
+  <div class="tile-grid">
+    <div class="tile sz-md" title="梅" data-suit="flower" data-rank="plum"><img src="res/tiles/flower_plum.png" alt="梅"/></div>
+    <div class="tile sz-md" title="兰" data-suit="flower" data-rank="orchid"><img src="res/tiles/flower_orchid.png" alt="兰"/></div>
+    <div class="tile sz-md" title="竹" data-suit="flower" data-rank="bamboo"><img src="res/tiles/flower_bamboo.png" alt="竹"/></div>
+    <div class="tile sz-md" title="菊" data-suit="flower" data-rank="chrys"><img src="res/tiles/flower_chrys.png" alt="菊"/></div>
+    <div class="tile sz-md" title="春" data-suit="flower" data-rank="spring"><img src="res/tiles/flower_spring.png" alt="春"/></div>
+    <div class="tile sz-md" title="夏" data-suit="flower" data-rank="summer"><img src="res/tiles/flower_summer.png" alt="夏"/></div>
+    <div class="tile sz-md" title="秋" data-suit="flower" data-rank="autumn"><img src="res/tiles/flower_autumn.png" alt="秋"/></div>
+    <div class="tile sz-md" title="冬" data-suit="flower" data-rank="winter"><img src="res/tiles/flower_winter.png" alt="冬"/></div>
+  </div>
+</div>
+
+<!-- ========== 游戏场景预览 ========== -->
+<div class="suit-row">
+  <div class="suit-label">游戏场景预览 — 手牌 + 明牌 + 弃牌</div>
+  <div style="background:#1a3d2e;border-radius:10px;padding:12px;border:1px solid rgba(212,165,55,0.15);">
+    <div style="font-size:10px;color:rgba(212,165,55,0.5);margin-bottom:6px;text-align:center;">南家手牌（含选中态）</div>
+    <div class="preview-hand tile-grid" style="justify-content:center;">
+      <!-- 万字 -->
+      <div class="tile" title="一萬"><img src="res/tiles/wan_1.png" alt="一萬"/></div>
+      <div class="tile" title="一萬"><img src="res/tiles/wan_1.png" alt="一萬"/></div>
+      <div class="tile" title="二萬"><img src="res/tiles/wan_2.png" alt="二萬"/></div>
+      <div class="tile" title="三萬"><img src="res/tiles/wan_3.png" alt="三萬"/></div>
+      <div class="tile" title="四萬"><img src="res/tiles/wan_4.png" alt="四萬"/></div>
+      <div class="tile" title="五萬"><img src="res/tiles/wan_5.png" alt="五萬"/></div>
+      <div class="tile" title="六萬"><img src="res/tiles/wan_6.png" alt="六萬"/></div>
+      <div class="tile" title="七萬"><img src="res/tiles/wan_7.png" alt="七萬"/></div>
+      <div class="tile" title="八萬"><img src="res/tiles/wan_8.png" alt="八萬"/></div>
+      <!-- 选中：9筒 -->
+      <div class="tile selected" title="9筒"><img src="res/tiles/tong_blue_9.png" alt="9筒"/></div>
+      <div class="tile" title="9筒"><img src="res/tiles/tong_blue_9.png" alt="9筒"/></div>
+      <div class="tile" title="9筒"><img src="res/tiles/tong_blue_9.png" alt="9筒"/></div>
+      <!-- 条 -->
+      <div class="tile" title="2条"><img src="res/tiles/tiao_green_2.png" alt="2条"/></div>
+      <div class="tile" title="3条"><img src="res/tiles/tiao_green_3.png" alt="3条"/></div>
+      <div class="tile" title="4条"><img src="res/tiles/tiao_green_4.png" alt="4条"/></div>
+      <!-- 字牌 -->
+      <div class="tile" title="南"><img src="res/tiles/wind_south.png" alt="南"/></div>
+      <div class="tile" title="中"><img src="res/tiles/dragon_zhong.png" alt="中"/></div>
+    </div>
+
+    <div style="margin-top:8px;font-size:10px;color:rgba(212,165,55,0.5);text-align:center;">明牌组 — 吃234万 + 碰555筒</div>
+    <div class="preview-meld tile-grid" style="justify-content:center;margin-top:4px;">
+      <div class="tile" title="二萬"><img src="res/tiles/wan_2.png" alt="二萬"/></div>
+      <div class="tile" title="三萬"><img src="res/tiles/wan_3.png" alt="三萬"/></div>
+      <div class="tile" title="四萬"><img src="res/tiles/wan_4.png" alt="四萬"/></div>
+      <div style="width:6px;"></div>
+      <div class="tile" title="5筒"><img src="res/tiles/tong_blue_5.png" alt="5筒"/></div>
+      <div class="tile" title="5筒"><img src="res/tiles/tong_blue_5.png" alt="5筒"/></div>
+      <div class="tile" title="5筒"><img src="res/tiles/tong_blue_5.png" alt="5筒"/></div>
+    </div>
+
+    <div style="margin-top:8px;font-size:10px;color:rgba(212,165,55,0.5);text-align:center;">弃牌区</div>
+    <div class="preview-discard tile-grid" style="justify-content:center;max-width:420px;margin-top:4px;">
+      <div class="tile" title="一萬"><img src="res/tiles/wan_1.png" alt="一萬"/></div>
+      <div class="tile" title="2筒"><img src="res/tiles/tong_blue_2.png" alt="2筒"/></div>
+      <div class="tile" title="5条"><img src="res/tiles/tiao_green_5.png" alt="5条"/></div>
+      <div class="tile" title="七萬"><img src="res/tiles/wan_7.png" alt="七萬"/></div>
+      <div class="tile" title="3筒"><img src="res/tiles/tong_blue_3.png" alt="3筒"/></div>
+      <div class="tile" title="东"><img src="res/tiles/wind_east.png" alt="东"/></div>
+      <div class="tile" title="三萬"><img src="res/tiles/wan_3.png" alt="三萬"/></div>
+      <div class="tile" title="4筒"><img src="res/tiles/tong_blue_4.png" alt="4筒"/></div>
+      <div class="tile" title="4条"><img src="res/tiles/tiao_green_4.png" alt="4条"/></div>
+      <div class="tile" title="二萬"><img src="res/tiles/wan_2.png" alt="二萬"/></div>
+      <div class="tile" title="發"><img src="res/tiles/dragon_fa.png" alt="發"/></div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>v4 实现方式</h3>
+  <ul style="font-size:12px;color:#bbb;line-height:1.8;">
+    <li><b>独立裁切</b>: 每张牌从 2754×1482 参考素材中用 sips 精确像素裁切为独立 PNG</li>
+    <li><b>&lt;img&gt; 标签</b>: 不再使用 CSS 精灵图 background-position，彻底避免坐标偏差问题</li>
+    <li><b>可访问性</b>: 每张牌有 title / data-suit / data-rank 属性</li>
+    <li><b>预览区复用</b>: preview-hand / preview-meld / preview-discard 三种尺寸 class</li>
+    <li><b>注意</b>: 行2(红筒)和行4(红条)已裁切但未在当前页面展示（AC麻将标准只用蓝筒+绿条；红色版本可用于特殊变体）</li>
+  </ul>
+</div>

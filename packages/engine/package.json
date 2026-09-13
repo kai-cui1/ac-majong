@@ -1,0 +1,22 @@
+{
+  "name": "@ac-majong/engine",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A&C 麻将台数计算引擎（前后端共享）",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8"
+  }
+}

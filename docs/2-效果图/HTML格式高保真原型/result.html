@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>AC 麻将俱乐部 — 结算</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .result-page {
+      min-height: 100vh;
+      background:
+        radial-gradient(ellipse at top, rgba(212, 165, 55, 0.08) 0%, transparent 60%),
+        linear-gradient(to bottom, var(--color-bg-wood) 0%, var(--color-bg-table) 40%);
+    }
+
+    /* 返回按钮 */
+    .back-btn {
+      position: absolute;
+      top: calc(var(--header-height) / 2);
+      left: 16px;
+      transform: translateY(-50%);
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(212,165,55,0.2);
+      color: var(--color-gold);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all var(--transition-fast);
+    }
+    .back-btn:hover { background: rgba(212,165,55,0.15); }
+
+    /* 胜利动画装饰 */
+    .result-deco-ring {
+      position: relative;
+      width: 120px;
+      height: 120px;
+      margin: 0 auto var(--spacing-md);
+    }
+    .deco-ring-outer {
+      position: absolute;
+      inset: 0;
+      border: 2px solid rgba(212, 165, 55, 0.2);
+      border-radius: 50%;
+      animation: ring-pulse 2s ease-in-out infinite;
+    }
+    .deco-ring-inner {
+      position: absolute;
+      inset: 12px;
+      border: 1px solid rgba(212, 165, 55, 0.12);
+      border-radius: 50%;
+      animation: ring-pulse 2s ease-in-out infinite 0.5s;
+    }
+    @keyframes ring-pulse { 0%,100%{opacity:0.3;transform:scale(1);} 50%{opacity:0.7;transform:scale(1.04);} }
+
+    /* 胡牌类型标签 */
+    .win-type-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: linear-gradient(135deg, rgba(212,165,55,0.2), rgba(212,165,55,0.05));
+      border: 1px solid var(--color-gold-dark);
+      border-radius: var(--radius-full);
+      padding: 4px 14px;
+      color: var(--color-gold);
+      font-size: 13px;
+      font-weight: 600;
+      margin-top: var(--spacing-sm);
+    }
+
+    /* 玩家结算列表 */
+    .settlement-list { margin: var(--spacing-xl) var(--spacing-lg); }
+    .settlement-item {
+      display: flex;
+      align-items: center;
+      padding: var(--spacing-md) var(--spacing-lg);
+      background: var(--color-bg-card);
+      border: 1px solid rgba(212, 165, 55, 0.1);
+      border-radius: var(--radius-lg);
+      margin-bottom: var(--spacing-sm);
+    }
+    .settlement-item.winner {
+      border-color: var(--color-gold-dark);
+      background: linear-gradient(135deg, rgba(212,165,55,0.08), rgba(61,31,13,0.9));
+    }
+    .settlement-avatar {
+      width: 40px; height: 40px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 17px; font-weight: 700; flex-shrink: 0;
+      border: 2px solid;
+    }
+    .settlement-avatar.me { background: linear-gradient(135deg, var(--color-gold), var(--color-gold-dark)); border-color: var(--color-gold-light); color: var(--color-bg-wood-dark); }
+    .settlement-avatar.ai { background: rgba(139,115,85,0.3); border-color: rgba(212,165,55,0.25); color: var(--color-text-secondary); }
+    .settlement-avatar.winner { border-color: var(--color-gold); box-shadow: 0 0 10px rgba(212,165,55,0.3); }
+    .settlement-info { flex: 1; margin-left: var(--spacing-md); }
+    .settlement-name-row { display: flex; align-items: center; gap: 6px; }
+    .settlement-name { font-size: 15px; font-weight: 600; color: var(--color-text-primary); }
+    .settlement-role { font-size: 10px; color: var(--color-text-muted); background: rgba(255,255,255,0.06); padding: 1px 6px; border-radius: 8px; }
+    .settlement-role.dealer { color: var(--color-gold); background: rgba(212,165,55,0.1); border-color: rgba(212,165,55,0.2); }
+    .settlement-detail { font-size: 11px; color: var(--color-text-muted); margin-top: 2px; }
+    .settlement-amount { text-align: right; flex-shrink: 0; }
+    .settlement-amount-val { font-size: 20px; font-weight: 900; font-family: var(--font-mono); }
+    .settlement-amount-val.win { color: var(--color-gold); }
+    .settlement-amount-val.lose { color: var(--color-danger); }
+    .settlement-amount-label { font-size: 10px; color: var(--color-text-muted); margin-top: 1px; }
+
+    /* 展开详情区 */
+    .detail-section {
+      margin: 0 var(--spacing-lg); max-height: 0; overflow: hidden;
+      transition: max-height 400ms ease, opacity 300ms ease;
+      opacity: 0;
+    }
+    .detail-section.expanded { max-height: 600px; opacity: 1; }
+    .detail-card {
+      background: rgba(0,0,0,0.25);
+      border: 1px solid rgba(212,165,55,0.1);
+      border-radius: var(--radius-lg);
+      padding: var(--spacing-lg);
+      margin-top: var(--spacing-md);
+    }
+    .detail-group-title {
+      font-size: 13px; font-weight: 700; color: var(--color-gold);
+      margin-bottom: var(--spacing-sm); padding-bottom: 4px;
+      border-bottom: 1px solid rgba(212,165,55,0.1);
+    }
+    .detail-line { display: flex; justify-content: space-between; padding: 5px 0; font-size: 13px; }
+    .detail-line-label { color: var(--color-text-secondary); }
+    .detail-line-value { color: var(--color-text-primary); font-weight: 500; }
+    .detail-line-value.gold { color: var(--color-gold-light); font-weight: 700; }
+
+    /* 底部按钮 */
+    .result-actions {
+      display: flex; gap: var(--spacing-md); padding: var(--spacing-xl) var(--spacing-lg) 40px;
+    }
+    .btn-result-primary {
+      flex: 1; padding: 14px; border-radius: var(--radius-full);
+      background: linear-gradient(135deg, var(--color-gold), var(--color-gold-dark));
+      color: var(--color-bg-wood-dark); border: 1px solid var(--color-gold-light);
+      font-size: 16px; font-weight: 700; cursor: pointer;
+      text-align: center; text-decoration: none;
+      box-shadow: 0 4px 14px rgba(212,165,55,0.3);
+      font-family: var(--font-cn); letter-spacing: 2px;
+      transition: all var(--transition-fast);
+    }
+    .btn-result-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(212,165,55,0.45); }
+    .btn-result-secondary {
+      flex: 1; padding: 14px; border-radius: var(--radius-full);
+      background: transparent; color: var(--color-text-secondary);
+      border: 1px solid rgba(212,165,55,0.25); font-size: 15px;
+      cursor: pointer; text-align: center; text-decoration: none;
+      font-family: var(--font-cn); transition: all var(--transition-fast);
+    }
+    .btn-result-secondary:hover { border-color: var(--color-gold); color: var(--color-gold); }
+  </style>
+</head>
+<body>
+  <div class="result-page page-container no-tab">
+
+    <a class="back-btn" href="game.html">←</a>
+
+    <!-- 头部 -->
+    <div class="page-header">
+      <span class="page-header-title">对局结算</span>
+    </div>
+
+    <!-- 胜利信息 -->
+    <div class="result-header">
+      <div class="result-deco-ring">
+        <div class="deco-ring-outer"></div>
+        <div class="deco-ring-inner"></div>
+        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;">
+          <div style="width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,var(--color-gold),var(--color-gold-dark));display:flex;align-items:center;justify-content:center;font-size:30px;border:2px solid var(--color-gold-light);box-shadow:0 0 20px rgba(212,165,55,0.35);">我</div>
+        </div>
+      </div>
+      <div class="winner-name">你 胡了！</div>
+      <div class="win-type-badge">🀄 自摸 · 一条龙</div>
+      <div style="margin-top: 16px;">
+        <span class="result-score-big">+520</span>
+        <span class="result-score-unit">元</span>
+      </div>
+      <div class="result-subtitle" style="margin-top:4px;">26 台 × 20 元/台</div>
+    </div>
+
+    <!-- 各玩家结算 -->
+    <div class="section-header" style="padding:0 var(--spacing-lg);">
+      <span class="section-title">本局明细</span>
+    </div>
+
+    <div class="settlement-list">
+      <!-- 自己（赢家） -->
+      <div class="settlement-item winner">
+        <div class="settlement-avatar me winner">我</div>
+        <div class="settlement-info">
+          <div class="settlement-name-row">
+            <span class="settlement-name">我</span>
+            <span class="settlement-role dealer">庄家 · 南</span>
+          </div>
+          <div class="settlement-detail">自摸 | 一条龙 + 门清自摸 + 缺一门 + ...</div>
+        </div>
+        <div class="settlement-amount">
+          <div class="settlement-amount-val win">+520</div>
+          <div class="settlement-amount-label">净赢</div>
+        </div>
+      </div>
+
+      <!-- 令狐冲 -->
+      <div class="settlement-item">
+        <div class="settlement-avatar ai">令</div>
+        <div class="settlement-info">
+          <div class="settlement-name-row">
+            <span class="settlement-name">令狐冲</span>
+            <span class="settlement-role">北</span>
+          </div>
+          <div class="settlement-detail">被自摸 | 支付 180 元</div>
+        </div>
+        <div class="settlement-amount">
+          <div class="settlement-amount-val lose">-180</div>
+          <div class="settlement-amount-label">净输</div>
+        </div>
+      </div>
+
+      <!-- 黄蓉 -->
+      <div class="settlement-item">
+        <div class="settlement-avatar ai">蓉</div>
+        <div class="settlement-info">
+          <div class="settlement-name-row">
+            <span class="settlement-name">黄蓉</span>
+            <span class="settlement-role">西</span>
+          </div>
+          <div class="settlement-detail">被自摸 | 支付 170 元</div>
+        </div>
+        <div class="settlement-amount">
+          <div class="settlement-amount-val lose">-170</div>
+          <div class="settlement-amount-label">净输</div>
+        </div>
+      </div>
+
+      <!-- 杨过 -->
+      <div class="settlement-item">
+        <div class="settlement-avatar ai">过</div>
+        <div class="settlement-info">
+          <div class="settlement-name-row">
+            <span class="settlement-name">杨过</span>
+            <span class="settlement-role">东</span>
+          </div>
+          <div class="settlement-detail">被自摸 | 支付 170 元</div>
+        </div>
+        <div class="settlement-amount">
+          <div class="settlement-amount-val lose">-170</div>
+          <div class="settlement-amount-label">净输</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 展开详情 -->
+    <button class="result-expand-btn" onclick="toggleDetail()">
+      ▼ 展开台数详情
+    </button>
+
+    <div class="detail-section" id="detailSection">
+      <div class="detail-card">
+        <div class="detail-group-title">台数组成 (26台)</div>
+        <div class="detail-line"><span class="detail-line-label">见花 ×2</span><span class="detail-line-value gold">+2台</span></div>
+        <div class="detail-line"><span class="detail-line-label">无字</span><span class="detail-line-value gold">+1台</span></div>
+        <div class="detail-line"><span class="detail-line-label">门清</span><span class="detail-line-value gold">+1台</span></div>
+        <div class="detail-line"><span class="detail-line-label">门清自摸（一摸三）</span><span class="detail-line-value gold">+3台</span></div>
+        <div class="detail-line"><span class="detail-line-label">独独</span><span class="detail-line-value gold">+2台</span></div>
+        <div class="detail-line"><span class="detail-line-label">缺一门</span><span class="detail-line-value gold">+4台</span></div>
+        <div class="detail-line"><span class="detail-line-label">胡九筒</span><span class="detail-line-value gold">+5台</span></div>
+        <div class="detail-line"><span class="detail-line-label">3九筒</span><span class="detail-line-value gold">+5台</span></div>
+        <div class="detail-line"><span class="detail-line-label">一条龙</span><span class="detail-line-value gold">+8台</span></div>
+        <div style="border-top:1px solid rgba(212,165,55,0.15);margin:8px 0;"></div>
+        <div class="detail-line"><span class="detail-line-label">连庄追加 (第1次)</span><span class="detail-line-value gold">+1台</span></div>
+        <div class="detail-line"><span class="detail-line-label">Base zi (+3台含在公式中)</span><span class="detail-line-value">已计入</span></div>
+
+        <div class="detail-group-title" style="margin-top:16px;">算账公式</div>
+        <div class="detail-line"><span class="detail-line-label">场景</span><span class="detail-line-value">庄家自摸</span></div>
+        <div class="detail-line"><span class="detail-line-label">公式</span><span class="detail-line-value">26 + 3*(N+1) + dealerBonus</span></div>
+        <div class="detail-line"><span class="detail-line-label">N 值 (vs 令狐冲)</span><span class="detail-line-value">zi:1+1 = 2</span></div>
+        <div class="detail-line"><span class="detail-line-label">→ 令狐冲应付</span><span class="detail-line-value gold">26 + 9 + 1 = 36台 = 720÷4 = 180元</span></div>
+      </div>
+    </div>
+
+    <!-- 操作按钮 -->
+    <div class="result-actions">
+      <a class="btn-result-primary" href="#">再来一局</a> <!-- 点击后直接洗牌发牌开始新一局 -->
+      <a class="btn-result-secondary" href="home.html">返回首页</a>
+    </div>
+
+    <div style="height: 24px;"></div>
+
+  </div>
+
+  <script>
+    function toggleDetail() {
+      const el = document.getElementById('detailSection');
+      const btn = event.target;
+      if (el.classList.contains('expanded')) {
+        el.classList.remove('expanded');
+        btn.textContent = '▼ 展开台数详情';
+      } else {
+        el.classList.add('expanded');
+        btn.textContent = '▲ 收起台数详情';
+      }
+    }
+  </script>
+</body>
+</html>

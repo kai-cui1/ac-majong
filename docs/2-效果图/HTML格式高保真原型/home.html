@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>AC 麻将俱乐部 — 首页</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    /* 首页特有样式 */
+    .home-hero {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 60px var(--spacing-lg) 40px;
+      text-align: center;
+    }
+    .home-logo {
+      width: 90px;
+      height: 90px;
+      background: linear-gradient(145deg, #d4a537 0%, #a07d1c 50%, #8b6820 100%);
+      border-radius: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 46px;
+      box-shadow:
+        0 8px 32px rgba(212, 165, 55, 0.35),
+        inset 0 2px 0 rgba(255,255,255,0.2);
+      margin-bottom: var(--spacing-lg);
+      border: 2px solid var(--color-gold-light);
+      position: relative;
+    }
+    .home-logo::after {
+      content: '';
+      position: absolute;
+      inset: -6px;
+      border: 1px solid rgba(212, 165, 55, 0.2);
+      border-radius: 24px;
+    }
+    .home-title {
+      font-size: 28px;
+      font-weight: 900;
+      color: var(--color-gold);
+      letter-spacing: 8px;
+      margin-bottom: 6px;
+      text-shadow: 0 2px 12px rgba(212, 165, 55, 0.25);
+    }
+    .home-subtitle {
+      font-size: 13px;
+      color: var(--color-text-muted);
+      letter-spacing: 2px;
+      margin-bottom: var(--spacing-xxl);
+    }
+
+    /* 快捷入口 */
+    .quick-entry {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--spacing-md);
+      padding: 0 var(--spacing-lg);
+      margin-bottom: var(--spacing-xl);
+    }
+    .quick-entry-item {
+      background: var(--color-bg-card);
+      border: 1px solid rgba(212, 165, 55, 0.15);
+      border-radius: var(--radius-lg);
+      padding: var(--spacing-lg) var(--spacing-md);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: var(--spacing-sm);
+      cursor: pointer;
+      transition: all var(--transition-fast);
+      text-decoration: none;
+    }
+    .quick-entry-item:hover {
+      border-color: var(--color-gold-dark);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-panel);
+    }
+    .quick-entry-icon {
+      width: 44px;
+      height: 44px;
+      background: linear-gradient(135deg, rgba(212, 165, 55, 0.15), rgba(212, 165, 55, 0.05));
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+    }
+    .quick-entry-text {
+      font-size: 14px;
+      color: var(--color-text-primary);
+      font-weight: 600;
+    }
+    .quick-entry-desc {
+      font-size: 11px;
+      color: var(--color-text-muted);
+    }
+
+    /* 最近对局 */
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 var(--spacing-lg);
+      margin-bottom: var(--spacing-md);
+    }
+    .section-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--color-text-primary);
+    }
+    .section-more {
+      font-size: 12px;
+      color: var(--color-gold);
+      text-decoration: none;
+    }
+
+    .recent-game-card {
+      margin: 0 var(--spacing-lg) var(--spacing-sm);
+      background: var(--color-bg-card);
+      border: 1px solid rgba(212, 165, 55, 0.12);
+      border-radius: var(--radius-lg);
+      padding: var(--spacing-md) var(--spacing-lg);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .recent-game-left {
+      display: flex;
+      align-items: center;
+      gap: var(--spacing-md);
+    }
+    .recent-game-result {
+      font-size: 20px;
+    }
+    .recent-game-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .recent-game-players {
+      font-size: 13px;
+      color: var(--color-text-primary);
+      font-weight: 500;
+    }
+    .recent-game-time {
+      font-size: 11px;
+      color: var(--color-text-muted);
+    }
+    .recent-game-score {
+      text-align: right;
+    }
+    .recent-score-val {
+      font-size: 18px;
+      font-weight: 700;
+      font-family: var(--font-mono);
+    }
+    .recent-score-val.win { color: var(--color-gold); }
+    .recent-score-val.lose { color: var(--color-danger); }
+    .recent-score-label {
+      font-size: 10px;
+      color: var(--color-text-muted);
+    }
+
+    /* 装饰元素 */
+    .deco-line {
+      height: 1px;
+      background: linear-gradient(to right, transparent, var(--color-gold-dark), transparent);
+      margin: var(--spacing-xl) var(--spacing-xxl);
+    }
+  </style>
+</head>
+<body class="bg-table">
+  <div class="page-container">
+
+    <!-- Hero 区域 -->
+    <div class="home-hero">
+      <div class="home-logo">🀄</div>
+      <div class="home-title">AC 麻将</div>
+      <div class="home-subtitle">传统台式麻将 · 自定义台数</div>
+
+      <!-- 开始游戏按钮 -->
+      <button class="btn-primary" style="width: 220px; padding: 14px 36px;">
+        开始游戏
+      </button>
+    </div>
+
+    <div class="deco-line"></div>
+
+    <!-- 快捷入口 -->
+    <div class="quick-entry">
+      <a class="quick-entry-item" href="#">
+        <div class="quick-entry-icon">📋</div>
+        <span class="quick-entry-text">规则说明</span>
+        <span class="quick-entry-desc">台数速查 / 算账公式</span>
+      </a>
+      <a class="quick-entry-item" href="#" style="opacity: 0.45; pointer-events: none;">
+        <div class="quick-entry-icon">🏆</div>
+        <span class="quick-entry-text">排行榜</span>
+        <span class="quick-entry-desc">即将上线 (v1.1)</span>
+      </a>
+    </div>
+
+    <div class="deco-line"></div>
+
+    <!-- 最近对局 -->
+    <div class="section-header">
+      <span class="section-title">最近对局</span>
+      <a class="section-more" href="#">查看全部 →</a>
+    </div>
+
+    <div class="recent-game-card">
+      <div class="recent-game-left">
+        <span class="recent-game-result">🏆</span>
+        <div class="recent-game-info">
+          <span class="recent-game-players">你 vs 令狐冲 / 黄蓉 / 杨过</span>
+          <span class="recent-game-time">今天 14:23 · 东风圈 · 第3局</span>
+        </div>
+      </div>
+      <div class="recent-game-score">
+        <div class="recent-score-val win">+260</div>
+        <div class="recent-score-label">净赢（元）</div>
+      </div>
+    </div>
+
+    <div class="recent-game-card">
+      <div class="recent-game-left">
+        <span class="recent-game-result">😅</span>
+        <div class="recent-game-info">
+          <span class="recent-game-players">你 vs 乔峰 / 段誉 / 虚竹</span>
+          <span class="recent-game-time">昨天 21:10 · 东风圈 · 第1局</span>
+        </div>
+      </div>
+      <div class="recent-game-score">
+        <div class="recent-score-val lose">-180</div>
+        <div class="recent-score-label">净输（元）</div>
+      </div>
+    </div>
+
+    <div class="recent-game-card">
+      <div class="recent-game-left">
+        <span class="recent-game-result">🏆</span>
+        <div class="recent-game-info">
+          <span class="recent-game-players">你 / 小龙女 / 王语嫣 / 郭靖</span>
+          <span class="recent-game-time">前天 19:45 · 东风圈 · 第2局</span>
+        </div>
+      </div>
+      <div class="recent-game-score">
+        <div class="recent-score-val win">+420</div>
+        <div class="recent-score-label">净赢（元）</div>
+      </div>
+    </div>
+
+    <!-- 底部留白 -->
+    <div style="height: 24px;"></div>
+
+  </div>
+
+  <!-- Tab 栏 -->
+  <nav class="tab-bar">
+    <a class="tab-item active" href="home.html">
+      <span class="tab-icon">🏠</span>
+      <span>首页</span>
+    </a>
+    <a class="tab-item" href="game.html">
+      <span class="tab-icon">🀄</span>
+      <span>游戏</span>
+    </a>
+    <a class="tab-item" href="rules.html">
+      <span class="tab-icon">📖</span>
+      <span>规则</span>
+    </a>
+    <a class="tab-item" href="profile.html">
+      <span class="tab-icon">👤</span>
+      <span>我的</span>
+    </a>
+  </nav>
+</body>
+</html>

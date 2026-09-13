@@ -1,34 +1,39 @@
-# Gradle files
-.gradle/
+# ---- Node / TS ----
+node_modules/
+.pnpm-store/
+dist/
 build/
+*.tsbuildinfo
 
-# Local configuration file (sdk path, etc)
-local.properties
-
-# Log/OS Files
+# ---- logs ----
 *.log
+npm-debug.log*
+pnpm-debug.log*
 
-# Android Studio generated files and folders
-captures/
-.externalNativeBuild/
-.cxx/
-*.aab
-*.apk
-output-metadata.json
+# ---- env ----
+.env
+.env.local
+.env.*.local
 
-# IntelliJ
-*.iml
+# ---- Cocos / 客户端构建产物（后续）----
+miniwxapp/temp/
+miniwxapp/library/
+miniwxapp/local/
+miniwxapp/build/
+
+# ---- 微信开发者工具 ----
+project.private.config.json
+
+# ---- 微信云托管 / server ----
+server/dist/
+server/.turbo/
+
+# ---- OS ----
+.DS_Store
+Thumbs.db
+
+# ---- IDE ----
 .idea/
-misc.xml
-deploymentTargetDropDown.xml
-render.experimental.xml
-
-# Keystore files
-*.jks
-*.keystore
-
-# Google Services (e.g. APIs or Firebase)
-google-services.json
-
-# Android Profiling
-*.hprof
+*.iml
+.vscode/*
+!.vscode/extensions.json

@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>AC 麻将俱乐部 — 游戏桌面 v2</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    /* ============================================
+       横屏游戏桌面 v2 — 方案A：中央公共牌河
+       基准: 844×390 (iPhone 12/13/14/15 6.1" 横屏)
+       布局: 上=北 / 下=南(自己) / 左=西 / 右=东
+       中央 = 四家集中牌河 / 南家底部 = 纯操作区
+       ============================================ */
+
+    .game-page {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      height: 100dvh;
+      overflow: hidden;
+      background:
+        radial-gradient(ellipse at center, rgba(30, 100, 60, 0.25) 0%, transparent 60%),
+        repeating-linear-gradient(
+          45deg,
+          var(--color-bg-table) 0px,
+          var(--color-bg-table) 2px,
+          var(--color-bg-table-dark) 2px,
+          var(--color-bg-table-dark) 4px
+        );
+    }
+
+    /* 竖屏提示 */
+    @media (orientation: portrait) {
+      .game-page::before {
+        content: '📱 请横屏手机以获得最佳体验';
+        position: absolute; inset: 0;
+        display: flex; align-items: center; justify-content: center;
+        background: rgba(0,0,0,0.85); color: var(--color-gold);
+        font-size: 18px; z-index: 9999; font-weight: 600;
+        letter-spacing: 2px; text-align: center; padding: 20px;
+      }
+    }
+
+    /* ====== 顶部状态栏（左上角胶囊，避开北家）====== */
+    .game-status-bar-custom {
+      position: absolute; top: 6px; left: 10px;
+      display: flex; align-items: center; gap: 8px;
+      background: rgba(13,74,42,0.88); backdrop-filter: blur(8px);
+      border: 1px solid rgba(212,165,55,0.18); border-radius: var(--radius-full);
+      padding: 4px 12px; font-size: 11px; white-space: nowrap; z-index: 50;
+    }
+    .status-divider { width: 1px; height: 12px; background: rgba(212,165,55,0.2); }
+    .status-item { color: var(--color-text-secondary); display: flex; align-items: center; gap: 3px; }
+    .status-item .value { color: var(--color-gold); font-weight: 700; font-family: var(--font-mono); }
+
+    /* 退出按钮（右上角） */
+    .btn-exit {
+      position: absolute; top: 6px; right: 10px; z-index: 50;
+      width: 28px; height: 28px; border-radius: 50%;
+      background: rgba(0,0,0,0.5); border: 1px solid rgba(212,165,55,0.2);
+      color: var(--color-text-secondary); font-size: 13px;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; text-decoration: none;
+      transition: all var(--transition-fast);
+    }
+    .btn-exit:hover { border-color: var(--color-gold); color: var(--color-gold); }
+
+    /* ====== 通用：玩家信息条 ====== */
+    .pinfo {
+      display: flex; align-items: center; gap: 5px;
+      background: rgba(0,0,0,0.55); border: 1px solid rgba(212,165,55,0.15);
+      border-radius: 20px; padding: 2px 10px 2px 2px;
+      backdrop-filter: blur(4px); white-space: nowrap;
+    }
+    .pinfo-avatar {
+      width: 22px; height: 22px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--color-gold), var(--color-gold-dark));
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; border: 1.5px solid var(--color-gold-light); flex-shrink: 0;
+      color: var(--color-bg-wood-dark); font-weight: 700;
+    }
+    .pinfo-name { font-size: 11px; color: var(--color-text-primary); font-weight: 600; }
+    .pinfo-score { font-size: 10px; color: var(--color-gold); font-weight: 700; font-family: var(--font-mono); }
+    .pinfo.active { border-color: var(--color-gold); box-shadow: 0 0 10px rgba(212,165,55,0.25); animation: active-glow 1.8s ease-in-out infinite; }
+    @keyframes active-glow { 0%,100%{box-shadow:0 0 6px rgba(212,165,55,0.15);} 50%{box-shadow:0 0 14px rgba(212,165,55,0.35);} }
+
+    /* ====== 牌侧俯视图（对手手牌）======
+       视觉参考: res/tiles/tile_edge_top.png
+       顶部80°俯视: 象牙白顶面受光条 + 蓝绿牌背体
+       原型用 CSS 渐变模拟, 正式版可替换为素材图    */
+    .tile-edge-h {
+      width: 19px; height: 13px; flex-shrink: 0;
+      border-radius: 2px;
+      background: linear-gradient(to bottom,
+        #f7f0dc 0%, #efe5c8 26%,          /* 顶面象牙色受光 */
+        #23538f 32%, #0d2857 100%);        /* 牌背蓝绿 */
+      border: 1px solid rgba(0,0,0,0.35);
+      box-shadow: 0 1px 2px rgba(0,0,0,0.4);
+    }
+    .tile-edge-v {
+      width: 13px; height: 15px; flex-shrink: 0;
+      border-radius: 2px;
+      background: linear-gradient(to right,
+        #f7f0dc 0%, #efe5c8 26%,
+        #23538f 32%, #0d2857 100%);
+      border: 1px solid rgba(0,0,0,0.35);
+      box-shadow: 1px 1px 2px rgba(0,0,0,0.4);
+    }
+
+    /* ====== 北家（顶部居中）====== */
+    .player-north {
+      position: absolute; top: 4px; left: 50%; transform: translateX(-50%);
+      display: flex; flex-direction: column; align-items: center; gap: 3px;
+      z-index: 10;
+    }
+    .north-hand-edge { display: flex; gap: 1px; }
+
+    /* ====== 西家（左侧）/ 东家（右侧）====== */
+    .player-west, .player-east {
+      position: absolute; top: 50%; transform: translateY(-50%);
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
+      z-index: 10;
+    }
+    .player-west { left: 8px; }
+    .player-east { right: 8px; }
+    .side-hand-edge { display: flex; flex-direction: column; gap: 1px; }
+
+    /* ====== 中央公共牌河 ====== */
+    .center-river {
+      position: absolute; top: 50px; bottom: 108px;
+      left: 78px; right: 78px;
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; gap: 5px;
+      z-index: 5;
+    }
+    .river-row { display: flex; flex-wrap: wrap; gap: 2px; justify-content: center; max-width: 460px; }
+    .river-row .tile { width: 20px; height: 27px; border-radius: 3px; margin: 0; cursor: default; }
+    .river-middle {
+      display: flex; align-items: center; justify-content: space-between;
+      width: 100%; padding: 0 6px;
+    }
+    .river-side { display: grid; grid-template-columns: repeat(4, 20px); gap: 2px; }
+    .river-side .tile { width: 20px; height: 27px; border-radius: 3px; margin: 0; cursor: default; }
+
+    /* 最新弃牌高亮 */
+    .river-row .tile.latest, .river-side .tile.latest {
+      box-shadow: 0 0 0 2px var(--color-gold), 0 0 10px rgba(212,165,55,0.5);
+    }
+
+    /* 风圈指示盘 */
+    .wind-indicator {
+      width: 58px; height: 58px; border-radius: 50%;
+      background: radial-gradient(circle, rgba(13,74,42,0.92) 55%, rgba(9,61,34,0.75));
+      border: 1.5px solid rgba(212,165,55,0.35);
+      display: flex; align-items: center; justify-content: center;
+      position: relative; flex-shrink: 0;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+    }
+    .wind-center { font-size: 20px; color: var(--color-gold); font-weight: 900; text-shadow: 0 1px 6px rgba(212,165,55,0.4); }
+    .wind-pos {
+      position: absolute; font-size: 8px; color: var(--color-text-muted);
+      width: 14px; height: 14px; display: flex; align-items: center; justify-content: center;
+      border-radius: 50%;
+    }
+    .wind-pos.on { color: var(--color-bg-wood-dark); background: var(--color-gold); font-weight: 700; }
+    .wind-pos.n { top: -4px; left: 50%; transform: translateX(-50%); }
+    .wind-pos.s { bottom: -4px; left: 50%; transform: translateX(-50%); }
+    .wind-pos.w { left: -4px; top: 50%; transform: translateY(-50%); }
+    .wind-pos.e { right: -4px; top: 50%; transform: translateY(-50%); }
+
+    /* ====== 南家（底部 = 自己）====== */
+    .player-south {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      display: flex; flex-direction: column; align-items: center;
+      z-index: 20; padding-bottom: max(env(safe-area-inset-bottom, 0px), 2px);
+      background: linear-gradient(to top, rgba(9,61,34,0.45), transparent);
+    }
+    /* 上行: 花牌 + 明牌 + 弹性区 + 台数徽章 */
+    .south-top-row {
+      display: flex; align-items: center; gap: 8px;
+      width: 100%; padding: 2px 12px 1px;
+    }
+    .flower-area { display: flex; gap: 3px; padding: 2px 5px; background: rgba(255,245,230,0.08); border-radius: 6px; border: 1px solid rgba(212,165,55,0.1); }
+    .flower-area .tile { width: 22px; height: 31px; border-radius: 3px; margin: 0; cursor: default; }
+    .south-melds { display: flex; gap: 5px; }
+    .south-melds .meld-group .tile { width: 24px; height: 34px; border-radius: 3px; margin: 0; cursor: default; }
+    .south-top-spacer { flex: 1; }
+
+    /* 台数徽章（收起态，点击展开） */
+    .score-badge {
+      display: flex; align-items: center; gap: 4px;
+      background: rgba(9,61,34,0.9); border: 1px solid var(--color-gold-dark);
+      border-radius: var(--radius-full); padding: 4px 12px;
+      color: var(--color-gold-light); font-size: 12px; font-weight: 700;
+      cursor: pointer; font-family: var(--font-mono);
+      transition: all var(--transition-fast); flex-shrink: 0;
+    }
+    .score-badge:hover { border-color: var(--color-gold); box-shadow: var(--shadow-gold); }
+
+    /* 下行: 手牌 + 出牌确认按钮 */
+    .south-hand-row {
+      display: flex; align-items: flex-end; gap: 10px;
+      width: 100%; padding: 6px 12px 0px; justify-content: center;
+    }
+    .south-hand { display: flex; gap: 3px; }
+    .south-hand .tile {
+      margin: 0; cursor: pointer; flex-shrink: 0;
+      width: 38px; height: 54px; border-radius: 5px;
+      transition: transform 150ms ease, box-shadow 150ms ease;
+    }
+    .south-hand .tile:hover { transform: translateY(-6px); }
+    .south-hand .tile.selected {
+      transform: translateY(-12px) scale(1.05);
+      box-shadow: 0 8px 20px rgba(0,0,0,0.35), 0 0 0 2px var(--color-gold);
+    }
+
+    /* 出牌确认按钮（两步确认，未选牌时置灰） */
+    .confirm-discard-btn {
+      width: 50px; height: 50px; border-radius: 50%; flex-shrink: 0;
+      background: linear-gradient(135deg, var(--color-gold), var(--color-gold-dark));
+      border: 2px solid var(--color-gold-light); color: var(--color-bg-wood-dark);
+      font-size: 13px; font-weight: 800; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 3px 12px rgba(212,165,55,0.35);
+      transition: all var(--transition-fast); font-family: var(--font-cn);
+      letter-spacing: 1px; margin-bottom: 2px;
+    }
+    .confirm-discard-btn:disabled {
+      background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.15);
+      color: var(--color-text-muted); box-shadow: none; cursor: not-allowed;
+    }
+    .confirm-discard-btn:not(:disabled):hover { transform: scale(1.06); box-shadow: 0 5px 18px rgba(212,165,55,0.5); }
+    .confirm-discard-btn:not(:disabled):active { transform: scale(0.96); }
+
+    /* ====== 操作浮层（吃碰杠胡，按需弹出）====== */
+    .action-overlay {
+      position: absolute; bottom: 128px; left: 50%; transform: translateX(-50%) translateY(8px);
+      background: rgba(9,30,18,0.94); backdrop-filter: blur(10px);
+      border: 1px solid rgba(212,165,55,0.35); border-radius: var(--radius-lg);
+      padding: 10px 14px 12px; z-index: 200;
+      display: flex; flex-direction: column; gap: 8px;
+      opacity: 0; pointer-events: none;
+      transition: opacity 200ms ease, transform 200ms ease;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    }
+    .action-overlay.show { opacity: 1; pointer-events: auto; transform: translateX(-50%) translateY(0); }
+    .action-overlay-hint {
+      font-size: 11px; color: var(--color-text-secondary); text-align: center;
+    }
+    .action-overlay-hint .tile-name { color: var(--color-gold); font-weight: 700; }
+    .action-countdown {
+      height: 3px; border-radius: 2px; background: rgba(255,255,255,0.1); overflow: hidden;
+    }
+    .action-countdown-bar {
+      height: 100%; width: 65%; border-radius: 2px;
+      background: linear-gradient(to right, var(--color-gold), var(--color-gold-light));
+      animation: countdown-shrink 8s linear forwards;
+    }
+    @keyframes countdown-shrink { from { width: 100%; } to { width: 0%; } }
+    .action-bar-custom { display: flex; gap: 6px; justify-content: center; }
+    .action-overlay .btn-action { min-width: 56px; height: 42px; font-size: 16px; }
+
+    /* ====== 台数详情浮层（徽章点击展开）====== */
+    .score-popover {
+      position: absolute; bottom: 122px; right: 12px; z-index: 210;
+      width: 190px; background: rgba(9,61,34,0.95);
+      backdrop-filter: blur(10px); border: 1px solid rgba(212,165,55,0.3);
+      border-radius: var(--radius-lg); padding: 10px 12px; font-size: 11px;
+      opacity: 0; pointer-events: none; transform: translateY(8px);
+      transition: opacity 200ms ease, transform 200ms ease;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    }
+    .score-popover.show { opacity: 1; pointer-events: auto; transform: translateY(0); }
+    .popover-title-row {
+      display: flex; align-items: center; justify-content: center; gap: 4px;
+      color: var(--color-gold); font-size: 11px; font-weight: 700;
+      margin-bottom: 6px; padding-bottom: 5px;
+      border-bottom: 1px solid rgba(212,165,55,0.15); letter-spacing: 1px;
+    }
+    .score-row { display: flex; justify-content: space-between; padding: 2px 0; color: var(--color-text-secondary); }
+    .score-row-val { color: var(--color-gold-light); font-weight: 700; font-family: var(--font-mono); }
+    .score-total-row { margin-top: 5px; padding-top: 5px; border-top: 1px solid rgba(212,165,55,0.15); display: flex; justify-content: space-between; align-items: center; }
+    .score-total-label { color: var(--color-gold); font-weight: 600; }
+    .score-total-val { color: var(--color-gold-light); font-size: 17px; font-weight: 900; font-family: var(--font-mono); text-shadow: 0 1px 4px rgba(212,165,55,0.25); }
+
+    /* ====== 原型演示控件（仅原型用）====== */
+    .demo-controls {
+      position: absolute; top: 9px; right: 46px;
+      z-index: 60;
+    }
+    .demo-controls button {
+      background: rgba(0,0,0,0.5); border: 1px dashed rgba(212,165,55,0.4);
+      color: var(--color-text-secondary); font-size: 10px;
+      border-radius: var(--radius-full); padding: 3px 10px; cursor: pointer;
+      font-family: var(--font-cn);
+    }
+    .demo-controls button:hover { color: var(--color-gold); border-color: var(--color-gold); }
+
+    /* ====== 窄屏适配（iPhone mini 等 744~812px 宽）====== */
+    @media (max-width: 812px) {
+      .south-hand .tile { width: 36px; height: 51px; }
+      .south-hand { gap: 2px; }
+      .confirm-discard-btn { width: 48px; height: 48px; font-size: 12px; }
+      .center-river { left: 66px; right: 66px; }
+      .tile-edge-h { width: 17px; }
+    }
+    /* ====== 低高度适配 ====== */
+    @media (max-height: 380px) {
+      .center-river { top: 48px; bottom: 112px; }
+      .river-row .tile, .river-side .tile { width: 18px; height: 24px; }
+      .river-side { grid-template-columns: repeat(4, 18px); }
+      .wind-indicator { width: 50px; height: 50px; }
+      .south-hand .tile { width: 36px; height: 50px; }
+      .south-top-row { padding-top: 2px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="game-page">
+
+    <!-- ====== 顶部状态栏（左上角）====== -->
+    <div class="game-status-bar-custom">
+      <span class="status-item">🀄 东风圈</span>
+      <span class="status-divider"></span>
+      <span class="status-item">第 <span class="value">2</span> 局</span>
+      <span class="status-divider"></span>
+      <span class="status-item">剩余 <span class="value">48</span> 张</span>
+      <span class="status-divider"></span>
+      <span class="status-item">连庄 <span class="value">1</span></span>
+    </div>
+
+    <!-- 退出按钮 -->
+    <a class="btn-exit" href="home.html" title="返回首页">✕</a>
+
+    <!-- 原型演示控件 -->
+    <div class="demo-controls">
+      <button onclick="document.getElementById('actionOverlay').classList.toggle('show')">演示: 吃碰杠胡浮层</button>
+    </div>
+
+    <!-- ====== 北家（AI：令狐冲）====== -->
+    <div class="player-north">
+      <div class="pinfo">
+        <div class="pinfo-avatar">令</div>
+        <span class="pinfo-name">令狐冲</span>
+        <span class="pinfo-score">+120</span>
+      </div>
+      <div class="north-hand-edge" id="northHand"></div>
+    </div>
+
+    <!-- ====== 西家（AI：黄蓉）====== -->
+    <div class="player-west">
+      <div class="pinfo">
+        <div class="pinfo-avatar">蓉</div>
+        <span class="pinfo-name">黄蓉</span>
+        <span class="pinfo-score">-40</span>
+      </div>
+      <div class="side-hand-edge" id="westHand"></div>
+    </div>
+
+    <!-- ====== 东家（AI：杨过）====== -->
+    <div class="player-east">
+      <div class="pinfo">
+        <div class="pinfo-avatar">过</div>
+        <span class="pinfo-name">杨过</span>
+        <span class="pinfo-score">-80</span>
+      </div>
+      <div class="side-hand-edge" id="eastHand"></div>
+    </div>
+
+    <!-- ====== 中央公共牌河 ====== -->
+    <div class="center-river">
+      <!-- 北家弃牌 -->
+      <div class="river-row">
+        <div class="tile"><img src="res/tiles/wan_1.png" alt="一萬"/></div>
+        <div class="tile"><img src="res/tiles/tiao_green_2.png" alt="2条"/></div>
+        <div class="tile"><img src="res/tiles/tong_blue_5.png" alt="5筒"/></div>
+        <div class="tile"><img src="res/tiles/wan_7.png" alt="七萬"/></div>
+        <div class="tile"><img src="res/tiles/tong_blue_3.png" alt="3筒"/></div>
+        <div class="tile"><img src="res/tiles/wind_east.png" alt="东"/></div>
+        <div class="tile"><img src="res/tiles/tiao_green_8.png" alt="8条"/></div>
+        <div class="tile"><img src="res/tiles/wan_9.png" alt="九萬"/></div>
+        <div class="tile"><img src="res/tiles/dragon_zhong.png" alt="中"/></div>
+        <div class="tile latest"><img src="res/tiles/tong_blue_2.png" alt="2筒"/></div>
+      </div>
+
+      <!-- 中间行: 西弃牌 | 风圈指示 | 东弃牌 -->
+      <div class="river-middle">
+        <div class="river-side">
+          <div class="tile"><img src="res/tiles/wan_3.png" alt="三萬"/></div>
+          <div class="tile"><img src="res/tiles/tong_blue_7.png" alt="7筒"/></div>
+          <div class="tile"><img src="res/tiles/tiao_green_4.png" alt="4条"/></div>
+          <div class="tile"><img src="res/tiles/wan_2.png" alt="二萬"/></div>
+          <div class="tile"><img src="res/tiles/dragon_fa.png" alt="發"/></div>
+          <div class="tile"><img src="res/tiles/tong_blue_9.png" alt="9筒"/></div>
+          <div class="tile"><img src="res/tiles/tiao_green_1.png" alt="1条"/></div>
+          <div class="tile"><img src="res/tiles/wind_south.png" alt="南"/></div>
+        </div>
+
+        <div class="wind-indicator">
+          <span class="wind-pos n">北</span>
+          <span class="wind-pos e">东</span>
+          <span class="wind-pos s on">南</span>
+          <span class="wind-pos w">西</span>
+          <span class="wind-center">东</span>
+        </div>
+
+        <div class="river-side">
+          <div class="tile"><img src="res/tiles/tong_blue_4.png" alt="4筒"/></div>
+          <div class="tile"><img src="res/tiles/wan_6.png" alt="六萬"/></div>
+          <div class="tile"><img src="res/tiles/tiao_green_9.png" alt="9条"/></div>
+          <div class="tile"><img src="res/tiles/tong_blue_1.png" alt="1筒"/></div>
+          <div class="tile"><img src="res/tiles/wind_west.png" alt="西"/></div>
+          <div class="tile"><img src="res/tiles/dragon_bai.png" alt="白"/></div>
+          <div class="tile"><img src="res/tiles/wan_8.png" alt="八萬"/></div>
+          <div class="tile"><img src="res/tiles/tiao_green_3.png" alt="3条"/></div>
+        </div>
+      </div>
+
+      <!-- 南家弃牌（自己的，最新一张高亮） -->
+      <div class="river-row" id="riverSouth">
+        <div class="tile"><img src="res/tiles/tiao_green_1.png" alt="1条"/></div>
+        <div class="tile"><img src="res/tiles/wan_6.png" alt="六萬"/></div>
+        <div class="tile"><img src="res/tiles/tong_blue_2.png" alt="2筒"/></div>
+        <div class="tile"><img src="res/tiles/wind_north.png" alt="北"/></div>
+        <div class="tile"><img src="res/tiles/tiao_green_7.png" alt="7条"/></div>
+        <div class="tile"><img src="res/tiles/wan_9.png" alt="九萬"/></div>
+        <div class="tile"><img src="res/tiles/tong_blue_8.png" alt="8筒"/></div>
+        <div class="tile"><img src="res/tiles/dragon_fa.png" alt="發"/></div>
+      </div>
+    </div>
+
+    <!-- ====== 南家（自己）====== -->
+    <div class="player-south">
+      <!-- 上行: 花牌 + 明牌 + 台数徽章 -->
+      <div class="south-top-row">
+        <div class="flower-area">
+          <div class="tile"><img src="res/tiles/flower_spring.png" alt="春"/></div>
+          <div class="tile"><img src="res/tiles/flower_summer.png" alt="夏"/></div>
+        </div>
+        <div class="south-melds">
+          <div class="meld-group">
+            <div class="tile"><img src="res/tiles/wan_2.png" alt="二萬"/></div>
+            <div class="tile"><img src="res/tiles/wan_3.png" alt="三萬"/></div>
+            <div class="tile"><img src="res/tiles/wan_4.png" alt="四萬"/></div>
+          </div>
+          <div class="meld-group">
+            <div class="tile"><img src="res/tiles/tong_blue_5.png" alt="5筒"/></div>
+            <div class="tile"><img src="res/tiles/tong_blue_5.png" alt="5筒"/></div>
+            <div class="tile"><img src="res/tiles/tong_blue_5.png" alt="5筒"/></div>
+          </div>
+        </div>
+        <div class="south-top-spacer"></div>
+        <div class="score-badge" onclick="document.getElementById('scorePopover').classList.toggle('show')">
+          💡 <span>20台</span> ▴
+        </div>
+      </div>
+
+      <!-- 下行: 手牌 + 出牌确认 -->
+      <div class="south-hand-row">
+        <div class="south-hand" id="southHand">
+          <div class="tile interactive"><img src="res/tiles/wan_1.png" alt="一萬"/></div>
+          <div class="tile interactive"><img src="res/tiles/wan_1.png" alt="一萬"/></div>
+          <div class="tile interactive"><img src="res/tiles/wan_2.png" alt="二萬"/></div>
+          <div class="tile interactive"><img src="res/tiles/wan_3.png" alt="三萬"/></div>
+          <div class="tile interactive"><img src="res/tiles/wan_4.png" alt="四萬"/></div>
+          <div class="tile interactive"><img src="res/tiles/wan_5.png" alt="五萬"/></div>
+          <div class="tile interactive"><img src="res/tiles/wan_6.png" alt="六萬"/></div>
+          <div class="tile interactive"><img src="res/tiles/wan_7.png" alt="七萬"/></div>
+          <div class="tile interactive"><img src="res/tiles/wan_8.png" alt="八萬"/></div>
+          <div class="tile interactive"><img src="res/tiles/tong_blue_9.png" alt="9筒"/></div>
+          <div class="tile interactive"><img src="res/tiles/tong_blue_9.png" alt="9筒"/></div>
+          <div class="tile interactive"><img src="res/tiles/tong_blue_9.png" alt="9筒"/></div>
+          <div class="tile interactive"><img src="res/tiles/tiao_green_2.png" alt="2条"/></div>
+          <div class="tile interactive"><img src="res/tiles/tiao_green_3.png" alt="3条"/></div>
+          <div class="tile interactive"><img src="res/tiles/tiao_green_4.png" alt="4条"/></div>
+          <div class="tile interactive"><img src="res/tiles/wind_south.png" alt="南"/></div>
+          <div class="tile interactive"><img src="res/tiles/dragon_zhong.png" alt="中"/></div>
+        </div>
+        <button class="confirm-discard-btn" id="discardBtn" disabled>出牌</button>
+      </div>
+    </div>
+
+    <!-- ====== 操作浮层（吃碰杠胡，默认隐藏）====== -->
+    <div class="action-overlay" id="actionOverlay">
+      <div class="action-overlay-hint">令狐冲打出 <span class="tile-name">「九筒」</span>，你可以：</div>
+      <div class="action-countdown"><div class="action-countdown-bar"></div></div>
+      <div class="action-bar-custom">
+        <button class="btn-action available">吃</button>
+        <button class="btn-action available">碰</button>
+        <button class="btn-action available">杠</button>
+        <button class="btn-action danger available">胡</button>
+        <button class="btn-action">过</button>
+      </div>
+    </div>
+
+    <!-- ====== 台数详情浮层（默认隐藏）====== -->
+    <div class="score-popover" id="scorePopover">
+      <div class="popover-title-row"><span>💡</span> 台数预览</div>
+      <div class="score-row"><span>见花 ×2</span><span class="score-row-val">+2</span></div>
+      <div class="score-row"><span>无字</span><span class="score-row-val">+1</span></div>
+      <div class="score-row"><span>门清</span><span class="score-row-val">+1</span></div>
+      <div class="score-row"><span>独独</span><span class="score-row-val">+2</span></div>
+      <div class="score-row"><span>缺一门</span><span class="score-row-val">+4</span></div>
+      <div class="score-row"><span>胡九筒</span><span class="score-row-val">+5</span></div>
+      <div class="score-row"><span>3九筒</span><span class="score-row-val">+5</span></div>
+      <div class="score-total-row">
+        <span class="score-total-label">合计</span>
+        <span class="score-total-val">20台</span>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    /* ====== 生成对手手牌（牌侧俯视图 ×18）====== */
+    ['northHand', 'westHand', 'eastHand'].forEach((id, i) => {
+      const box = document.getElementById(id);
+      const cls = id === 'northHand' ? 'tile-edge-h' : 'tile-edge-v';
+      for (let n = 0; n < 18; n++) {
+        const d = document.createElement('div');
+        d.className = cls;
+        box.appendChild(d);
+      }
+    });
+
+    /* ====== 手牌选中 + 两步出牌 ====== */
+    const handBox = document.getElementById('southHand');
+    const discardBtn = document.getElementById('discardBtn');
+    const riverSouth = document.getElementById('riverSouth');
+    let selectedTile = null;
+
+    handBox.addEventListener('click', (e) => {
+      const tile = e.target.closest('.tile');
+      if (!tile) return;
+      if (selectedTile === tile) {
+        tile.classList.remove('selected');
+        selectedTile = null;
+      } else {
+        if (selectedTile) selectedTile.classList.remove('selected');
+        tile.classList.add('selected');
+        selectedTile = tile;
+      }
+      discardBtn.disabled = !selectedTile;
+    });
+
+    discardBtn.addEventListener('click', () => {
+      if (!selectedTile) return;
+      // 清除旧的最新高亮
+      const oldLatest = riverSouth.querySelector('.latest');
+      if (oldLatest) oldLatest.classList.remove('latest');
+      // 移动到南家弃牌区并高亮
+      const d = document.createElement('div');
+      d.className = 'tile latest';
+      d.innerHTML = selectedTile.innerHTML;
+      riverSouth.appendChild(d);
+      selectedTile.remove();
+      selectedTile = null;
+      discardBtn.disabled = true;
+      // 剩余牌数 -1（演示）
+      const remainEl = document.querySelectorAll('.status-item .value')[1];
+      remainEl.textContent = Math.max(0, parseInt(remainEl.textContent) - 1);
+    });
+
+    /* ====== 操作浮层按钮（演示：点击后关闭）====== */
+    document.querySelectorAll('#actionOverlay .btn-action').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.getElementById('actionOverlay').classList.remove('show');
+      });
+    });
+
+    /* ====== 点击浮层外部收起台数详情 ====== */
+    document.addEventListener('click', (e) => {
+      const pop = document.getElementById('scorePopover');
+      const badge = document.querySelector('.score-badge');
+      if (pop.classList.contains('show') && !pop.contains(e.target) && !badge.contains(e.target)) {
+        pop.classList.remove('show');
+      }
+    });
+  </script>
+</body>
+</html>
