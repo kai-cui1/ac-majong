@@ -46,3 +46,16 @@ describe('必然包含去重（规格书 4）', () => {
   it('自摸九筒吸收自摸 → 10（特例1）', () => expect(computeTai([P('自摸九筒'), P('自摸')]).total).toBe(10));
   it('将一色不吸收缺一门 → 44（原例8）', () => expect(computeTai([P('将一色'), P('缺一门')]).total).toBe(44));
 });
+
+describe('无花无字吸收（N9）', () => {
+  it('无花无字吸收 无花+无字 → 3', () =>
+    expect(computeTai([P('无花无字'), P('无花'), P('无字')]).total).toBe(3));
+  it('大平吸收无花无字（及其无花/无字）→ 8', () =>
+    expect(computeTai([P('大平'), P('无花无字'), P('无花'), P('无字')]).total).toBe(8));
+  it('将一色吸收无花无字 → 40', () =>
+    expect(computeTai([P('将一色'), P('无花无字'), P('无字')]).total).toBe(40));
+  it('清一色不吸收无花无字 → 40+3=43', () =>
+    expect(computeTai([P('清一色'), P('无花无字')]).total).toBe(43));
+  it('清一色不吸收无字（叠加）→ 40+1=41', () =>
+    expect(computeTai([P('清一色'), P('无字')]).total).toBe(41));
+});

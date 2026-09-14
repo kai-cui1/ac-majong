@@ -86,7 +86,7 @@
     @keyframes active-glow { 0%,100%{box-shadow:0 0 6px rgba(212,165,55,0.15);} 50%{box-shadow:0 0 14px rgba(212,165,55,0.35);} }
 
     /* ====== 牌侧俯视图（对手手牌）======
-       视觉参考: res/tiles/tile_edge_top.png
+       视觉参考: res/tiles/tile_edge_top.png?v=3
        顶部80°俯视: 象牙白顶面受光条 + 蓝绿牌背体
        原型用 CSS 渐变模拟, 正式版可替换为素材图    */
     .tile-edge-h {
@@ -107,6 +107,12 @@
       border: 1px solid rgba(0,0,0,0.35);
       box-shadow: 1px 1px 2px rgba(0,0,0,0.4);
     }
+    /* 东家镜像: 牌背(蓝)朝桌面中央, 即朝屏幕左 */
+    .player-east .tile-edge-v {
+      background: linear-gradient(to left,
+        #f7f0dc 0%, #efe5c8 26%,
+        #23538f 32%, #0d2857 100%);
+    }
 
     /* ====== 北家（顶部居中）====== */
     .player-north {
@@ -115,6 +121,17 @@
       z-index: 10;
     }
     .north-hand-edge { display: flex; gap: 1px; }
+
+    /* ====== 明牌组标签（四家通用，新手提示）====== */
+    .meld-item { display: flex; flex-direction: column; align-items: center; gap: 1px; }
+    .meld-label { font-size: 9px; color: var(--color-text-secondary); letter-spacing: 1px; line-height: 1.2; opacity: 0.9; }
+
+    /* 北家明牌: 横排在牌条左侧（北家右手边） */
+    .north-body { display: flex; align-items: flex-start; gap: 10px; }
+    .north-melds { display: flex; gap: 8px; padding-top: 1px; }
+    .north-melds .meld-group { gap: 1px; padding: 1px; }
+    .north-melds .tile, .north-melds .tile-back { width: 16px; height: 22px; border-radius: 2px; margin: 0; cursor: default; }
+    .north-melds .tile-back { border-width: 1px; }
 
     /* ====== 西家（左侧）/ 东家（右侧）====== */
     .player-west, .player-east {
@@ -126,22 +143,32 @@
     .player-east { right: 8px; }
     .side-hand-edge { display: flex; flex-direction: column; gap: 1px; }
 
+    /* 西/东家明牌: 竖排在牌条朝中央一侧 */
+    .west-body, .east-body { display: flex; align-items: flex-start; gap: 4px; }
+    .side-melds { display: flex; flex-direction: column; gap: 6px; padding-top: 1px; }
+    .side-melds .meld-group { display: flex; flex-direction: column; gap: 1px; padding: 1px; }
+    .side-melds .tile, .side-melds .tile-back { width: 14px; height: 19px; border-radius: 2px; margin: 0; cursor: default; }
+    .side-melds .tile-back { border-width: 1px; }
+
     /* ====== 中央公共牌河 ====== */
     .center-river {
-      position: absolute; top: 50px; bottom: 108px;
-      left: 78px; right: 78px;
+      position: absolute; top: 68px; bottom: 118px;
+      left: 88px; right: 88px;
       display: flex; flex-direction: column; align-items: center;
-      justify-content: center; gap: 5px;
+      justify-content: space-between; padding: 2px 0;
       z-index: 5;
     }
     .river-row { display: flex; flex-wrap: wrap; gap: 2px; justify-content: center; max-width: 460px; }
-    .river-row .tile { width: 20px; height: 27px; border-radius: 3px; margin: 0; cursor: default; }
+    .river-row .tile { width: 18px; height: 25px; border-radius: 3px; margin: 0; cursor: default; }
     .river-middle {
       display: flex; align-items: center; justify-content: space-between;
-      width: 100%; padding: 0 6px;
+      width: 100%; gap: 8px;
     }
-    .river-side { display: grid; grid-template-columns: repeat(4, 20px); gap: 2px; }
-    .river-side .tile { width: 20px; height: 27px; border-radius: 3px; margin: 0; cursor: default; }
+    /* 西/东弃牌: 横排换行, 极端容量 12列×2行=24张 */
+    .river-side { display: flex; flex-wrap: wrap; gap: 2px; max-width: 240px; flex: 1; }
+    .river-west { justify-content: flex-start; }
+    .river-east { justify-content: flex-end; }
+    .river-side .tile { width: 18px; height: 25px; border-radius: 3px; margin: 0; cursor: default; }
 
     /* 最新弃牌高亮 */
     .river-row .tile.latest, .river-side .tile.latest {
@@ -173,7 +200,7 @@
     .player-south {
       position: absolute; bottom: 0; left: 0; right: 0;
       display: flex; flex-direction: column; align-items: center;
-      z-index: 20; padding-bottom: max(env(safe-area-inset-bottom, 0px), 2px);
+      z-index: 20; padding-bottom: max(env(safe-area-inset-bottom, 0px), 6px);
       background: linear-gradient(to top, rgba(9,61,34,0.45), transparent);
     }
     /* 上行: 花牌 + 明牌 + 弹性区 + 台数徽章 */
@@ -183,7 +210,8 @@
     }
     .flower-area { display: flex; gap: 3px; padding: 2px 5px; background: rgba(255,245,230,0.08); border-radius: 6px; border: 1px solid rgba(212,165,55,0.1); }
     .flower-area .tile { width: 22px; height: 31px; border-radius: 3px; margin: 0; cursor: default; }
-    .south-melds { display: flex; gap: 5px; }
+    .south-melds { display: flex; gap: 6px; align-items: flex-start; }
+    .south-melds .meld-group .tile-back { width: 24px; height: 34px; border-radius: 3px; border-width: 1px; margin: 0; }
     .south-melds .meld-group .tile { width: 24px; height: 34px; border-radius: 3px; margin: 0; cursor: default; }
     .south-top-spacer { flex: 1; }
 
@@ -307,7 +335,10 @@
     }
     /* ====== 低高度适配 ====== */
     @media (max-height: 380px) {
-      .center-river { top: 48px; bottom: 112px; }
+      .center-river { top: 62px; bottom: 108px; }
+      .side-melds .tile, .side-melds .tile-back { width: 12px; height: 17px; }
+      .north-melds .tile, .north-melds .tile-back { width: 14px; height: 19px; }
+      .meld-label { font-size: 8px; }
       .river-row .tile, .river-side .tile { width: 18px; height: 24px; }
       .river-side { grid-template-columns: repeat(4, 18px); }
       .wind-indicator { width: 50px; height: 50px; }
@@ -325,7 +356,7 @@
       <span class="status-divider"></span>
       <span class="status-item">第 <span class="value">2</span> 局</span>
       <span class="status-divider"></span>
-      <span class="status-item">剩余 <span class="value">48</span> 张</span>
+      <span class="status-item">剩余 <span class="value" style="color: var(--color-danger);">4</span> 张</span>
       <span class="status-divider"></span>
       <span class="status-item">连庄 <span class="value">1</span></span>
     </div>
@@ -338,65 +369,98 @@
       <button onclick="document.getElementById('actionOverlay').classList.toggle('show')">演示: 吃碰杠胡浮层</button>
     </div>
 
-    <!-- ====== 北家（AI：令狐冲）====== -->
+    <!-- ====== 北家（AI：令狐冲）：1碰+1明杠 → 牌侧条 18-7=11 ====== -->
     <div class="player-north">
       <div class="pinfo">
         <div class="pinfo-avatar">令</div>
         <span class="pinfo-name">令狐冲</span>
         <span class="pinfo-score">+120</span>
       </div>
-      <div class="north-hand-edge" id="northHand"></div>
+      <div class="north-body">
+        <div class="north-melds">
+          <div class="meld-item">
+            <div class="meld-group">
+              <div class="tile"><img src="res/tiles/wind_west.png?v=3" alt="西"/></div>
+              <div class="tile"><img src="res/tiles/wind_west.png?v=3" alt="西"/></div>
+              <div class="tile"><img src="res/tiles/wind_west.png?v=3" alt="西"/></div>
+            </div>
+            <div class="meld-label">碰</div>
+          </div>
+          <div class="meld-item">
+            <div class="meld-group">
+              <div class="tile"><img src="res/tiles/wan_1.png?v=3" alt="一萬"/></div>
+              <div class="tile"><img src="res/tiles/wan_1.png?v=3" alt="一萬"/></div>
+              <div class="tile"><img src="res/tiles/wan_1.png?v=3" alt="一萬"/></div>
+              <div class="tile"><img src="res/tiles/wan_1.png?v=3" alt="一萬"/></div>
+            </div>
+            <div class="meld-label">明杠</div>
+          </div>
+        </div>
+        <div class="north-hand-edge" id="northHand"></div>
+      </div>
     </div>
 
-    <!-- ====== 西家（AI：黄蓉）====== -->
+    <!-- ====== 西家（AI：黄蓉）：1吃+1暗杠 → 牌侧条 18-7=11 ====== -->
     <div class="player-west">
       <div class="pinfo">
         <div class="pinfo-avatar">蓉</div>
         <span class="pinfo-name">黄蓉</span>
         <span class="pinfo-score">-40</span>
       </div>
-      <div class="side-hand-edge" id="westHand"></div>
+      <div class="west-body">
+        <div class="side-hand-edge" id="westHand"></div>
+        <div class="side-melds">
+          <div class="meld-item">
+            <div class="meld-group">
+              <div class="tile"><img src="res/tiles/tong_blue_6.png?v=3" alt="6筒"/></div>
+              <div class="tile"><img src="res/tiles/tong_blue_7.png?v=3" alt="7筒"/></div>
+              <div class="tile"><img src="res/tiles/tong_blue_8.png?v=3" alt="8筒"/></div>
+            </div>
+            <div class="meld-label">吃</div>
+          </div>
+          <div class="meld-item">
+            <div class="meld-group">
+              <div class="tile-back"></div>
+              <div class="tile-back"></div>
+              <div class="tile-back"></div>
+              <div class="tile-back"></div>
+            </div>
+            <div class="meld-label">暗杠</div>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <!-- ====== 东家（AI：杨过）====== -->
+    <!-- ====== 东家（AI：杨过）：1碰 → 牌侧条 18-3=15 ====== -->
     <div class="player-east">
       <div class="pinfo">
         <div class="pinfo-avatar">过</div>
         <span class="pinfo-name">杨过</span>
         <span class="pinfo-score">-80</span>
       </div>
-      <div class="side-hand-edge" id="eastHand"></div>
+      <div class="east-body">
+        <div class="side-melds">
+          <div class="meld-item">
+            <div class="meld-group">
+              <div class="tile"><img src="res/tiles/wind_north.png?v=3" alt="北"/></div>
+              <div class="tile"><img src="res/tiles/wind_north.png?v=3" alt="北"/></div>
+              <div class="tile"><img src="res/tiles/wind_north.png?v=3" alt="北"/></div>
+            </div>
+            <div class="meld-label">碰</div>
+          </div>
+        </div>
+        <div class="side-hand-edge" id="eastHand"></div>
+      </div>
     </div>
 
-    <!-- ====== 中央公共牌河 ====== -->
+    <!-- ====== 中央公共牌河（极端情况演示: 剩4张, 弃牌由各方位贴边横排, JS生成）====== -->
     <div class="center-river">
-      <!-- 北家弃牌 -->
-      <div class="river-row">
-        <div class="tile"><img src="res/tiles/wan_1.png" alt="一萬"/></div>
-        <div class="tile"><img src="res/tiles/tiao_green_2.png" alt="2条"/></div>
-        <div class="tile"><img src="res/tiles/tong_blue_5.png" alt="5筒"/></div>
-        <div class="tile"><img src="res/tiles/wan_7.png" alt="七萬"/></div>
-        <div class="tile"><img src="res/tiles/tong_blue_3.png" alt="3筒"/></div>
-        <div class="tile"><img src="res/tiles/wind_east.png" alt="东"/></div>
-        <div class="tile"><img src="res/tiles/tiao_green_8.png" alt="8条"/></div>
-        <div class="tile"><img src="res/tiles/wan_9.png" alt="九萬"/></div>
-        <div class="tile"><img src="res/tiles/dragon_zhong.png" alt="中"/></div>
-        <div class="tile latest"><img src="res/tiles/tong_blue_2.png" alt="2筒"/></div>
-      </div>
+      <!-- 北家弃牌: 横排换行, 容量 23×2=46 -->
+      <div class="river-row" id="riverNorth"></div>
 
       <!-- 中间行: 西弃牌 | 风圈指示 | 东弃牌 -->
       <div class="river-middle">
-        <div class="river-side">
-          <div class="tile"><img src="res/tiles/wan_3.png" alt="三萬"/></div>
-          <div class="tile"><img src="res/tiles/tong_blue_7.png" alt="7筒"/></div>
-          <div class="tile"><img src="res/tiles/tiao_green_4.png" alt="4条"/></div>
-          <div class="tile"><img src="res/tiles/wan_2.png" alt="二萬"/></div>
-          <div class="tile"><img src="res/tiles/dragon_fa.png" alt="發"/></div>
-          <div class="tile"><img src="res/tiles/tong_blue_9.png" alt="9筒"/></div>
-          <div class="tile"><img src="res/tiles/tiao_green_1.png" alt="1条"/></div>
-          <div class="tile"><img src="res/tiles/wind_south.png" alt="南"/></div>
-        </div>
-
+        <div class="river-side river-west" id="riverWest"></div>
         <div class="wind-indicator">
           <span class="wind-pos n">北</span>
           <span class="wind-pos e">东</span>
@@ -404,30 +468,11 @@
           <span class="wind-pos w">西</span>
           <span class="wind-center">东</span>
         </div>
-
-        <div class="river-side">
-          <div class="tile"><img src="res/tiles/tong_blue_4.png" alt="4筒"/></div>
-          <div class="tile"><img src="res/tiles/wan_6.png" alt="六萬"/></div>
-          <div class="tile"><img src="res/tiles/tiao_green_9.png" alt="9条"/></div>
-          <div class="tile"><img src="res/tiles/tong_blue_1.png" alt="1筒"/></div>
-          <div class="tile"><img src="res/tiles/wind_west.png" alt="西"/></div>
-          <div class="tile"><img src="res/tiles/dragon_bai.png" alt="白"/></div>
-          <div class="tile"><img src="res/tiles/wan_8.png" alt="八萬"/></div>
-          <div class="tile"><img src="res/tiles/tiao_green_3.png" alt="3条"/></div>
-        </div>
+        <div class="river-side river-east" id="riverEast"></div>
       </div>
 
       <!-- 南家弃牌（自己的，最新一张高亮） -->
-      <div class="river-row" id="riverSouth">
-        <div class="tile"><img src="res/tiles/tiao_green_1.png" alt="1条"/></div>
-        <div class="tile"><img src="res/tiles/wan_6.png" alt="六萬"/></div>
-        <div class="tile"><img src="res/tiles/tong_blue_2.png" alt="2筒"/></div>
-        <div class="tile"><img src="res/tiles/wind_north.png" alt="北"/></div>
-        <div class="tile"><img src="res/tiles/tiao_green_7.png" alt="7条"/></div>
-        <div class="tile"><img src="res/tiles/wan_9.png" alt="九萬"/></div>
-        <div class="tile"><img src="res/tiles/tong_blue_8.png" alt="8筒"/></div>
-        <div class="tile"><img src="res/tiles/dragon_fa.png" alt="發"/></div>
-      </div>
+      <div class="river-row" id="riverSouth"></div>
     </div>
 
     <!-- ====== 南家（自己）====== -->
@@ -435,19 +480,35 @@
       <!-- 上行: 花牌 + 明牌 + 台数徽章 -->
       <div class="south-top-row">
         <div class="flower-area">
-          <div class="tile"><img src="res/tiles/flower_spring.png" alt="春"/></div>
-          <div class="tile"><img src="res/tiles/flower_summer.png" alt="夏"/></div>
+          <div class="tile"><img src="res/tiles/flower_spring.png?v=3" alt="春"/></div>
+          <div class="tile"><img src="res/tiles/flower_summer.png?v=3" alt="夏"/></div>
         </div>
         <div class="south-melds">
-          <div class="meld-group">
-            <div class="tile"><img src="res/tiles/wan_2.png" alt="二萬"/></div>
-            <div class="tile"><img src="res/tiles/wan_3.png" alt="三萬"/></div>
-            <div class="tile"><img src="res/tiles/wan_4.png" alt="四萬"/></div>
+          <div class="meld-item">
+            <div class="meld-group">
+              <div class="tile"><img src="res/tiles/wan_2.png?v=3" alt="二萬"/></div>
+              <div class="tile"><img src="res/tiles/wan_3.png?v=3" alt="三萬"/></div>
+              <div class="tile"><img src="res/tiles/wan_4.png?v=3" alt="四萬"/></div>
+            </div>
+            <div class="meld-label">吃</div>
           </div>
-          <div class="meld-group">
-            <div class="tile"><img src="res/tiles/tong_blue_5.png" alt="5筒"/></div>
-            <div class="tile"><img src="res/tiles/tong_blue_5.png" alt="5筒"/></div>
-            <div class="tile"><img src="res/tiles/tong_blue_5.png" alt="5筒"/></div>
+          <div class="meld-item">
+            <div class="meld-group">
+              <div class="tile"><img src="res/tiles/tong_blue_5.png?v=3" alt="5筒"/></div>
+              <div class="tile"><img src="res/tiles/tong_blue_5.png?v=3" alt="5筒"/></div>
+              <div class="tile"><img src="res/tiles/tong_blue_5.png?v=3" alt="5筒"/></div>
+            </div>
+            <div class="meld-label">碰</div>
+          </div>
+          <!-- 自己的暗杠: 中间两张亮出仅自己可见 -->
+          <div class="meld-item">
+            <div class="meld-group">
+              <div class="tile-back"></div>
+              <div class="tile"><img src="res/tiles/dragon_bai.png?v=3" alt="白"/></div>
+              <div class="tile"><img src="res/tiles/dragon_bai.png?v=3" alt="白"/></div>
+              <div class="tile-back"></div>
+            </div>
+            <div class="meld-label">暗杠</div>
           </div>
         </div>
         <div class="south-top-spacer"></div>
@@ -459,23 +520,23 @@
       <!-- 下行: 手牌 + 出牌确认 -->
       <div class="south-hand-row">
         <div class="south-hand" id="southHand">
-          <div class="tile interactive"><img src="res/tiles/wan_1.png" alt="一萬"/></div>
-          <div class="tile interactive"><img src="res/tiles/wan_1.png" alt="一萬"/></div>
-          <div class="tile interactive"><img src="res/tiles/wan_2.png" alt="二萬"/></div>
-          <div class="tile interactive"><img src="res/tiles/wan_3.png" alt="三萬"/></div>
-          <div class="tile interactive"><img src="res/tiles/wan_4.png" alt="四萬"/></div>
-          <div class="tile interactive"><img src="res/tiles/wan_5.png" alt="五萬"/></div>
-          <div class="tile interactive"><img src="res/tiles/wan_6.png" alt="六萬"/></div>
-          <div class="tile interactive"><img src="res/tiles/wan_7.png" alt="七萬"/></div>
-          <div class="tile interactive"><img src="res/tiles/wan_8.png" alt="八萬"/></div>
-          <div class="tile interactive"><img src="res/tiles/tong_blue_9.png" alt="9筒"/></div>
-          <div class="tile interactive"><img src="res/tiles/tong_blue_9.png" alt="9筒"/></div>
-          <div class="tile interactive"><img src="res/tiles/tong_blue_9.png" alt="9筒"/></div>
-          <div class="tile interactive"><img src="res/tiles/tiao_green_2.png" alt="2条"/></div>
-          <div class="tile interactive"><img src="res/tiles/tiao_green_3.png" alt="3条"/></div>
-          <div class="tile interactive"><img src="res/tiles/tiao_green_4.png" alt="4条"/></div>
-          <div class="tile interactive"><img src="res/tiles/wind_south.png" alt="南"/></div>
-          <div class="tile interactive"><img src="res/tiles/dragon_zhong.png" alt="中"/></div>
+          <div class="tile interactive"><img src="res/tiles/wan_1.png?v=3" alt="一萬"/></div>
+          <div class="tile interactive"><img src="res/tiles/wan_1.png?v=3" alt="一萬"/></div>
+          <div class="tile interactive"><img src="res/tiles/wan_2.png?v=3" alt="二萬"/></div>
+          <div class="tile interactive"><img src="res/tiles/wan_3.png?v=3" alt="三萬"/></div>
+          <div class="tile interactive"><img src="res/tiles/wan_4.png?v=3" alt="四萬"/></div>
+          <div class="tile interactive"><img src="res/tiles/wan_5.png?v=3" alt="五萬"/></div>
+          <div class="tile interactive"><img src="res/tiles/wan_6.png?v=3" alt="六萬"/></div>
+          <div class="tile interactive"><img src="res/tiles/wan_7.png?v=3" alt="七萬"/></div>
+          <div class="tile interactive"><img src="res/tiles/wan_8.png?v=3" alt="八萬"/></div>
+          <div class="tile interactive"><img src="res/tiles/tong_blue_9.png?v=3" alt="9筒"/></div>
+          <div class="tile interactive"><img src="res/tiles/tong_blue_9.png?v=3" alt="9筒"/></div>
+          <div class="tile interactive"><img src="res/tiles/tong_blue_9.png?v=3" alt="9筒"/></div>
+          <div class="tile interactive"><img src="res/tiles/tiao_green_2.png?v=3" alt="2条"/></div>
+          <div class="tile interactive"><img src="res/tiles/tiao_green_3.png?v=3" alt="3条"/></div>
+          <div class="tile interactive"><img src="res/tiles/tiao_green_4.png?v=3" alt="4条"/></div>
+          <div class="tile interactive"><img src="res/tiles/wind_south.png?v=3" alt="南"/></div>
+          <div class="tile interactive"><img src="res/tiles/dragon_zhong.png?v=3" alt="中"/></div>
         </div>
         <button class="confirm-discard-btn" id="discardBtn" disabled>出牌</button>
       </div>
@@ -514,10 +575,36 @@
 
   <script>
     /* ====== 生成对手手牌（牌侧俯视图 ×18）====== */
-    ['northHand', 'westHand', 'eastHand'].forEach((id, i) => {
+    /* ====== 牌河填充（极端演示: 打到剩4张, 弃牌北南各20/西东各20）====== */
+    const tilePool = [];
+    ['wan', 'tong_blue', 'tiao_green'].forEach(s => { for (let i = 1; i <= 9; i++) tilePool.push(`${s}_${i}`); });
+    ['wind_east', 'wind_south', 'wind_west', 'wind_north', 'dragon_zhong', 'dragon_fa', 'dragon_bai'].forEach(h => tilePool.push(h));
+    const altMap = { wan: '萬', tong_blue: '筒', tiao_green: '条', wind_east: '东', wind_south: '南', wind_west: '西', wind_north: '北', dragon_zhong: '中', dragon_fa: '發', dragon_bai: '白' };
+    function fillRiver(id, count, latestLast) {
+      const box = document.getElementById(id);
+      const offset = id.length * 3;
+      for (let i = 0; i < count; i++) {
+        const name = tilePool[(i * 5 + offset) % tilePool.length];
+        const d = document.createElement('div');
+        d.className = 'tile' + (latestLast && i === count - 1 ? ' latest' : '');
+        const alt = name.includes('_') && !name.includes('wind') && !name.includes('dragon')
+          ? name.split('_').pop() + altMap[name.split('_').slice(0, -1).join('_')]
+          : altMap[name];
+        d.innerHTML = `<img src="res/tiles/${name}.png?v=3" alt="${alt}"/>`;
+        box.appendChild(d);
+      }
+    }
+    fillRiver('riverNorth', 20);
+    fillRiver('riverWest', 20);
+    fillRiver('riverEast', 20);
+    fillRiver('riverSouth', 18, true);
+
+    // 牌侧条数量 = 18 - 已亮出的明牌（吃/碰-3、杠-4）
+    const edgeCount = { northHand: 11, westHand: 11, eastHand: 15 };
+    Object.entries(edgeCount).forEach(([id, count]) => {
       const box = document.getElementById(id);
       const cls = id === 'northHand' ? 'tile-edge-h' : 'tile-edge-v';
-      for (let n = 0; n < 18; n++) {
+      for (let n = 0; n < count; n++) {
         const d = document.createElement('div');
         d.className = cls;
         box.appendChild(d);
