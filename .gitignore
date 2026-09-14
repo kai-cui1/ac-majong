@@ -15,11 +15,13 @@ pnpm-debug.log*
 .env.local
 .env.*.local
 
-# ---- Cocos / 客户端构建产物（后续）----
-miniwxapp/temp/
-miniwxapp/library/
-miniwxapp/local/
-miniwxapp/build/
+# ---- Cocos / 客户端构建产物 ----
+**/temp/
+**/library/
+**/local/
+**/profiles/
+client/*/build/
+client/*/.DS_Store
 
 # ---- 微信开发者工具 ----
 project.private.config.json
@@ -32,7 +34,8 @@ server/.turbo/
 .DS_Store
 Thumbs.db
 
-# ---- IDE ----
+# ---- IDE / Tooling ----
+.qoder/
 .idea/
 *.iml
 .vscode/*

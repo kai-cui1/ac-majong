@@ -1,0 +1,6 @@
+{
+  "port": 9527,
+  "autoStart": false,
+  "enableDebugLog": false,
+  "maxConnections": 10
+}

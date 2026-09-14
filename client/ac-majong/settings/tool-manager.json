@@ -1,0 +1,315 @@
+{
+  "configurations": [
+    {
+      "id": "bf3efc12-40fb-48db-b59f-44f98115cff3",
+      "name": "默认配置",
+      "description": "自动创建的默认工具配置",
+      "tools": [
+        {
+          "category": "scene",
+          "name": "scene_management",
+          "enabled": true,
+          "description": "SCENE MANAGEMENT: Core scene operations for project workflow. COMMON TASKS: get_current for active scene info, get_list to see all scenes, open to switch scenes, save to persist changes, create for new scenes. WORKFLOW: Always save before switching scenes to avoid data loss."
+        },
+        {
+          "category": "scene",
+          "name": "scene_hierarchy",
+          "enabled": true,
+          "description": "SCENE HIERARCHY: Get the complete hierarchy of current scene with optional component information. Use this to inspect scene structure."
+        },
+        {
+          "category": "scene",
+          "name": "scene_execution_control",
+          "enabled": true,
+          "description": "EXECUTION CONTROL: Execute component methods, scene scripts, or restore prefab instances. Use this for running custom logic and managing prefab synchronization."
+        },
+        {
+          "category": "scene",
+          "name": "scene_state_management",
+          "enabled": true,
+          "description": "STATE MANAGEMENT: Create snapshots, manage undo/redo operations, and control scene reload. Use this for version control and state tracking."
+        },
+        {
+          "category": "scene",
+          "name": "scene_query_system",
+          "enabled": true,
+          "description": "QUERY SYSTEM: Get scene status, available classes/components, and find nodes by asset usage. Use this for scene inspection and analysis."
+        },
+        {
+          "category": "node",
+          "name": "node_query",
+          "enabled": true,
+          "description": "NODE SEARCH & INFORMATION: Essential tool for finding and inspecting scene nodes. CRITICAL WORKFLOW: Always use this FIRST to get node UUIDs before any modifications. Use \"find\" for partial name search, \"find_by_name\" for exact match, \"info\" for detailed node data, \"list_all\" to see entire scene structure."
+        },
+        {
+          "category": "node",
+          "name": "node_lifecycle",
+          "enabled": true,
+          "description": "NODE CREATION & DELETION: Create new nodes or delete existing ones. CRITICAL WORKFLOW for create: 1) Use node_query to find parent UUID, 2) Provide parentUuid (scene root if omitted), 3) Add components or instantiate from prefab. Delete only needs node UUID."
+        },
+        {
+          "category": "node",
+          "name": "node_transform",
+          "enabled": true,
+          "description": "MODIFY NODE PROPERTIES: Use this to change node name, visibility, position, rotation, scale, or other properties. Automatically handles 2D/3D differences. ALWAYS provide uuid (get from node_query first)."
+        },
+        {
+          "category": "node",
+          "name": "node_hierarchy",
+          "enabled": true,
+          "description": "MOVE OR COPY NODES: Use this to change node parent (move in hierarchy) or duplicate nodes. For move: changes which node is the parent. For duplicate: creates a copy of the node."
+        },
+        {
+          "category": "node",
+          "name": "node_clipboard",
+          "enabled": true,
+          "description": "CLIPBOARD OPERATIONS: Copy, paste, cut nodes and manage node clipboard operations. Use this for duplicating and moving nodes within the scene hierarchy."
+        },
+        {
+          "category": "node",
+          "name": "node_property_management",
+          "enabled": true,
+          "description": "PROPERTY MANAGEMENT: Reset node properties, transform values, or component settings to defaults. Use this to restore original values and clean up modifications."
+        },
+        {
+          "category": "node",
+          "name": "node_array_management",
+          "enabled": true,
+          "description": "ARRAY MANAGEMENT: Move or remove elements in node array properties like component lists. Use this for reordering components or removing array items."
+        },
+        {
+          "category": "node",
+          "name": "node_script_management",
+          "enabled": true,
+          "description": "NODE SCRIPT MANAGEMENT: Attach or remove custom TypeScript/JavaScript components to/from nodes. WORKFLOW: 1) Use \"attach\" with scriptPath for new scripts, 2) Use component_query from component-tools to see attached scripts, 3) Use \"remove\" with scriptCid to detach. Scripts are node-based components with UUID-format CIDs."
+        },
+        {
+          "category": "component",
+          "name": "component_manage",
+          "enabled": true,
+          "description": "COMPONENT MANAGEMENT: Add or remove built-in Cocos Creator components (cc.Sprite, cc.Button, etc.). WORKFLOW: 1) Use node_query to get nodeUuid, 2) Add components with componentType, 3) Use component_query to verify. For custom scripts use node_script_management from node-tools instead."
+        },
+        {
+          "category": "component",
+          "name": "component_query",
+          "enabled": true,
+          "description": "COMPONENT QUERY: Get component information, list all components on node, or get available component types. Use this FIRST to find component CIDs before removing!"
+        },
+        {
+          "category": "component",
+          "name": "set_component_property",
+          "enabled": true,
+          "description": "COMPONENT PROPERTY SETTER: Set component properties with strict type validation. CRITICAL WORKFLOW: 1) Use component_query to get exact componentType AND inspect property types, 2) Set properties with MANDATORY propertyType specification, 3) Verify results. SUPPORTS: All Cocos Creator built-in components (cc.Label, cc.Sprite, cc.Button) and custom script components. ⚠️ IMPORTANT: propertyType is REQUIRED - no automatic detection!"
+        },
+        {
+          "category": "component",
+          "name": "configure_click_event",
+          "enabled": true,
+          "description": "Configure or remove click events for Button components. Supports adding new events, removing specific events, or clearing all events."
+        },
+        {
+          "category": "prefab",
+          "name": "prefab_browse",
+          "enabled": true,
+          "description": "PREFAB BROWSER: Query and analyze prefab files in your project. WORKFLOW: Use \"list\" to discover all prefabs → \"info\" to get detailed prefab data → \"validate\" to check file integrity. Essential for prefab management and debugging. Common use: finding prefabs before instantiation."
+        },
+        {
+          "category": "prefab",
+          "name": "prefab_lifecycle",
+          "enabled": true,
+          "description": "PREFAB LIFECYCLE: Create prefabs from existing nodes or delete prefab files. WORKFLOW: For create → select source node → specify name and save path → creates reusable prefab. For delete → specify prefab path → removes file permanently. Use with caution for delete operations."
+        },
+        {
+          "category": "prefab",
+          "name": "prefab_instance",
+          "enabled": true,
+          "description": "PREFAB INSTANCES: Manage prefab instances in the scene. WORKFLOW: \"instantiate\" to create instances → modify as needed → \"apply\" to save changes back to prefab OR \"unlink\" to break connection OR \"revert\" to restore original. Critical for prefab-based development."
+        },
+        {
+          "category": "prefab",
+          "name": "prefab_edit",
+          "enabled": true,
+          "description": "PREFAB EDIT WORKFLOW: Edit prefab content in dedicated editing mode. CRITICAL WORKFLOW: 1) \"enter\" edit mode (switches to prefab scene) → 2) make modifications using other tools → 3) \"save\" changes → 4) \"exit\" back to main scene. IMPORTANT: Always save before exit to persist changes."
+        },
+        {
+          "category": "project",
+          "name": "project_manage",
+          "enabled": true,
+          "description": "PROJECT MANAGEMENT: Core project operations and configuration. COMMON WORKFLOWS: get_info for project details, run for preview testing, build for deployment preparation, get_settings for configuration inspection. Note: Build operations require manual interaction due to API limitations."
+        },
+        {
+          "category": "project",
+          "name": "project_build_system",
+          "enabled": true,
+          "description": "BUILD SYSTEM: Control build panel, check builder status, and manage preview servers. Use this for build-related operations and preview management."
+        },
+        {
+          "category": "debug",
+          "name": "debug_console",
+          "enabled": true,
+          "description": "CONSOLE MANAGEMENT: Get console logs or clear console. Use this for monitoring editor output and debugging messages."
+        },
+        {
+          "category": "debug",
+          "name": "debug_logs",
+          "enabled": true,
+          "description": "PROJECT LOG ANALYSIS: Read, search, and analyze project log files. Use this for troubleshooting errors and monitoring system activity."
+        },
+        {
+          "category": "debug",
+          "name": "debug_system",
+          "enabled": true,
+          "description": "SYSTEM INFORMATION: Get editor version, project details, memory usage, and performance stats. Use this for environment debugging and system monitoring."
+        },
+        {
+          "category": "preferences",
+          "name": "preferences_manage",
+          "enabled": true,
+          "description": "PREFERENCES MANAGEMENT: Configure Cocos Creator editor settings and open preferences panel. WORKFLOW: open_panel to access GUI settings, get_config to read current values, set_config to modify settings, reset_config to restore defaults. Supports global/local/default scopes."
+        },
+        {
+          "category": "preferences",
+          "name": "preferences_query",
+          "enabled": true,
+          "description": "PREFERENCES QUERY: Get all available preferences, list categories, or search for specific preference settings. Use this for preference discovery and inspection."
+        },
+        {
+          "category": "preferences",
+          "name": "preferences_backup",
+          "enabled": true,
+          "description": "PREFERENCES BACKUP: Export current preferences to JSON format or prepare for backup operations. Use this for preference backup and restore workflows."
+        },
+        {
+          "category": "server",
+          "name": "server_information",
+          "enabled": true,
+          "description": "SERVER INFORMATION: Get Cocos Creator editor server network details and status. USAGE: Essential for network configuration, debugging connection issues, and understanding server setup. Use \"get_ip_list\" to see available network interfaces, \"get_port\" for current server port."
+        },
+        {
+          "category": "server",
+          "name": "server_connectivity",
+          "enabled": true,
+          "description": "SERVER CONNECTIVITY: Test and diagnose network connectivity for the Cocos Creator editor server. USAGE: \"test_connectivity\" to verify server accessibility with custom timeout, \"get_network_interfaces\" for detailed network adapter information. Critical for troubleshooting connection problems."
+        },
+        {
+          "category": "broadcast",
+          "name": "broadcast_log_management",
+          "enabled": true,
+          "description": "BROADCAST LOG MANAGEMENT: Monitor Cocos Creator internal messages for debugging and system monitoring. USAGE: get_log to view recent events, clear_log to reset history. DEBUGGING: Use messageType filter to focus on specific events like \"scene:ready\" or \"asset-db:asset-add\"."
+        },
+        {
+          "category": "broadcast",
+          "name": "broadcast_listener_management",
+          "enabled": true,
+          "description": "BROADCAST LISTENER MANAGEMENT: Control which Cocos Creator events to monitor in real-time. WORKFLOW: start_listening to begin monitoring events → get_active_listeners to see current monitors → stop_listening to end monitoring. Useful for debugging workflows and system monitoring."
+        },
+        {
+          "category": "sceneView",
+          "name": "scene_view_gizmo_management",
+          "enabled": true,
+          "description": "GIZMO MANAGEMENT: Control scene manipulation tools and transformation handles. USAGE: Change between position/rotation/scale tools, switch coordinate systems (local/global), adjust pivot points. Essential for precise scene editing and object manipulation in the editor."
+        },
+        {
+          "category": "sceneView",
+          "name": "scene_view_mode_control",
+          "enabled": true,
+          "description": "VIEW MODE CONTROL: Switch scene editor between 2D and 3D modes and control visual aids. USAGE: Toggle 2D/3D perspective for different editing contexts, show/hide grid for alignment reference. 2D mode for UI/sprite editing, 3D mode for 3D scene construction."
+        },
+        {
+          "category": "sceneView",
+          "name": "scene_view_icon_gizmo",
+          "enabled": true,
+          "description": "ICON GIZMO CONTROL: Configure visual representation of scene nodes and components. USAGE: Adjust icon display mode (2D/3D) and size for better visibility. Useful for managing visual clutter and improving scene navigation when working with many objects."
+        },
+        {
+          "category": "sceneView",
+          "name": "scene_view_camera_control",
+          "enabled": true,
+          "description": "CAMERA CONTROL: Navigate and position the scene view camera for better editing workflow. USAGE: Focus on specific objects, align camera angles, and synchronize view positions. Essential for efficient scene navigation and precise editing of complex scenes."
+        },
+        {
+          "category": "sceneView",
+          "name": "scene_view_status_management",
+          "enabled": true,
+          "description": "STATUS MANAGEMENT: Monitor scene view configuration and restore default settings. USAGE: \"get_status\" for comprehensive view state information, \"reset_view\" to restore default camera position and settings. Useful for troubleshooting view issues and standardizing editor state."
+        },
+        {
+          "category": "referenceImage",
+          "name": "reference_image_management",
+          "enabled": true,
+          "description": "REFERENCE IMAGE MANAGEMENT: Manage overlay reference images in the scene editor for design guidance. WORKFLOW: \"add\" images from file paths → \"switch\" between multiple references → \"remove\" when no longer needed OR \"clear_all\" to reset. Essential for UI design and scene layout matching."
+        },
+        {
+          "category": "referenceImage",
+          "name": "reference_image_query",
+          "enabled": true,
+          "description": "REFERENCE IMAGE QUERY: Inspect current reference image state and configuration. USAGE: \"get_config\" for system settings, \"get_current\" for active image details, \"list_all\" for inventory of added images. Essential for understanding current reference setup and debugging display issues."
+        },
+        {
+          "category": "referenceImage",
+          "name": "reference_image_transform",
+          "enabled": true,
+          "description": "REFERENCE IMAGE TRANSFORM: Adjust reference image display properties for better design alignment. USAGE: Fine-tune position, scale, and opacity to overlay images properly with scene content. Essential for precise UI design matching and layout guidance."
+        },
+        {
+          "category": "referenceImage",
+          "name": "reference_image_display",
+          "enabled": true,
+          "description": "REFERENCE IMAGE DISPLAY: Update and refresh reference image rendering in the scene view. USAGE: \"refresh\" to force display update after changes or when images appear corrupted. Use when reference images don't display correctly or after system changes."
+        },
+        {
+          "category": "assetAdvanced",
+          "name": "asset_manage",
+          "enabled": true,
+          "description": "ASSET MANAGEMENT: Import, delete, save metadata, or generate URLs for assets. Use this for all asset creation/deletion/modification operations. WORKFLOW: First use asset_query to find assets, then perform operations. Import requires sourcePath+targetUrl, delete needs urls array, save_meta needs urlOrUUID+content, generate_url needs url parameter."
+        },
+        {
+          "category": "assetAdvanced",
+          "name": "asset_analyze",
+          "enabled": true,
+          "description": "ASSET ANALYSIS: Get dependencies or export manifests. Use this to understand asset relationships and generate project reports. WORKFLOW: Use dependencies to trace asset usage, use manifest to export inventory. LIMITATIONS: Reference validation and unused asset detection are disabled due to API constraints."
+        },
+        {
+          "category": "assetAdvanced",
+          "name": "asset_system",
+          "enabled": true,
+          "description": "ASSET SYSTEM: Check asset database status, refresh assets, or open assets with external programs. Use this for system-level asset operations."
+        },
+        {
+          "category": "assetAdvanced",
+          "name": "asset_query",
+          "enabled": true,
+          "description": "ASSET QUERY: Search, get information, and find assets by various criteria. Use this for asset discovery and detailed information retrieval."
+        },
+        {
+          "category": "assetAdvanced",
+          "name": "asset_operations",
+          "enabled": true,
+          "description": "ASSET OPERATIONS: Create, copy, move, delete, save, and import assets. Use this for all asset file operations and modifications."
+        },
+        {
+          "category": "validation",
+          "name": "validate_json_params",
+          "enabled": true,
+          "description": "JSON PARAMETER VALIDATION: Validate and auto-fix JSON strings before sending to other tools. USAGE: Paste malformed JSON and get corrected version. Handles common issues like unescaped quotes, trailing commas, missing brackets. Essential for ensuring tool parameters are properly formatted."
+        },
+        {
+          "category": "validation",
+          "name": "safe_string_value",
+          "enabled": true,
+          "description": "STRING SAFETY: Convert text into JSON-safe format by escaping special characters. USAGE: When you have strings with quotes, newlines, or special characters that break JSON. Automatically handles escaping and formatting for safe JSON inclusion."
+        },
+        {
+          "category": "validation",
+          "name": "format_mcp_request",
+          "enabled": true,
+          "description": "MCP REQUEST FORMATTING: Generate properly formatted MCP tool call request with correct JSON structure. USAGE: Provide tool name and arguments, get back complete MCP request ready to send. Handles all JSON escaping and protocol formatting automatically."
+        }
+      ],
+      "createdAt": "2026-09-14T09:00:12.809Z",
+      "updatedAt": "2026-09-14T09:00:12.809Z"
+    }
+  ],
+  "currentConfigId": "bf3efc12-40fb-48db-b59f-44f98115cff3",
+  "maxConfigSlots": 5
+}

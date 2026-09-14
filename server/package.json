@@ -1,0 +1,27 @@
+{
+  "name": "@ac-majong/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A&C 麻将联机服务端（平台无关，WS 网关 + 房间 Actor + 权威引擎）",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ac-majong/engine": "workspace:*",
+    "@ac-majong/protocol": "workspace:*",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@ac-majong/client-core": "workspace:*",
+    "@types/node": "^22.10.2",
+    "@types/ws": "^8.5.13",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8"
+  }
+}

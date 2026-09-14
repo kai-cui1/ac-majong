@@ -84,6 +84,13 @@
     .pinfo-score { font-size: 10px; color: var(--color-gold); font-weight: 700; font-family: var(--font-mono); }
     .pinfo.active { border-color: var(--color-gold); box-shadow: 0 0 10px rgba(212,165,55,0.25); animation: active-glow 1.8s ease-in-out infinite; }
     @keyframes active-glow { 0%,100%{box-shadow:0 0 6px rgba(212,165,55,0.15);} 50%{box-shadow:0 0 14px rgba(212,165,55,0.35);} }
+    /* pinfo 扩展: 子数 / 庄家角标 / 状态标签 */
+    .pinfo-zi { font-size: 9px; color: var(--color-text-muted); font-family: var(--font-mono); border-left: 1px solid rgba(212,165,55,0.18); padding-left: 5px; }
+    .pinfo-dealer { font-size: 9px; font-weight: 800; color: var(--color-bg-wood-dark); background: linear-gradient(135deg, var(--color-gold), var(--color-gold-dark)); border-radius: 6px; padding: 1px 5px; }
+    .pinfo-auto-tag { font-size: 9px; color: var(--color-info); background: rgba(33,150,243,0.15); padding: 1px 5px; border-radius: 6px; }
+    .pinfo-off-tag { font-size: 9px; color: #ccc; background: rgba(255,255,255,0.12); padding: 1px 5px; border-radius: 6px; display: none; }
+    .pinfo.offline { opacity: 0.45; filter: grayscale(0.7); }
+    .pinfo.offline .pinfo-off-tag { display: inline; }
 
     /* ====== 牌侧俯视图（对手手牌）======
        视觉参考: res/tiles/tile_edge_top.png?v=3
@@ -245,6 +252,7 @@
 
     /* 出牌确认按钮（两步确认，未选牌时置灰） */
     .confirm-discard-btn {
+      position: relative;
       width: 50px; height: 50px; border-radius: 50%; flex-shrink: 0;
       background: linear-gradient(135deg, var(--color-gold), var(--color-gold-dark));
       border: 2px solid var(--color-gold-light); color: var(--color-bg-wood-dark);
@@ -260,6 +268,63 @@
     }
     .confirm-discard-btn:not(:disabled):hover { transform: scale(1.06); box-shadow: 0 5px 18px rgba(212,165,55,0.5); }
     .confirm-discard-btn:not(:disabled):active { transform: scale(0.96); }
+    /* 自己回合: 环形倒计时提示（原型演示: 68% 剩余） */
+    .confirm-discard-btn.my-turn::before {
+      content: ''; position: absolute; inset: -7px; border-radius: 50%;
+      background: conic-gradient(var(--color-gold) 0 68%, rgba(255,255,255,0.12) 68% 100%);
+      -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px));
+              mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px));
+      animation: cd-ring 15s linear infinite;
+      pointer-events: none;
+    }
+    @keyframes cd-ring { to { transform: rotate(360deg); } }
+
+    /* ====== 局末结算弹层（P7，横屏）====== */
+    .result-overlay {
+      position: absolute; inset: 0; z-index: 300;
+      background: rgba(0,0,0,0.6); backdrop-filter: blur(3px);
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0; pointer-events: none; transition: opacity 250ms ease;
+    }
+    .result-overlay.show { opacity: 1; pointer-events: auto; }
+    .result-panel {
+      width: 560px; max-width: 92vw; max-height: 94vh;
+      background: linear-gradient(160deg, rgba(61,31,13,0.97), rgba(42,20,8,0.97));
+      border: 1px solid var(--color-gold-dark); border-radius: var(--radius-xl);
+      padding: 16px 20px; box-shadow: 0 16px 48px rgba(0,0,0,0.6), 0 0 30px rgba(212,165,55,0.12);
+      display: flex; flex-direction: column;
+    }
+    .result-panel-title { text-align: center; font-size: 20px; font-weight: 900; color: var(--color-gold); letter-spacing: 3px; }
+    .result-panel-sub { text-align: center; font-size: 11px; color: var(--color-text-muted); margin: 4px 0 12px; }
+    .result-panel-body { display: flex; gap: 14px; min-height: 0; }
+    .result-col { flex: 1; background: rgba(0,0,0,0.25); border: 1px solid rgba(212,165,55,0.12); border-radius: var(--radius-md); padding: 10px 12px; }
+    .result-col-title { font-size: 11px; color: var(--color-gold); font-weight: 700; padding-bottom: 6px; margin-bottom: 6px; border-bottom: 1px solid rgba(212,165,55,0.15); text-align: center; }
+    .result-row { display: flex; justify-content: space-between; font-size: 11px; padding: 2px 0; color: var(--color-text-secondary); }
+    .result-row span:last-child { font-family: var(--font-mono); color: var(--color-gold-light); font-weight: 700; }
+    .result-row .win { color: var(--color-gold); }
+    .result-row .lose { color: var(--color-danger); }
+    .result-row.total { border-top: 1px solid rgba(212,165,55,0.15); margin-top: 4px; padding-top: 5px; font-weight: 700; }
+    .result-row.total span:last-child { font-size: 14px; }
+    .result-next-btn {
+      margin-top: 12px; align-self: center;
+      padding: 10px 44px; border-radius: var(--radius-full);
+      background: linear-gradient(135deg, var(--color-gold), var(--color-gold-dark));
+      color: var(--color-bg-wood-dark); border: 1px solid var(--color-gold-light);
+      font-size: 15px; font-weight: 800; letter-spacing: 2px; cursor: pointer;
+      font-family: var(--font-cn); box-shadow: 0 4px 14px rgba(212,165,55,0.3);
+    }
+    .result-panel.small { width: 380px; }
+    .huang-desc { text-align: center; font-size: 12px; color: var(--color-text-secondary); padding: 8px 0 4px; line-height: 1.8; }
+
+    /* ====== 顶部提示 toast（诈胡等）====== */
+    .toast-tip {
+      position: absolute; top: 40px; left: 50%; transform: translateX(-50%) translateY(-8px);
+      background: rgba(30,10,10,0.92); border: 1px solid rgba(244,67,54,0.5);
+      color: #ff8a80; font-size: 12px; padding: 7px 16px; border-radius: var(--radius-full);
+      z-index: 400; opacity: 0; pointer-events: none; transition: all 250ms ease;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    }
+    .toast-tip.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
     /* ====== 操作浮层（吃碰杠胡，按需弹出）====== */
     .action-overlay {
@@ -312,18 +377,28 @@
     .score-total-label { color: var(--color-gold); font-weight: 600; }
     .score-total-val { color: var(--color-gold-light); font-size: 17px; font-weight: 900; font-family: var(--font-mono); text-shadow: 0 1px 4px rgba(212,165,55,0.25); }
 
-    /* ====== 原型演示控件（仅原型用）====== */
-    .demo-controls {
-      position: absolute; top: 9px; right: 46px;
-      z-index: 60;
-    }
-    .demo-controls button {
+    /* ====== 原型演示抽屉（仅原型用）====== */
+    .demo-controls { position: absolute; top: 9px; right: 46px; z-index: 60; }
+    .demo-controls > button {
       background: rgba(0,0,0,0.5); border: 1px dashed rgba(212,165,55,0.4);
       color: var(--color-text-secondary); font-size: 10px;
       border-radius: var(--radius-full); padding: 3px 10px; cursor: pointer;
       font-family: var(--font-cn);
     }
-    .demo-controls button:hover { color: var(--color-gold); border-color: var(--color-gold); }
+    .demo-controls > button:hover { color: var(--color-gold); border-color: var(--color-gold); }
+    .demo-menu {
+      position: absolute; top: 26px; right: 0; width: 132px;
+      background: rgba(9,30,18,0.95); border: 1px solid rgba(212,165,55,0.3);
+      border-radius: var(--radius-md); padding: 5px; display: none;
+      flex-direction: column; gap: 3px; box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    }
+    .demo-menu.show { display: flex; }
+    .demo-menu button {
+      background: transparent; border: none; color: var(--color-text-secondary);
+      font-size: 11px; padding: 6px 8px; cursor: pointer; text-align: left;
+      border-radius: 4px; font-family: var(--font-cn);
+    }
+    .demo-menu button:hover { background: rgba(212,165,55,0.12); color: var(--color-gold-light); }
 
     /* ====== 窄屏适配（iPhone mini 等 744~812px 宽）====== */
     @media (max-width: 812px) {
@@ -354,19 +429,30 @@
     <div class="game-status-bar-custom">
       <span class="status-item">🀄 东风圈</span>
       <span class="status-divider"></span>
-      <span class="status-item">第 <span class="value">2</span> 局</span>
+      <span class="status-item">房 <span class="value">828666</span></span>
+      <span class="status-divider"></span>
+      <span class="status-item">第 <span class="value">2</span>/<span class="value">8</span> 局</span>
       <span class="status-divider"></span>
       <span class="status-item">剩余 <span class="value" style="color: var(--color-danger);">4</span> 张</span>
       <span class="status-divider"></span>
       <span class="status-item">连庄 <span class="value">1</span></span>
+      <span class="status-divider"></span>
+      <span class="status-item">⏱ <span class="value">12</span>s</span>
     </div>
 
     <!-- 退出按钮 -->
     <a class="btn-exit" href="home.html" title="返回首页">✕</a>
 
-    <!-- 原型演示控件 -->
+    <!-- 原型演示抽屉 -->
     <div class="demo-controls">
-      <button onclick="document.getElementById('actionOverlay').classList.toggle('show')">演示: 吃碰杠胡浮层</button>
+      <button id="demoToggle">▶ 演示</button>
+      <div class="demo-menu" id="demoMenu">
+        <button data-demo="action">吃碰杠胡浮层</button>
+        <button data-demo="result">结算弹层</button>
+        <button data-demo="huang">荒庄流局</button>
+        <button data-demo="zhahu">诈胡提示</button>
+        <button data-demo="offline">西家离线状态</button>
+      </div>
     </div>
 
     <!-- ====== 北家（AI：令狐冲）：1碰+1明杠 → 牌侧条 18-7=11 ====== -->
@@ -375,6 +461,7 @@
         <div class="pinfo-avatar">令</div>
         <span class="pinfo-name">令狐冲</span>
         <span class="pinfo-score">+120</span>
+        <span class="pinfo-zi">子1</span>
       </div>
       <div class="north-body">
         <div class="north-melds">
@@ -402,10 +489,12 @@
 
     <!-- ====== 西家（AI：黄蓉）：1吃+1暗杠 → 牌侧条 18-7=11 ====== -->
     <div class="player-west">
-      <div class="pinfo">
+      <div class="pinfo" id="pinfoWest">
         <div class="pinfo-avatar">蓉</div>
         <span class="pinfo-name">黄蓉</span>
         <span class="pinfo-score">-40</span>
+        <span class="pinfo-zi">子1</span>
+        <span class="pinfo-off-tag">离线</span>
       </div>
       <div class="west-body">
         <div class="side-hand-edge" id="westHand"></div>
@@ -437,6 +526,8 @@
         <div class="pinfo-avatar">过</div>
         <span class="pinfo-name">杨过</span>
         <span class="pinfo-score">-80</span>
+        <span class="pinfo-zi">子1</span>
+        <span class="pinfo-auto-tag">托管中</span>
       </div>
       <div class="east-body">
         <div class="side-melds">
@@ -479,6 +570,13 @@
     <div class="player-south">
       <!-- 上行: 花牌 + 明牌 + 台数徽章 -->
       <div class="south-top-row">
+        <div class="pinfo active">
+          <div class="pinfo-avatar">我</div>
+          <span class="pinfo-name">我</span>
+          <span class="pinfo-score">+520</span>
+          <span class="pinfo-zi">子2</span>
+          <span class="pinfo-dealer">庄</span>
+        </div>
         <div class="flower-area">
           <div class="tile"><img src="res/tiles/flower_spring.png?v=3" alt="春"/></div>
           <div class="tile"><img src="res/tiles/flower_summer.png?v=3" alt="夏"/></div>
@@ -538,7 +636,7 @@
           <div class="tile interactive"><img src="res/tiles/wind_south.png?v=3" alt="南"/></div>
           <div class="tile interactive"><img src="res/tiles/dragon_zhong.png?v=3" alt="中"/></div>
         </div>
-        <button class="confirm-discard-btn" id="discardBtn" disabled>出牌</button>
+        <button class="confirm-discard-btn my-turn" id="discardBtn" disabled>出牌</button>
       </div>
     </div>
 
@@ -554,6 +652,48 @@
         <button class="btn-action">过</button>
       </div>
     </div>
+
+    <!-- ====== 局末结算弹层（默认隐藏，P7）====== -->
+    <div class="result-overlay" id="resultOverlay">
+      <div class="result-panel">
+        <div class="result-panel-title">🎉 我 · 自摸胡！</div>
+        <div class="result-panel-sub">第 2/8 局 · 庄家胡牌连庄 +1 · 1 台 = 20 积分</div>
+        <div class="result-panel-body">
+          <div class="result-col">
+            <div class="result-col-title">台数明细（必然包含叠加）</div>
+            <div class="result-row"><span>见花 ×2</span><span>+2</span></div>
+            <div class="result-row"><span>无字</span><span>+1</span></div>
+            <div class="result-row"><span>门清自摸（一摸三）</span><span>+3</span></div>
+            <div class="result-row"><span>独独</span><span>+2</span></div>
+            <div class="result-row"><span>缺一门</span><span>+4</span></div>
+            <div class="result-row"><span>一条龙</span><span>+8</span></div>
+            <div class="result-row"><span>连庄追加</span><span>+1</span></div>
+            <div class="result-row total"><span>合计</span><span>26 台</span></div>
+          </div>
+          <div class="result-col">
+            <div class="result-col-title">积分变动</div>
+            <div class="result-row"><span>我（庄家）</span><span class="win">+520</span></div>
+            <div class="result-row"><span>令狐冲</span><span class="lose">-180</span></div>
+            <div class="result-row"><span>黄蓉</span><span class="lose">-170</span></div>
+            <div class="result-row"><span>杨过</span><span class="lose">-170</span></div>
+            <div class="result-row total"><span>我当前累计</span><span class="win">+520</span></div>
+          </div>
+        </div>
+        <button class="result-next-btn" onclick="document.getElementById('resultOverlay').classList.remove('show')">下一局 ▶</button>
+      </div>
+    </div>
+
+    <!-- ====== 荒庄弹层（默认隐藏）====== -->
+    <div class="result-overlay" id="huangOverlay">
+      <div class="result-panel small">
+        <div class="result-panel-title">🀄 荒庄流局</div>
+        <div class="huang-desc">牌墙剩余 4 张死牌，本局无人胡牌<br>不计分 · 庄家连庄</div>
+        <button class="result-next-btn" onclick="document.getElementById('huangOverlay').classList.remove('show')">下一局 ▶</button>
+      </div>
+    </div>
+
+    <!-- ====== 顶部提示 toast（诈胡拦截等）====== -->
+    <div class="toast-tip" id="toastTip">⚠ 未达 6 台起胡门槛，无法胡牌</div>
 
     <!-- ====== 台数详情浮层（默认隐藏）====== -->
     <div class="score-popover" id="scorePopover">
@@ -654,6 +794,31 @@
       btn.addEventListener('click', () => {
         document.getElementById('actionOverlay').classList.remove('show');
       });
+    });
+
+    /* ====== 原型演示抽屉逻辑 ====== */
+    const demoMenu = document.getElementById('demoMenu');
+    document.getElementById('demoToggle').addEventListener('click', (e) => {
+      e.stopPropagation();
+      demoMenu.classList.toggle('show');
+    });
+    demoMenu.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-demo]');
+      if (!btn) return;
+      const kind = btn.dataset.demo;
+      if (kind === 'action') document.getElementById('actionOverlay').classList.toggle('show');
+      if (kind === 'result') document.getElementById('resultOverlay').classList.add('show');
+      if (kind === 'huang') document.getElementById('huangOverlay').classList.add('show');
+      if (kind === 'zhahu') {
+        const t = document.getElementById('toastTip');
+        t.classList.add('show');
+        setTimeout(() => t.classList.remove('show'), 2500);
+      }
+      if (kind === 'offline') document.getElementById('pinfoWest').classList.toggle('offline');
+      demoMenu.classList.remove('show');
+    });
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.demo-controls')) demoMenu.classList.remove('show');
     });
 
     /* ====== 点击浮层外部收起台数详情 ====== */

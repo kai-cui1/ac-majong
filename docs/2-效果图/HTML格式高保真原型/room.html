@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>AC 麻将俱乐部 — 房间等待</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .room-page {
+      min-height: 100vh;
+      background:
+        radial-gradient(ellipse at top, rgba(212, 165, 55, 0.08) 0%, transparent 55%),
+        linear-gradient(to bottom, var(--color-bg-wood) 0%, var(--color-bg-table) 50%);
+    }
+    .back-btn {
+      position: absolute; top: calc(var(--header-height) / 2); left: 16px;
+      transform: translateY(-50%);
+      width: 32px; height: 32px; border-radius: 50%;
+      background: rgba(255,255,255,0.08); border: 1px solid rgba(212,165,55,0.2);
+      color: var(--color-gold); display: flex; align-items: center; justify-content: center;
+      font-size: 16px; cursor: pointer; text-decoration: none;
+    }
+
+    /* 房间号卡片 */
+    .room-code-card {
+      margin: var(--spacing-xl) var(--spacing-lg) 0;
+      background: var(--color-bg-card);
+      border: 1px solid var(--color-gold-dark);
+      border-radius: var(--radius-xl);
+      padding: var(--spacing-xl);
+      text-align: center;
+      box-shadow: var(--shadow-card);
+    }
+    .room-code-label { font-size: 12px; color: var(--color-text-muted); letter-spacing: 2px; margin-bottom: 8px; }
+    .room-code-num {
+      font-size: 44px; font-weight: 900; letter-spacing: 10px;
+      font-family: var(--font-mono); color: var(--color-gold);
+      text-shadow: 0 2px 12px rgba(212,165,55,0.3);
+      cursor: pointer;
+    }
+    .room-code-copy { font-size: 11px; color: var(--color-text-muted); margin-top: 6px; }
+    .room-meta-row {
+      display: flex; justify-content: center; gap: var(--spacing-lg);
+      margin-top: var(--spacing-md); padding-top: var(--spacing-md);
+      border-top: 1px solid rgba(212,165,55,0.12);
+      font-size: 12px; color: var(--color-text-secondary);
+    }
+    .room-meta-row .value { color: var(--color-gold); font-weight: 700; }
+
+    /* 分享按钮 */
+    .share-btn {
+      margin: var(--spacing-lg) var(--spacing-lg) 0;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      padding: 12px; border-radius: var(--radius-full);
+      background: linear-gradient(135deg, #07c160, #06a050);
+      color: #fff; font-size: 15px; font-weight: 700; letter-spacing: 2px;
+      border: none; cursor: pointer; font-family: var(--font-cn);
+      box-shadow: 0 3px 12px rgba(7,193,96,0.3);
+      transition: all var(--transition-fast);
+    }
+    .share-btn:hover { transform: translateY(-1px); }
+
+    /* 座位区 2×2 */
+    .seat-section-title {
+      padding: 0 var(--spacing-lg); margin: var(--spacing-xl) 0 var(--spacing-md);
+      font-size: 14px; color: var(--color-text-secondary);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .seat-count { color: var(--color-gold); font-family: var(--font-mono); font-weight: 700; }
+    .seat-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: var(--spacing-md);
+      padding: 0 var(--spacing-lg);
+    }
+    .seat-card {
+      background: var(--color-bg-card);
+      border: 1px solid rgba(212,165,55,0.15);
+      border-radius: var(--radius-lg);
+      padding: var(--spacing-lg);
+      display: flex; align-items: center; gap: var(--spacing-md);
+      min-width: 0;
+    }
+    .seat-avatar {
+      width: 46px; height: 46px; border-radius: 50%; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; font-weight: 700;
+      position: relative;
+    }
+    .seat-avatar.occupied {
+      background: linear-gradient(135deg, var(--color-gold), var(--color-gold-dark));
+      color: var(--color-bg-wood-dark); border: 2px solid var(--color-gold-light);
+    }
+    .seat-avatar .online-dot {
+      position: absolute; right: -1px; bottom: -1px;
+      width: 12px; height: 12px; border-radius: 50%;
+      background: var(--color-success); border: 2px solid var(--color-bg-wood-dark);
+    }
+    .seat-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .seat-name { font-size: 14px; font-weight: 600; color: var(--color-text-primary); }
+    .seat-tag {
+      display: inline-block; font-size: 9px; padding: 1px 7px; border-radius: 8px;
+      width: fit-content;
+    }
+    .seat-tag.host { background: rgba(212,165,55,0.15); color: var(--color-gold); border: 1px solid rgba(212,165,55,0.3); }
+    .seat-tag.me { background: rgba(76,175,80,0.12); color: var(--color-success); border: 1px solid rgba(76,175,80,0.3); }
+
+    /* 空位 */
+    .seat-card.empty {
+      border: 1.5px dashed rgba(212,165,55,0.25);
+      background: rgba(255,255,255,0.02);
+      cursor: pointer; transition: all var(--transition-fast);
+    }
+    .seat-card.empty:hover { border-color: var(--color-gold); background: rgba(212,165,55,0.05); }
+    .seat-empty-icon {
+      width: 46px; height: 46px; border-radius: 50%; flex-shrink: 0;
+      border: 1.5px dashed rgba(212,165,55,0.3);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px; color: var(--color-gold); font-weight: 300;
+    }
+    .seat-empty-text { font-size: 13px; color: var(--color-text-muted); }
+
+    /* 底部主按钮 */
+    .room-bottom {
+      padding: var(--spacing-xl) var(--spacing-lg) calc(var(--spacing-xxl) + env(safe-area-inset-bottom, 0px));
+    }
+    .btn-start {
+      width: 100%; padding: 15px; border-radius: var(--radius-full);
+      background: linear-gradient(135deg, var(--color-gold), var(--color-gold-dark));
+      color: var(--color-bg-wood-dark); border: 1px solid var(--color-gold-light);
+      font-size: 17px; font-weight: 800; letter-spacing: 3px; cursor: pointer;
+      font-family: var(--font-cn);
+      box-shadow: 0 4px 16px rgba(212,165,55,0.35);
+      transition: all var(--transition-fast);
+      display: block; text-align: center; text-decoration: none;
+    }
+    .btn-start:hover { transform: translateY(-1px); }
+    .btn-start:disabled {
+      background: rgba(255,255,255,0.08); color: var(--color-text-muted);
+      border-color: rgba(255,255,255,0.12); box-shadow: none; cursor: not-allowed; transform: none;
+    }
+    .start-hint { text-align: center; font-size: 11px; color: var(--color-text-muted); margin-top: 10px; }
+    .start-hint.warn { color: var(--color-warning); }
+  </style>
+</head>
+<body>
+  <div class="room-page page-container no-tab">
+
+    <a class="back-btn" href="home.html">←</a>
+    <div class="page-header">
+      <span class="page-header-title">房间等待</span>
+    </div>
+
+    <!-- 房间号卡片 -->
+    <div class="room-code-card">
+      <div class="room-code-label">房 间 号</div>
+      <div class="room-code-num" onclick="navigator.clipboard && navigator.clipboard.writeText('828666'); this.nextElementSibling.textContent='已复制 ✓';">828666</div>
+      <div class="room-code-copy">点击号码复制</div>
+      <div class="room-meta-row">
+        <span>局数上限 <span class="value">8 局</span></span>
+        <span>底注 <span class="value">20 积分/台</span></span>
+      </div>
+    </div>
+
+    <!-- 微信分享 -->
+    <button class="share-btn" onclick="alert('原型演示：调起微信分享卡片')">💬 分享微信好友，一键入座</button>
+
+    <!-- 座位区 -->
+    <div class="seat-section-title">
+      <span>牌友座位</span>
+      <span class="seat-count" id="seatCount">3 / 4</span>
+    </div>
+    <div class="seat-grid" id="seatGrid">
+      <div class="seat-card">
+        <div class="seat-avatar occupied">我<span class="online-dot"></span></div>
+        <div class="seat-info">
+          <span class="seat-name">牌友老张</span>
+          <span><span class="seat-tag host">房主</span> <span class="seat-tag me">我</span></span>
+        </div>
+      </div>
+      <div class="seat-card">
+        <div class="seat-avatar occupied">令<span class="online-dot"></span></div>
+        <div class="seat-info">
+          <span class="seat-name">令狐冲</span>
+          <span class="seat-tag" style="color:var(--color-text-muted);border:none;">已就位</span>
+        </div>
+      </div>
+      <div class="seat-card">
+        <div class="seat-avatar occupied">蓉<span class="online-dot"></span></div>
+        <div class="seat-info">
+          <span class="seat-name">黄蓉</span>
+          <span class="seat-tag" style="color:var(--color-text-muted);border:none;">已就位</span>
+        </div>
+      </div>
+      <div class="seat-card empty" id="emptySeat" onclick="joinDemo()">
+        <div class="seat-empty-icon">+</div>
+        <div class="seat-info">
+          <span class="seat-empty-text">等待牌友加入…</span>
+          <span class="seat-tag" style="color:var(--color-gold);border:1px dashed rgba(212,165,55,0.4);">点击模拟加入</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 开始按钮（房主视角） -->
+    <div class="room-bottom">
+      <button class="btn-start" id="startBtn" disabled onclick="location.href='game.html'">开始游戏</button>
+      <div class="start-hint warn" id="startHint">⚠ 满 4 人方可开始（FR-房间-04）</div>
+    </div>
+
+  </div>
+
+  <script>
+    /* 原型演示：点击空位模拟第 4 人加入，开始按钮亮起 */
+    function joinDemo() {
+      const seat = document.getElementById('emptySeat');
+      seat.classList.remove('empty');
+      seat.onclick = null;
+      seat.innerHTML = `
+        <div class="seat-avatar occupied">过<span class="online-dot"></span></div>
+        <div class="seat-info">
+          <span class="seat-name">杨过</span>
+          <span class="seat-tag" style="color:var(--color-text-muted);border:none;">刚刚加入</span>
+        </div>`;
+      document.getElementById('seatCount').textContent = '4 / 4';
+      const btn = document.getElementById('startBtn');
+      btn.disabled = false;
+      const hint = document.getElementById('startHint');
+      hint.textContent = '✓ 人齐，可以开始';
+      hint.classList.remove('warn');
+      hint.style.color = 'var(--color-success)';
+    }
+  </script>
+</body>
+</html>

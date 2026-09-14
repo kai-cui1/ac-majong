@@ -62,16 +62,36 @@
 
     <div class="index-logo">🀄</div>
     <div class="index-title">AC 麻将俱乐部</div>
-    <div class="index-subtitle">UI 原型 v1.0 · 设计稿</div>
+    <div class="index-subtitle">UI 原型 v2.2 · 房间制全流程 · 设计稿</div>
 
     <div class="page-list">
 
-      <!-- 首页 -->
+      <!-- 登录授权 -->
+      <a class="page-card" href="login.html">
+        <div class="page-icon">🔐</div>
+        <div class="page-info">
+          <div class="page-name">登录授权页（P1）</div>
+          <div class="page-desc">微信一键登录、协议勾选、健康游戏提示<br>竖屏 · 合规入口</div>
+          <span class="tag tag-p0">P0 核心</span>
+        </div>
+      </a>
+
+      <!-- 大厅 -->
       <a class="page-card" href="home.html">
         <div class="page-icon">🏠</div>
         <div class="page-info">
-          <div class="page-name">首页</div>
-          <div class="page-desc">大厅入口、开始游戏、最近对局<br>Tab 1 · 竖屏</div>
+          <div class="page-name">大厅（P2）</div>
+          <div class="page-desc">创建房间 / 加入房间两入口、创建弹窗(局数选择)、加入弹窗(6位房号)<br>Tab 1 · 竖屏</div>
+          <span class="tag tag-p0">P0 核心</span>
+        </div>
+      </a>
+
+      <!-- 房间等待页 -->
+      <a class="page-card" href="room.html">
+        <div class="page-icon">🛋️</div>
+        <div class="page-info">
+          <div class="page-name">房间等待页（P5）</div>
+          <div class="page-desc">房间号分享、4 座位状态、房主开始（满4人可点）<br>竖屏 · 满4人交互可演示</div>
           <span class="tag tag-p0">P0 核心</span>
         </div>
       </a>
@@ -80,18 +100,18 @@
       <a class="page-card" href="game.html">
         <div class="page-icon">🀄</div>
         <div class="page-info">
-          <div class="page-name">游戏桌面</div>
-          <div class="page-desc">4人座位、手牌、弃牌堆、操作按钮、台数侧栏<br>Tab 2 · 横屏 Landscape</div>
+          <div class="page-name">牌桌页（P6 核心）</div>
+          <div class="page-desc">中央公共牌河、四家明牌/牌侧俯视、结算弹层、荒庄/诈胡/离线演示<br>横屏 Landscape 844×390 · 右上角「▶ 演示」抽屉</div>
           <span class="tag tag-p0">P0 核心</span>
         </div>
       </a>
 
-      <!-- 结算页 -->
+      <!-- 散场战绩页 -->
       <a class="page-card" href="result.html">
         <div class="page-icon">🏆</div>
         <div class="page-info">
-          <div class="page-name">结算页</div>
-          <div class="page-desc">胜利展示、逐人结算、台数详情展开<br>独立页（非 Tab）</div>
+          <div class="page-name">散场战绩页（P8）</div>
+          <div class="page-desc">最终排名、局数回顾、返回大厅<br>竖屏 · 散场后积分清零</div>
           <span class="tag tag-p0">P0 核心</span>
         </div>
       </a>
@@ -125,10 +145,12 @@
       保真度：高保真（颜色 / 字体 / 间距 / 牌面样式）<br><br>
       📁 文件清单：<br>
       · style.css — 设计系统 (CSS 变量 / 组件)<br>
-      · home.html — 首页<br>
-      · game.html — 游戏桌面（横版）<br>
-      · result.html — 结算页<br>
-      · rules.html — 规则说明<br>
+      · login.html — 登录授权（P1）<br>
+      · home.html — 大厅（P2）+ 创建/加入弹窗（P3/P4）<br>
+      · room.html — 房间等待（P5）<br>
+      · game.html — 牌桌（P6，含结算弹层 P7）<br>
+      · result.html — 散场战绩（P8）<br>
+      · rules.html — 规则说明（P9）<br>
       · profile.html — 我的
     </div>
 

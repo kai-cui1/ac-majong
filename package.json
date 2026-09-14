@@ -7,7 +7,8 @@
   "scripts": {
     "test": "pnpm -r test",
     "build": "pnpm -r build",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "sync:client": "node scripts/sync-to-cocos.mjs"
   },
   "devDependencies": {
     "typescript": "^5.6.3"

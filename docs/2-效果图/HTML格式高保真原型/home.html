@@ -3,15 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>AC 麻将俱乐部 — 首页</title>
+  <title>AC 麻将俱乐部 — 大厅</title>
   <link rel="stylesheet" href="style.css">
   <style>
-    /* 首页特有样式 */
+    /* 大厅特有样式 */
     .home-hero {
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 60px var(--spacing-lg) 40px;
+      padding: 56px var(--spacing-lg) 28px;
       text-align: center;
     }
     .home-logo {
@@ -49,127 +49,192 @@
       font-size: 13px;
       color: var(--color-text-muted);
       letter-spacing: 2px;
-      margin-bottom: var(--spacing-xxl);
     }
 
-    /* 快捷入口 */
-    .quick-entry {
+    /* 用户信息条（点击进 profile） */
+    .user-bar {
+      display: flex; align-items: center; gap: var(--spacing-md);
+      margin: 0 var(--spacing-lg) var(--spacing-xl);
+      background: var(--color-bg-card);
+      border: 1px solid rgba(212,165,55,0.15);
+      border-radius: var(--radius-lg);
+      padding: var(--spacing-md) var(--spacing-lg);
+      text-decoration: none;
+      transition: all var(--transition-fast);
+    }
+    .user-bar:hover { border-color: var(--color-gold-dark); }
+    .user-bar-avatar {
+      width: 44px; height: 44px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--color-gold), var(--color-gold-dark));
+      display: flex; align-items: center; justify-content: center;
+      font-size: 19px; font-weight: 700; color: var(--color-bg-wood-dark);
+      border: 2px solid var(--color-gold-light); flex-shrink: 0;
+    }
+    .user-bar-info { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+    .user-bar-name { font-size: 16px; font-weight: 700; color: var(--color-text-primary); }
+    .user-bar-id { font-size: 11px; color: var(--color-text-muted); font-family: var(--font-mono); }
+    .user-bar-arrow { color: var(--color-text-muted); font-size: 14px; }
+
+    /* 两大核心入口 */
+    .room-entry {
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: var(--spacing-md);
       padding: 0 var(--spacing-lg);
       margin-bottom: var(--spacing-xl);
     }
-    .quick-entry-item {
+    .room-entry-item {
       background: var(--color-bg-card);
-      border: 1px solid rgba(212, 165, 55, 0.15);
+      border: 1px solid rgba(212, 165, 55, 0.18);
       border-radius: var(--radius-lg);
-      padding: var(--spacing-lg) var(--spacing-md);
+      padding: var(--spacing-xl) var(--spacing-md);
       display: flex;
       flex-direction: column;
       align-items: center;
       gap: var(--spacing-sm);
       cursor: pointer;
       transition: all var(--transition-fast);
-      text-decoration: none;
+      min-width: 0;
     }
-    .quick-entry-item:hover {
-      border-color: var(--color-gold-dark);
+    .room-entry-item:hover {
+      border-color: var(--color-gold);
       transform: translateY(-2px);
-      box-shadow: var(--shadow-panel);
+      box-shadow: var(--shadow-panel), 0 0 16px rgba(212,165,55,0.12);
     }
-    .quick-entry-icon {
-      width: 44px;
-      height: 44px;
-      background: linear-gradient(135deg, rgba(212, 165, 55, 0.15), rgba(212, 165, 55, 0.05));
-      border-radius: 12px;
+    .room-entry-icon {
+      width: 52px;
+      height: 52px;
+      background: linear-gradient(135deg, rgba(212, 165, 55, 0.18), rgba(212, 165, 55, 0.05));
+      border: 1px solid rgba(212,165,55,0.25);
+      border-radius: 14px;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 22px;
+      font-size: 26px;
     }
-    .quick-entry-text {
-      font-size: 14px;
-      color: var(--color-text-primary);
-      font-weight: 600;
-    }
-    .quick-entry-desc {
-      font-size: 11px;
-      color: var(--color-text-muted);
-    }
-
-    /* 最近对局 */
-    .section-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0 var(--spacing-lg);
-      margin-bottom: var(--spacing-md);
-    }
-    .section-title {
+    .room-entry-text {
       font-size: 16px;
+      color: var(--color-text-primary);
       font-weight: 700;
-      color: var(--color-text-primary);
+      letter-spacing: 1px;
     }
-    .section-more {
-      font-size: 12px;
-      color: var(--color-gold);
-      text-decoration: none;
-    }
-
-    .recent-game-card {
-      margin: 0 var(--spacing-lg) var(--spacing-sm);
-      background: var(--color-bg-card);
-      border: 1px solid rgba(212, 165, 55, 0.12);
-      border-radius: var(--radius-lg);
-      padding: var(--spacing-md) var(--spacing-lg);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-    .recent-game-left {
-      display: flex;
-      align-items: center;
-      gap: var(--spacing-md);
-    }
-    .recent-game-result {
-      font-size: 20px;
-    }
-    .recent-game-info {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-    }
-    .recent-game-players {
-      font-size: 13px;
-      color: var(--color-text-primary);
-      font-weight: 500;
-    }
-    .recent-game-time {
+    .room-entry-desc {
       font-size: 11px;
       color: var(--color-text-muted);
-    }
-    .recent-game-score {
-      text-align: right;
-    }
-    .recent-score-val {
-      font-size: 18px;
-      font-weight: 700;
-      font-family: var(--font-mono);
-    }
-    .recent-score-val.win { color: var(--color-gold); }
-    .recent-score-val.lose { color: var(--color-danger); }
-    .recent-score-label {
-      font-size: 10px;
-      color: var(--color-text-muted);
+      text-align: center;
     }
 
-    /* 装饰元素 */
-    .deco-line {
-      height: 1px;
-      background: linear-gradient(to right, transparent, var(--color-gold-dark), transparent);
-      margin: var(--spacing-xl) var(--spacing-xxl);
+    /* 次要入口 */
+    .sub-entry {
+      margin: 0 var(--spacing-lg);
+      display: flex; flex-direction: column; gap: var(--spacing-sm);
     }
+    .sub-entry-item {
+      display: flex; align-items: center; gap: var(--spacing-md);
+      background: rgba(0,0,0,0.25);
+      border: 1px solid rgba(212,165,55,0.1);
+      border-radius: var(--radius-md);
+      padding: 12px var(--spacing-lg);
+      text-decoration: none;
+      color: var(--color-text-primary);
+      font-size: 14px;
+      transition: all var(--transition-fast);
+    }
+    .sub-entry-item:hover { border-color: rgba(212,165,55,0.3); }
+    .sub-entry-item .icon { font-size: 18px; }
+    .sub-entry-item .arrow { margin-left: auto; color: var(--color-text-muted); }
+
+    /* 公告位 + 版本 */
+    .notice-bar {
+      margin: var(--spacing-xl) var(--spacing-lg) 0;
+      padding: 10px var(--spacing-lg);
+      background: rgba(212,165,55,0.06);
+      border: 1px dashed rgba(212,165,55,0.2);
+      border-radius: var(--radius-md);
+      font-size: 12px; color: var(--color-text-secondary);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .version-tag {
+      text-align: center; margin-top: var(--spacing-lg);
+      font-size: 10px; color: var(--color-text-muted); font-family: var(--font-mono);
+    }
+
+    /* ====== 弹层（创建/加入房间）====== */
+    .modal-mask {
+      position: fixed; inset: 0; z-index: 500;
+      background: rgba(0,0,0,0.65); backdrop-filter: blur(4px);
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0; pointer-events: none;
+      transition: opacity var(--transition-normal);
+    }
+    .modal-mask.show { opacity: 1; pointer-events: auto; }
+    .modal-panel {
+      width: 320px; max-width: 88vw;
+      background: linear-gradient(160deg, var(--color-bg-wood) 0%, var(--color-bg-wood-dark) 100%);
+      border: 1px solid var(--color-gold-dark);
+      border-radius: var(--radius-xl);
+      padding: var(--spacing-xl);
+      box-shadow: 0 16px 48px rgba(0,0,0,0.5), 0 0 24px rgba(212,165,55,0.1);
+      transform: translateY(12px);
+      transition: transform var(--transition-normal);
+    }
+    .modal-mask.show .modal-panel { transform: translateY(0); }
+    .modal-title {
+      text-align: center; font-size: 18px; font-weight: 700;
+      color: var(--color-gold); letter-spacing: 3px;
+      margin-bottom: var(--spacing-lg);
+    }
+    .modal-close {
+      position: absolute; top: 12px; right: 14px;
+      width: 28px; height: 28px; border-radius: 50%;
+      background: rgba(255,255,255,0.06); border: none;
+      color: var(--color-text-muted); font-size: 14px; cursor: pointer;
+    }
+    .modal-panel { position: relative; }
+
+    /* 局数选项 */
+    .rounds-group { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: var(--spacing-xl); }
+    .rounds-option {
+      padding: 12px 0; text-align: center;
+      background: rgba(0,0,0,0.3); border: 1px solid rgba(212,165,55,0.2);
+      border-radius: var(--radius-md); cursor: pointer;
+      color: var(--color-text-secondary); font-size: 14px; font-weight: 600;
+      transition: all var(--transition-fast);
+      font-family: var(--font-cn);
+    }
+    .rounds-option:hover { border-color: var(--color-gold-dark); }
+    .rounds-option.selected {
+      background: linear-gradient(135deg, rgba(212,165,55,0.25), rgba(212,165,55,0.1));
+      border-color: var(--color-gold); color: var(--color-gold-light);
+    }
+    .rounds-option .sub { display: block; font-size: 9px; color: var(--color-text-muted); margin-top: 2px; font-weight: 400; }
+    .rounds-option.selected .sub { color: var(--color-gold); }
+
+    /* 房间号输入 */
+    .room-code-input {
+      width: 100%; padding: 14px 8px; text-align: center;
+      font-size: 26px; font-weight: 700; letter-spacing: 8px;
+      font-family: var(--font-mono); color: var(--color-gold-light);
+      background: rgba(0,0,0,0.35); border: 1px solid rgba(212,165,55,0.3);
+      border-radius: var(--radius-md); outline: none;
+      margin-bottom: var(--spacing-xl);
+    }
+    .room-code-input::placeholder { color: var(--color-text-muted); letter-spacing: 10px; }
+    .room-code-input:focus { border-color: var(--color-gold); box-shadow: 0 0 12px rgba(212,165,55,0.15); }
+
+    .modal-submit {
+      width: 100%; padding: 13px;
+      background: linear-gradient(135deg, var(--color-gold), var(--color-gold-dark));
+      color: var(--color-bg-wood-dark); border: 1px solid var(--color-gold-light);
+      border-radius: var(--radius-full); font-size: 16px; font-weight: 700;
+      cursor: pointer; letter-spacing: 3px; font-family: var(--font-cn);
+      box-shadow: 0 3px 12px rgba(212,165,55,0.3);
+      transition: all var(--transition-fast);
+      display: block; text-align: center; text-decoration: none;
+    }
+    .modal-submit:hover { transform: translateY(-1px); box-shadow: 0 5px 18px rgba(212,165,55,0.45); }
+
+    .modal-hint { text-align: center; font-size: 11px; color: var(--color-text-muted); margin-top: var(--spacing-md); }
   </style>
 </head>
 <body class="bg-table">
@@ -179,83 +244,78 @@
     <div class="home-hero">
       <div class="home-logo">🀄</div>
       <div class="home-title">AC 麻将</div>
-      <div class="home-subtitle">传统台式麻将 · 自定义台数</div>
-
-      <!-- 开始游戏按钮 -->
-      <button class="btn-primary" style="width: 220px; padding: 14px 36px;">
-        开始游戏
-      </button>
+      <div class="home-subtitle">传统台式麻将 · 自定义台数 · 好友组局</div>
     </div>
 
-    <div class="deco-line"></div>
+    <!-- 用户信息条 -->
+    <a class="user-bar" href="profile.html">
+      <div class="user-bar-avatar">我</div>
+      <div class="user-bar-info">
+        <span class="user-bar-name">牌友老张</span>
+        <span class="user-bar-id">ID: 10086</span>
+      </div>
+      <span class="user-bar-arrow">›</span>
+    </a>
 
-    <!-- 快捷入口 -->
-    <div class="quick-entry">
-      <a class="quick-entry-item" href="#">
-        <div class="quick-entry-icon">📋</div>
-        <span class="quick-entry-text">规则说明</span>
-        <span class="quick-entry-desc">台数速查 / 算账公式</span>
+    <!-- 两大核心入口 -->
+    <div class="room-entry">
+      <div class="room-entry-item" onclick="document.getElementById('createModal').classList.add('show')">
+        <div class="room-entry-icon">🎲</div>
+        <span class="room-entry-text">创建房间</span>
+        <span class="room-entry-desc">我是房主，开局组局</span>
+      </div>
+      <div class="room-entry-item" onclick="document.getElementById('joinModal').classList.add('show')">
+        <div class="room-entry-icon">🚪</div>
+        <span class="room-entry-text">加入房间</span>
+        <span class="room-entry-desc">输入房间号入座</span>
+      </div>
+    </div>
+
+    <!-- 次要入口 -->
+    <div class="sub-entry">
+      <a class="sub-entry-item" href="rules.html">
+        <span class="icon">📋</span>
+        <span>规则说明 · 台数速查 / 算账公式</span>
+        <span class="arrow">›</span>
       </a>
-      <a class="quick-entry-item" href="#" style="opacity: 0.45; pointer-events: none;">
-        <div class="quick-entry-icon">🏆</div>
-        <span class="quick-entry-text">排行榜</span>
-        <span class="quick-entry-desc">即将上线 (v1.1)</span>
-      </a>
     </div>
 
-    <div class="deco-line"></div>
-
-    <!-- 最近对局 -->
-    <div class="section-header">
-      <span class="section-title">最近对局</span>
-      <a class="section-more" href="#">查看全部 →</a>
+    <!-- 公告位 -->
+    <div class="notice-bar">
+      <span>📢</span>
+      <span>v0.1 内测版 · 仅供俱乐部成员体验，积分仅供娱乐</span>
     </div>
+    <div class="version-tag">AC Mahjong Club v0.1.0</div>
 
-    <div class="recent-game-card">
-      <div class="recent-game-left">
-        <span class="recent-game-result">🏆</span>
-        <div class="recent-game-info">
-          <span class="recent-game-players">你 vs 令狐冲 / 黄蓉 / 杨过</span>
-          <span class="recent-game-time">今天 14:23 · 东风圈 · 第3局</span>
-        </div>
-      </div>
-      <div class="recent-game-score">
-        <div class="recent-score-val win">+260</div>
-        <div class="recent-score-label">净赢（元）</div>
-      </div>
-    </div>
-
-    <div class="recent-game-card">
-      <div class="recent-game-left">
-        <span class="recent-game-result">😅</span>
-        <div class="recent-game-info">
-          <span class="recent-game-players">你 vs 乔峰 / 段誉 / 虚竹</span>
-          <span class="recent-game-time">昨天 21:10 · 东风圈 · 第1局</span>
-        </div>
-      </div>
-      <div class="recent-game-score">
-        <div class="recent-score-val lose">-180</div>
-        <div class="recent-score-label">净输（元）</div>
-      </div>
-    </div>
-
-    <div class="recent-game-card">
-      <div class="recent-game-left">
-        <span class="recent-game-result">🏆</span>
-        <div class="recent-game-info">
-          <span class="recent-game-players">你 / 小龙女 / 王语嫣 / 郭靖</span>
-          <span class="recent-game-time">前天 19:45 · 东风圈 · 第2局</span>
-        </div>
-      </div>
-      <div class="recent-game-score">
-        <div class="recent-score-val win">+420</div>
-        <div class="recent-score-label">净赢（元）</div>
-      </div>
-    </div>
-
-    <!-- 底部留白 -->
     <div style="height: 24px;"></div>
+  </div>
 
+  <!-- ====== 弹层：创建房间 ====== -->
+  <div class="modal-mask" id="createModal" onclick="if(event.target===this)this.classList.remove('show')">
+    <div class="modal-panel">
+      <button class="modal-close" onclick="document.getElementById('createModal').classList.remove('show')">✕</button>
+      <div class="modal-title">创建房间</div>
+      <div style="font-size:12px;color:var(--color-text-muted);margin-bottom:10px;text-align:center;">选择局数上限</div>
+      <div class="rounds-group" id="roundsGroup">
+        <div class="rounds-option" data-v="4">4 局<span class="sub">快餐局</span></div>
+        <div class="rounds-option selected" data-v="8">8 局<span class="sub">标准局</span></div>
+        <div class="rounds-option" data-v="16">16 局<span class="sub">酣战局</span></div>
+        <div class="rounds-option" data-v="0">不限<span class="sub">尽兴</span></div>
+      </div>
+      <a class="modal-submit" href="room.html">创建并分享</a>
+      <div class="modal-hint">创建后生成 6 位房间号，可分享微信好友</div>
+    </div>
+  </div>
+
+  <!-- ====== 弹层：加入房间 ====== -->
+  <div class="modal-mask" id="joinModal" onclick="if(event.target===this)this.classList.remove('show')">
+    <div class="modal-panel">
+      <button class="modal-close" onclick="document.getElementById('joinModal').classList.remove('show')">✕</button>
+      <div class="modal-title">加入房间</div>
+      <input class="room-code-input" maxlength="6" inputmode="numeric" placeholder="——————" value="828666">
+      <a class="modal-submit" href="room.html">加入房间</a>
+      <div class="modal-hint">输入好友分享的 6 位房间号</div>
+    </div>
   </div>
 
   <!-- Tab 栏 -->
@@ -277,5 +337,15 @@
       <span>我的</span>
     </a>
   </nav>
+
+  <script>
+    /* 局数单选 */
+    document.getElementById('roundsGroup').addEventListener('click', (e) => {
+      const opt = e.target.closest('.rounds-option');
+      if (!opt) return;
+      document.querySelectorAll('.rounds-option').forEach(o => o.classList.remove('selected'));
+      opt.classList.add('selected');
+    });
+  </script>
 </body>
 </html>
