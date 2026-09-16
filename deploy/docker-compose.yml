@@ -1,0 +1,36 @@
+# 本地开发依赖：MySQL 8（权威永久存储）+ Redis 7（会话/快照/动作缓冲/路由）
+# 用法：cd deploy && docker compose up -d   （首次启动 MySQL 会自动执行 schema.sql 建表）
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: ac-majong-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: ac_majong
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+      - ac_mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  redis:
+    image: redis:7
+    container_name: ac-majong-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  ac_mysql_data:

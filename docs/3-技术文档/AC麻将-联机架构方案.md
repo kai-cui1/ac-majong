@@ -1,6 +1,6 @@
 # A&C 麻将 · 联机架构方案
 
-> **版本**：v0.1（草案）　**面向**：服务端 + 客户端联调开发
+> **版本**：v0.2（数据存储升级：Redis + MySQL · 全量可还原）　**面向**：服务端 + 客户端联调开发
 > **上游**：[PRD](../1-prd/AC麻将小游戏-PRD.md)、[台数计算规格书](./AC麻将-台数计算规格书.md)、`packages/engine`（已完成的台数 + 对局流程引擎）
 > **核心思想**：**把 `packages/engine` 的 `reducer` 直接作为服务端权威状态机**——客户端只发 `Action`、只收**按座位裁剪**后的 `ViewState`，引擎代码前后端共享、服务端唯一裁决。
 
@@ -31,7 +31,7 @@
 - **支撑**：房间制 4 人真人联机对战（PRD 第 4 章），服务端权威的胡牌判定/台数/结算。
 - **必须**：实时同步、断线重连、超时托管、防作弊（防透视/防篡改）、微信登录鉴权。
 - **跨平台复用（决策1）**：本期微信小游戏，但架构须支撑未来**独立 HTML5 版**（不依赖微信）——平台无关核心 + 平台适配层，最小化微信耦合。
-- **不做**：全局匹配、跨房间持久化积分、赛季排行（PRD 非目标）。
+- **不做**：全局匹配、跨房间积分账户、赛季排行（PRD 非目标、D-03/D-32）。**但**每局对局记录全量持久化用于审计/还原（见第 11 章）。
 
 ## 2. 架构总览
 
@@ -49,13 +49,17 @@ flowchart LR
       ENG[packages/engine: reducer/scoreAndSettle]
       ST[(权威 TableState)]
     end
-    REDIS[(Redis: 房间快照/会话)]
+    REDIS[(Redis: 会话/房间快照/动作Stream)]
   end
+  MYSQL[(MySQL: 房间/进出/对局/动作日志/结算)]
   WX[微信登录 code2Session]
   UI --> NET -->|wss Action| GW --> RM --> AUTH --> ENG --> ST
   ST -->|Event| GW -->|裁剪 ViewState| NET --> UI
   GW -.-> WX
   RM <--> REDIS
+  RM -.->|房间创建/进出记录| MYSQL
+  REDIS -.->|局末动作批量落库| MYSQL
+  ST -.->|每局初始牌墙+手牌/结算| MYSQL
 ```
 
 **分层职责**：
@@ -63,7 +67,8 @@ flowchart LR
 - **接入网关**：WSS 连接、鉴权、心跳、消息路由到房间。
 - **房间 Actor**：单房间串行处理 Action（天然免锁），持有权威 `TableState`。
 - **引擎**：直接复用 `packages/engine`（`applyAction`/`scoreAndSettle`），**服务端唯一算分**。
-- **Redis**：房间快照（宕机恢复）、会话/路由。
+- **Redis**：会话/重连、房间实时快照（宕机恢复）、逐动作写缓冲（Stream）、`room→instance` 路由与锁。
+- **MySQL**：**权威持久层**——房间创建、进出记录、每局初始牌墙 + 起手手牌、动作日志、结算/积分变动；支撑审计与**真实对局还原**（详见第 11 章）。
 
 ## 3. 技术选型（已定）
 
@@ -74,7 +79,7 @@ flowchart LR
 | 实时 | **WebSocket** | 小游戏 **`wx.cloud.connectContainer`**（连云托管、免配域名，返回标准 socketTask） |
 | 托管 | **微信云托管**（Docker 容器） | 用户已定；原生支持 WS、免运维、贴合微信生态 |
 | 鉴权 | 云托管注入 `x-wx-openid`（主）+ `code2Session`（iOS 高性能+ 兜底） | openid 作身份 |
-| 存储 | **Redis**（云托管配套/云数据库） | 房间快照、会话；积分房间内不持久化 |
+| 存储 | **Redis + MySQL**（云托管配套/云数据库） | Redis：会话/房间快照/动作缓冲；MySQL：房间/进出/对局/动作日志/结算 **永久持久化**（见第 11 章） |
 | 共享 | `packages/engine`（pnpm workspace） | 客户端可选本地预算，服务端权威 |
 
 > ✅ **已核实（A1 消解）**：用**云托管**作后端时**无需配置通讯域名、无需自有备案域名**——客户端用 `wx.cloud.connectContainer`（WebSocket）/ `callContainer`（HTTPS）走微信私有协议直连云托管（官方小游戏网络文档）。需**基础库 ≥ 2.21.1**。
@@ -272,24 +277,62 @@ flowchart LR
 
 ## 11. 数据存储
 
-| 数据 | 存储 | 生命期 |
-|---|---|---|
-| 房间快照 `TableState` | Redis | 对局期间 + 散场后短暂 |
-| 会话 `session→openid→seat` | Redis | 房间生命期 |
-| `room→instance` 路由 | Redis | 房间生命期 |
-| 积分 | 仅内存/快照 | **房间内累计、散场清零**（D-03），不持久化 |
-| 对局日志（可选） | 对象存储 | 审计/复盘 |
+> **v0.2 重大修订**：从“用完即弃”升级为「**全量留痕、可真实还原每一次对局**」。选型 **Redis（热/实时）+ MySQL（权威持久，永久保留）**。
 
-> 无账号体系：openid 即身份；无跨房间持久化（PRD 非目标）。
+### 11.1 职责划分
+
+| 存储 | 角色 | 内容 |
+|---|---|---|
+| **Redis** | 热数据 / 实时 | 会话 `session→openid→seat`、房间实时快照 `TableState`（重连/宕机恢复）、逐动作写缓冲（Stream）、`room→instance` 路由、分布式锁 |
+| **MySQL** | 权威持久（永久） | 用户身份、房间创建、进出记录、每局初始牌墙 + 起手手牌、动作日志、结算/积分变动 |
+
+### 11.2 对局还原策略：只存“业务事实”（事件溯源）
+
+引擎是**确定性**的（`seed→洗牌` 固定、`applyAction` 纯函数），故**无需存每步 `TableState`**，只存业务事实即可逐步重放、100% 复现：
+
+- **每局初始**：初始牌墙（144 张顺序）+ 各家起手手牌（含补花）+ 庄家/连庄数 + `seed`（交叉校验）。
+- **动作日志**：有序的 摸/打/吃/碰/杠(明/暗/加)/胡/过/诈胡，每条含 `seat`、`tile`、子参数、时间戳。
+- **结算结果**：胡牌/荒庄类型、台数明细、各家积分变动、亮牌。
+
+> **体量**：业务事实 ~15–40 KB/局（vs 全量快照 ~0.5–1.3 MB/局）；1000 局/天 · 永久 ≈ **~10 GB/年**，MySQL 可轻松承载。
+> **工程前提**：需给 `packages/engine` 增加还原入口 `rehydrate(initialWall, hands, …)`（当前 `createTable` 由 seed 生成牌墙）；回放 = `rehydrate → 按序 applyAction → 与结算结果校验`。**显式存牌墙+手牌**（算法无关），`seed` 仅作校验，防洗牌算法变更导致旧局无法还原。
+
+### 11.3 MySQL 表设计
+
+| 表 | 关键字段 | 说明 |
+|---|---|---|
+| `users` | openid(uniq)、nickname、avatar_url、created_at、last_login_at | 身份/资料；**不含积分字段**（不做账户积分） |
+| `rooms` | room_id、host_openid、max_rounds、initial_score_json、final_score_json、status、created_at、closed_at | 房间创建 + 初始积分分配 + 散场积分快照 |
+| `room_member_events` | room_id、openid、seat、event(join/leave/reconnect/host_start)、at | **进出房间记录** |
+| `games` | game_id、room_id、round_no、dealer_seat、seed、end_type、result_json、started_at、ended_at | 一局一行 + 结算结果 |
+| `game_initial_states` | game_id、wall_json、hands_json、lianzhuang_count | **每局初始牌墙 + 各家起手手牌** |
+| `game_actions` | game_id、seq、seat、action_type、payload_json、at | **有序动作日志**（事件溯源；建议按月分区） |
+
+### 11.4 写入时机与宕机安全
+
+- **准实时落 MySQL**：房间创建、进出记录、每局初始状态、每局结算、散场积分快照。
+- **逐动作**：先进 **Redis Stream** 缓冲 → **局末批量落** `game_actions`；**散场确保 flush 完整**。
+- **宕机恢复**：Redis 开启 AOF + 房间快照 → 重启恢复当前局；已落库历史不丢。房间实时快照**始终写 Redis**（重连/恢复/未来多实例）。
+
+### 11.5 积分与合规（承接 D-02/D-03，见规则说明书 D-32）
+
+- 积分**随房间生命周期**留存：初始分配 → 每局变动 → 散场快照，**全部落库**。
+- **不建立全局账户积分、不跨房间累计到用户、不可提现**——守住“非赌博”合规底线。`users` 表只存身份资料，**无余额字段**。
+
+### 11.6 保留与回放
+
+- **保留期：永久**。`game_actions` 按月分区，超期可转冷存储/归档表。
+- **前端回放 UI**：要做，但**优先级低**（已记入 backlog）；后端预留按 `game_id` 拉取「初始事实 + 动作日志」的回放数据接口。
 
 ---
 
 ## 12. 并发与可扩展性
 
 - **单房间**：Actor 串行队列处理 Action → 无锁、无竞态、顺序确定。
-- **多房间**：单实例多 Actor（Node 事件循环）；房间数上限受内存/CPU约束。
-- **水平扩展**：按 `room` 分片到多实例（见 10.4）；Redis 作为共享注册/快照。
-- **实时性**：目标操作→广播 <200ms（NFR-01）；同实例内存广播，延迟低。
+- **多房间**：单实例多 Actor（Node 事件循环）；房间数上限受内存/CPU 约束。
+- **MVP 部署形态**：**单实例 / 房间亲和**（`room→instance` 固定）——权威 `TableState` 在进程内存处理，但**快照始终写 Redis**，为宕机恢复与未来扩展留口。
+- **水平扩展（扩展期，MVP 不做）**：按 `room` 分片到多实例；权威快照外置 Redis + `room→instance` 路由 + 跨实例 pub/sub 广播。
+- **持久化不阻塞对局**：MySQL 写入走“准实时关键事件 + 局末批量”（第 11.4），动作路径不因落库同步阻塞，保障 <200ms 广播（NFR-01）。
 
 ---
 
@@ -328,12 +371,7 @@ sequenceDiagram
 
 ## 14. 里程碑
 
-| 阶段 | 交付 | 依赖 |
-|---|---|---|
-| **t4-a 服务骨架** | WS 网关 + RoomManager + 单房间 Actor + `redact` + 接入 engine；本地可多客户端联调 | ✅ engine 就绪 |
-| **t4-b 鉴权与部署** | `code2Session` + session + 云托管 Docker 部署 + wss | t4-a |
-| **t4-c 健壮性** | 断线重连 + 托管 + 快照恢复 + 限流 | t4-a |
-| **t6 客户端** | **Cocos Creator** 牌桌（一套→微信小游戏+Web）+ Transport 对接 + 开发者工具跑通 | t4-a |
+> **已迁至 backlog**：按文档职责约定，里程碑/版本/迭代规划（“什么时候做”）统一维护在 [`docs/5-backlog`](../5-backlog/README.md)（见《开发计划-路线图》）。本文档只描述架构“怎么做”，不再维护排期。
 
 ---
 
@@ -348,6 +386,7 @@ sequenceDiagram
 | A5 | 一炮多响轮庄 / 诈胡续局 为默认策略 | 🟡 中 | 引擎已标 TODO，待规则明确 |
 | A6 | 心跳/超时参数（10s/30s/60s）需实测调优 | 🟢 低 | 可配置；云托管网关 60s 空闲断连，须 ~10s 心跳 |
 | A7 | Cocos 工程引用 workspace 的 `@ac-majong/engine`（TS 包）构建支持 | 🟡 中 | 必要时预编译 dist 再引入；需验证 |
+| A8 | 事件溯源还原依赖引擎确定性 | 🟡 中 | 洗牌/发牌算法若变更，仅靠 seed 无法还原旧局；故**显式存初始牌墙+手牌**（算法无关），seed 仅作校验；需为 engine 增 `rehydrate` 还原入口 |
 
 ---
 
@@ -400,4 +439,4 @@ interface IdentityProvider { login(): Promise<{ userId: string; token?: string }
 
 ---
 
-> **下一步**：t4-a/t8 服务骨架——新建 `server/`（Node+TS+ws），WS 网关 + RoomManager + RoomActor + `redact` + **可插拔 auth**，复用 `@ac-majong/engine` 的 `applyAction`；本地用标准 ws 客户端联调，上线时微信走 connectContainer、HTML5 走公网 wss。之后 t6 用 Cocos 建客户端。
+> **实施进度与排期**：见 [`docs/5-backlog/开发计划-路线图.md`](../5-backlog/开发计划-路线图.md)（本文档只描述架构“怎么做”，不维护“什么时候做”）。
