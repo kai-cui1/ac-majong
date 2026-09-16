@@ -94,6 +94,9 @@ export class GameClient {
   start(): void {
     this.send({ t: 'start', seq: this.nextSeq() });
   }
+  nextRound(): void {
+    this.send({ t: 'nextRound', seq: this.nextSeq() });
+  }
   action(action: Action): void {
     this.send({ t: 'action', seq: this.nextSeq(), action });
   }

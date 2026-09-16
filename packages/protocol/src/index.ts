@@ -13,12 +13,16 @@ export type RoomPhase = 'waiting' | 'playing' | 'finished';
 export interface ViewState {
   room: string;
   round: number;
+  /** 本房间总局数上限（用于客户端判断“下一局/对局结束”与进度显示） */
+  maxRounds: number;
   phase: TableState['phase'];
   dealerSeat: number;
   currentSeat: number;
   wallRemaining: number;
   lianzhuangCount: number;
   lastDiscard: { seat: number; tile: string } | null;
+  /** 全局有序弃牌河（公开信息），供客户端渲染中央牌河 */
+  discards: { seat: number; tile: string }[];
   you: {
     seat: number;
     concealed: Record<string, number>;
@@ -54,6 +58,7 @@ export type ClientMsg =
   | { t: 'join'; seq: number; room: string }
   | { t: 'leave'; seq: number }
   | { t: 'start'; seq: number }
+  | { t: 'nextRound'; seq: number }
   | { t: 'action'; seq: number; action: Action }
   | { t: 'ping'; seq: number };
 

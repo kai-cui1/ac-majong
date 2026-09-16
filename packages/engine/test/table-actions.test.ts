@@ -32,6 +32,7 @@ function mkTable(o: Partial<TableState>): TableState {
     currentSeat: 0,
     phase: 'draw',
     lastDiscard: null,
+    discards: [],
     lastDrawn: null,
     pending: {},
     lianzhuangCount: 0,

@@ -4,6 +4,7 @@ import type { ClientMsg, ServerMsg } from '@ac-majong/protocol';
 import type { Connection } from './connection';
 import type { IdentityProvider } from './identity';
 import { RoomManager } from './roomManager';
+import { fillDevBots } from './devBots';
 
 interface Session {
   ws: WebSocket;
@@ -17,6 +18,8 @@ export interface GatewayOptions {
   port: number;
   identity: IdentityProvider;
   heartbeatMs?: number;
+  /** 本地开发专用：真人建房后自动补 Bot 并开局（生产必须为0） */
+  autoBots?: number;
 }
 
 export interface Gateway {
@@ -60,7 +63,7 @@ export function startGateway(opts: GatewayOptions): Gateway {
       } catch {
         return send(session, { t: 'error', reason: 'bad json' });
       }
-      void handleMsg(session, conn, msg, rooms, opts.identity, send);
+      void handleMsg(session, conn, msg, rooms, opts.identity, opts.autoBots ?? 0, send);
     });
     ws.on('close', () => {
       sessions.delete(session);
@@ -96,6 +99,7 @@ async function handleMsg(
   msg: ClientMsg,
   rooms: RoomManager,
   identity: IdentityProvider,
+  autoBots: number,
   send: (s: Session, m: ServerMsg) => void,
 ): Promise<void> {
   switch (msg.t) {
@@ -110,6 +114,11 @@ async function handleMsg(
       if (!session.userId) return send(session, { t: 'error', reason: '未鉴权' });
       const room = rooms.create(session.userId, conn, msg.maxRounds ?? 8);
       session.roomId = room.id;
+      const botCount = Math.max(0, Math.min(3, autoBots));
+      if (botCount > 0) {
+        fillDevBots(room, botCount);
+        if (room.playerCount() === 4) room.start(session.userId);
+      }
       return send(session, { t: 'ack', seq: msg.seq, ok: true, reason: room.id });
     }
     case 'join': {
@@ -128,6 +137,11 @@ async function handleMsg(
     case 'start': {
       if (!session.roomId || !session.userId) return send(session, { t: 'error', reason: '无房间' });
       const r = rooms.get(session.roomId)?.start(session.userId) ?? { ok: false, reason: '无房间' };
+      return send(session, { t: 'ack', seq: msg.seq, ok: r.ok, reason: r.reason });
+    }
+    case 'nextRound': {
+      if (!session.roomId || !session.userId) return send(session, { t: 'error', reason: '无房间' });
+      const r = rooms.get(session.roomId)?.nextRound(session.userId) ?? { ok: false, reason: '无房间' };
       return send(session, { t: 'ack', seq: msg.seq, ok: r.ok, reason: r.reason });
     }
     case 'action': {

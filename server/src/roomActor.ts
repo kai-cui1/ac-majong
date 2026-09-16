@@ -121,21 +121,27 @@ export class RoomActor {
     const { state, events } = applyAction(this.state, action);
     this.state = state;
     this.broadcastGame(events);
-    this.afterEvents();
     return { ok: true };
   }
 
-  /** 局末（roundEnd/exhaustive）→ 下一局或结束（骨架：立即重开；生产可加结算展示延时） */
-  private afterEvents(): void {
-    if (!this.state) return;
-    if (this.state.phase !== 'settled' && this.state.phase !== 'exhaustive') return;
+  /**
+   * 开下一局（由客户端结算浮层驱动，取代旧的“局末即时自动续局”，让玩家有时间看结算）。
+   * 相位守卫：仅当本局已结束（settled/exhaustive）才受理，天然防止重复推进。
+   * 达到总局上限则置 finished。
+   */
+  nextRound(byUserId: string): OpResult {
+    if (this.phase !== 'playing' || !this.state) return { ok: false, reason: '未在对局中' };
+    if (this.seatOf.get(byUserId) == null) return { ok: false, reason: '不在房间' };
+    const ph = this.state.phase;
+    if (ph !== 'settled' && ph !== 'exhaustive') return { ok: false, reason: '本局尚未结束' };
     if (this.state.round >= this.maxRounds) {
       this.phase = 'finished';
       this.broadcastAll();
-      return;
+      return { ok: true };
     }
     this.state = startNextRound(this.state, this.seed++).state;
     this.broadcastGame();
+    return { ok: true };
   }
 
   private broadcastGame(events?: GameEvent[]): void {
@@ -144,7 +150,7 @@ export class RoomActor {
     for (const [userId, conn] of this.connOf) {
       const seat = this.seatOf.get(userId);
       if (seat == null) continue;
-      conn.send({ t: 'gameView', view: redact(this.state, seat, this.id) });
+      conn.send({ t: 'gameView', view: redact(this.state, seat, this.id, this.maxRounds) });
     }
   }
 

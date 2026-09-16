@@ -3,7 +3,7 @@ import WebSocket from 'ws';
 import type { AddressInfo } from 'node:net';
 import { startGateway, type Gateway } from '../src/wsGateway';
 import { MockIdentity } from '../src/identity';
-import type { ServerMsg } from '../src/protocol';
+import type { ServerMsg } from '@ac-majong/protocol';
 
 let gw: Gateway | null = null;
 afterEach(() => {

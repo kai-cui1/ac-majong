@@ -33,6 +33,8 @@ export interface TableState {
   currentSeat: number;
   phase: Phase;
   lastDiscard: Discard | null;
+  /** 全局有序弃牌河（被吃/碰/杠收走的牌会移除），供客户端渲染中央牌河 */
+  discards: Discard[];
   /** 最近一次摸牌（自摸胡时定位胡张 + 补牌来源，用于杠开/花开/海底捞） */
   lastDrawn: {
     seat: number;
@@ -133,6 +135,7 @@ export function createTable(dealerSeat: number, seed: number, seats = [0, 1, 2, 
     currentSeat: dealerSeat,
     phase: 'discard',
     lastDiscard: null,
+    discards: [],
     lastDrawn: null,
     pending: {},
     robKong: null,

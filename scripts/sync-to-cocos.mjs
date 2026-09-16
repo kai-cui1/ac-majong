@@ -6,7 +6,7 @@
  *  1) 把 engine / protocol / client-core 的 TS 源码同步到
  *     client/ac-majong/assets/scripts/vendor/<pkg>/，并把跨包 import
  *     （@ac-majong/xxx）重写为相对路径，使 Cocos 自带的 TS 编译可直接处理；
- *  2) 同步牌面素材 docs/2-效果图/.../res/tiles → assets/res/tiles。
+ *  2) 同步牌面素材 docs/2-效果图/.../res/tiles → assets/resources/tiles（供 resources.load）。
  *
  * 用法：pnpm sync:client
  */
@@ -18,7 +18,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const COCOS = join(ROOT, 'client/ac-majong');
 const VENDOR = join(COCOS, 'assets/scripts/vendor');
 const TILES_SRC = join(ROOT, 'docs/2-效果图/HTML格式高保真原型/res/tiles');
-const TILES_DST = join(COCOS, 'assets/res/tiles');
+const TILES_DST = join(COCOS, 'assets/resources/tiles');
 
 const PKGS = [
   { name: 'engine', src: join(ROOT, 'packages/engine/src') },
@@ -62,7 +62,7 @@ function syncTiles() {
     cpSync(join(TILES_SRC, f), join(TILES_DST, f));
     n++;
   }
-  console.log(`  ✓ 素材: ${n} 张 → assets/res/tiles/`);
+  console.log(`  ✓ 素材: ${n} 张 → assets/resources/tiles/`);
 }
 
 if (!existsSync(COCOS)) {

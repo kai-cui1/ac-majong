@@ -30,12 +30,17 @@ export type GameEvent =
   | { type: 'melded'; seat: number; move: string; tiles: TileId[] }
   | { type: 'kong'; seat: number; kind: string; tile: TileId }
   | { type: 'advance'; seat: number }
-  | { type: 'win'; winners: { seat: number; tai: number }[]; delta: Record<number, number> }
+  | { type: 'win'; winners: { seat: number; tai: number }[]; delta: Record<number, number>; revealed: Record<number, Record<string, number>> }
   | { type: 'zhahu'; seat: number }
-  | { type: 'exhaustive' }
+  | { type: 'exhaustive'; revealed: Record<number, Record<string, number>> }
   | { type: 'roundEnd'; dealerSeat: number; lianzhuangCount: number; round: number };
 
 const seatList = (s: TableState) => s.players.map((p) => p.seat);
+
+/** 局末亮牌：各家暗牌计数表（对局结束后公开，供结算层展示） */
+function revealedHands(s: TableState): Record<number, Record<string, number>> {
+  return Object.fromEntries(s.players.map((p) => [p.seat, { ...p.concealed }]));
+}
 
 /** 可移植深拷贝（TableState 为纯数据，兼容 Node 与微信小游戏） */
 function clone<T>(v: T): T {
@@ -109,6 +114,7 @@ function drawWithFlowers(s: TableState, seat: number, events: GameEvent[]): Draw
 function doDiscard(s: TableState, seat: number, tile: TileId, events: GameEvent[]): void {
   removeTile(getPlayer(s, seat).concealed, tile);
   s.lastDiscard = { seat, tile };
+  s.discards.push({ seat, tile });
   s.lastDrawn = null;
   events.push({ type: 'discarded', seat, tile });
   enterResponse(s, events);
@@ -257,6 +263,7 @@ function applyPong(s: TableState, seat: number, tile: TileId, events: GameEvent[
   removeTile(p.concealed, tile);
   removeTile(p.concealed, tile);
   p.melds.push({ type: 'pong', tiles: [tile, tile, tile] });
+  s.discards.pop();
   s.lastDiscard = null;
   s.pending = {};
   s.currentSeat = seat;
@@ -268,6 +275,7 @@ function applyExposedKong(s: TableState, seat: number, tile: TileId, events: Gam
   const p = getPlayer(s, seat);
   for (let i = 0; i < 3; i++) removeTile(p.concealed, tile);
   p.melds.push({ type: 'kong_exposed', tiles: [tile, tile, tile, tile] });
+  s.discards.pop();
   s.lastDiscard = null;
   s.pending = {};
   events.push({ type: 'kong', seat, kind: 'exposed', tile });
@@ -279,6 +287,7 @@ function applyChi(s: TableState, seat: number, tile: TileId, chiTiles: TileId[],
   for (const t of chiTiles) removeTile(p.concealed, t);
   const meldTiles = [tile, ...chiTiles].sort();
   p.melds.push({ type: 'chi', tiles: meldTiles });
+  s.discards.pop();
   s.lastDiscard = null;
   s.pending = {};
   s.currentSeat = seat;
@@ -367,7 +376,7 @@ function settleWins(
   }
   applyDeltas(s, allDelta);
   getPlayer(s, payer).zi = 0; // 放炮方子清零
-  events.push({ type: 'win', winners: winTais, delta: allDelta });
+  events.push({ type: 'win', winners: winTais, delta: allDelta, revealed: revealedHands(s) });
   // 一炮多响时按最近赢家轮庄（多家胡的轮庄规则待复核）
   endRound(s, closestByTurn(s, payer, winTais.map((w) => w.seat)), events);
 }
@@ -384,7 +393,7 @@ function doSelfWin(s: TableState, seat: number, events: GameEvent[]): void {
   }
   applyDeltas(s, delta!);
   for (const p of s.players) if (p.seat !== seat) p.zi = 0; // 被自摸者子清零
-  events.push({ type: 'win', winners: [{ seat, tai: score.total }], delta: delta! });
+  events.push({ type: 'win', winners: [{ seat, tai: score.total }], delta: delta!, revealed: revealedHands(s) });
   endRound(s, seat, events);
 }
 
@@ -419,7 +428,7 @@ function doExhaustive(s: TableState, events: GameEvent[]): void {
   s.phase = 'exhaustive';
   s.lianzhuangCount += 1; // 荒庄庄家连庄
   getPlayer(s, s.dealerSeat).zi += 1;
-  events.push({ type: 'exhaustive' });
+  events.push({ type: 'exhaustive', revealed: revealedHands(s) });
   events.push({ type: 'roundEnd', dealerSeat: s.dealerSeat, lianzhuangCount: s.lianzhuangCount, round: s.round });
 }
 

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { RoomManager } from '../src/roomManager';
 import type { Connection } from '../src/connection';
-import type { ServerMsg } from '../src/protocol';
+import type { ServerMsg } from '@ac-majong/protocol';
 
 class MockConn implements Connection {
   userId: string;
@@ -88,5 +88,13 @@ describe('RoomActor · 防透视与权限', () => {
     room.addPlayer('u3', new MockConn('u3'));
     // 未 start
     expect(room.handleAction('u0', { type: 'draw', seat: 0 }).ok).toBe(false);
+  });
+
+  it('nextRound 相位守卫：未开始/本局未结束/非房间成员均被拒', () => {
+    const { room } = setupRoom(11);
+    expect(room.nextRound('u0').ok).toBe(false); // 未 start：不在对局中
+    room.start('u0');
+    expect(room.nextRound('u0').ok).toBe(false); // 本局刚开始(discard)，未结束
+    expect(room.nextRound('ghost').ok).toBe(false); // 不在房间
   });
 });
