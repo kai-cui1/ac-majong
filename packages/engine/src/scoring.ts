@@ -13,7 +13,12 @@ export const MIN_WIN_TAI = 6;
  */
 export function computeTai(patterns: MatchedPattern[], opts: ScoreOptions = {}): ScoreResult {
   const kept = dedup(patterns);
-  const detail = kept.map((p) => ({ name: p.name, tai: patternTai(p) }));
+  const detail = kept.map((p) => ({
+    name: p.name,
+    tai: patternTai(p),
+    ...(p.count != null ? { count: p.count } : {}),
+    ...(p.tiles && p.tiles.length ? { tiles: p.tiles } : {}),
+  }));
   const sum = detail.reduce((s, d) => s + d.tai, 0);
 
   if (opts.minimal) {

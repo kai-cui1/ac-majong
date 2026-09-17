@@ -25,10 +25,12 @@ export interface HandAnalysis {
   windPungCount: number;
   dragonPungCount: number;
   honorPungCount: number; // 见字计数（字刻 + 字杠）
+  honorPungTiles: TileId[]; // 见字的具体字牌（供展开显示）
   pairIsWind: boolean;
   pairIsDragon: boolean;
   hasEastPung: boolean;
   flowerCount: number;
+  flowerTiles: TileId[]; // 见花的具体花牌（供展开显示）
   isMenqing: boolean;
   nineB: number; // 手牌中 B9 张数
   nineW: number; // 手牌中 W9 张数
@@ -95,10 +97,12 @@ export function analyze(hand: Hand, decomp: WinDecomp): HandAnalysis {
     windPungCount: pungLike.filter((m) => isWind(m.base)).length,
     dragonPungCount: pungLike.filter((m) => isDragon(m.base)).length,
     honorPungCount: pungLike.filter((m) => isHonor(m.base)).length,
+    honorPungTiles: pungLike.filter((m) => isHonor(m.base)).map((m) => m.base),
     pairIsWind: pair != null && isWind(pair),
     pairIsDragon: pair != null && isDragon(pair),
     hasEastPung: pungLike.some((m) => m.base === 'Z1'),
     flowerCount: hand.flowers.length,
+    flowerTiles: [...hand.flowers],
     isMenqing,
     nineB: allTiles.filter((t) => t === 'B9').length,
     nineW: allTiles.filter((t) => t === 'W9').length,

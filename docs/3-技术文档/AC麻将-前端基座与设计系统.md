@@ -158,6 +158,9 @@ abstract class Screen {
 
 ### 11.2 牌面资源加载与缓存（TileNode）
 - `resources.load` 异步载入牌面 `SpriteFrame`；模块级 `frameCache` 缓存，命中则**同步**赋值，降低重复载图与异步窗口。
+- **终局摊牌**：`win`/`exhaustive` 事件存 `revealed` 并重渲染——北家面牌横排、西/东面牌双竖列（16×22），phase 离开 settled/exhaustive 时收起。
+- **解散二次确认** `showDissolveConfirm`：结果页「解散牌局」先弹确认框（确认解散/取消），确认框挂 `BlockInputEvents` 防穿透误点，确认后才 `net.dissolve()`。
+- **台数预览浮层**：三态状态行（可自摸 · N台 / 打 X 听牌 · N台 / 听牌 · N台）+ 明细行带 `×count`；**结算明细**按张番种附小字行列出具体牌（`tileName` 支持 Z1..Z7 字牌、H1..H8 花牌）。
 - **牌面选择器** `showTileChooser`（吃/杠多解共用）：面板高度 = 标题 + 选项数×行高 + 内边距（自适应，不溢出）；每选项渲染为真实牌面组合（`createTileNode` 24×34）。
 - **手牌选中**：按**位置索引** `selectedIdx`（非牌 ID），一对牌点选仅抬被点的那张；视图刷新（`render`）时清除选中，出牌按索引从排序手牌取牌 ID。
 - **摸牌显示**：`you.drawn` 下发的刚摸牌在排序手牌**原位抬高 10px**（抽出态，取最右一张同牌），选中抬高 18px 以区分；`drawn=null` 时回退连排。
@@ -172,3 +175,6 @@ abstract class Screen {
 | 2026-09-17 | §11 补摸牌显示：`you.drawn` 刚摸牌原位抬高 10px（抽出态），选中 18px 区分 |
 | 2026-09-17 | §11 补手牌选中按位置索引 `selectedIdx`：一对牌仅抬被点的那张 |
 | 2026-09-17 | §11 补牌面选择器 `showTileChooser`：自适应高度 + 选项渲染为真实牌面组合 |
+| 2026-09-17 | §11 补台数预览三态状态行 + 结算明细个数/具体牌展开 + tileName 字/花映射 |
+| 2026-09-17 | §11 补解散二次确认框 showDissolveConfirm（防结果页误点） |
+| 2026-09-17 | §11 补终局摊牌渲染（revealed → 北横排/西东双竖列面牌） |

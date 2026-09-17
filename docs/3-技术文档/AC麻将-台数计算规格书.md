@@ -665,6 +665,12 @@ PatternDef {
 
 ---
 
+## 11. 台数明细个数与构成牌（ScoreDetail.count / tiles）
+
+- `ScoreDetail` 增 `count?`（按张计台番种的张数）与 `tiles?`（构成该番种的具体牌），供客户端展开显示（如「见花 ×2：春、夏」）。
+- `recognize` 对见花/见字填入 `count` 与 `tiles`（花牌列表 / 字刻字牌）；`name` 保持不变（必然包含矩阵与测试以 name 为键）。
+- `previewTai` 升级**三态实时**：A 可直接自摸→`canWin`+胡牌台数；B 3n+2 未胡→遍历打法取「打后听牌且台数最高」路线（`viaDiscard`）；C 3n+1 已听牌→最佳听张台数。复用 `scoreHand`，与真实结算一致。
+
 ## 维护记录
 
 | 日期 | 概要 |

@@ -58,11 +58,17 @@ export interface MatchedPattern {
   count?: number;
   /** 显式覆盖台数（默认 = 表值 × count） */
   tai?: number;
+  /** 构成该番种的具体牌（供客户端展开显示，如见花列出哪几朵花） */
+  tiles?: TileId[];
 }
 
 export interface ScoreDetail {
   name: string;
   tai: number;
+  /** 按张计台的番种的张数（如见花=花数） */
+  count?: number;
+  /** 构成该番种的具体牌（供展开显示） */
+  tiles?: TileId[];
 }
 
 export interface ScoreResult {

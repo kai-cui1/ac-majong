@@ -10,9 +10,9 @@ const key = (s: string, r: number) => `${s}${r}`;
 /** 花 / 字类 */
 function flowerHonor(a: HandAnalysis): MatchedPattern[] {
   const out: MatchedPattern[] = [];
-  if (a.flowerCount >= 1) out.push(P('见花', a.flowerCount));
+  if (a.flowerCount >= 1) out.push({ name: '见花', count: a.flowerCount, tiles: a.flowerTiles });
   else out.push(P('无花'));
-  if (a.honorPungCount >= 1) out.push(P('见字', a.honorPungCount));
+  if (a.honorPungCount >= 1) out.push({ name: '见字', count: a.honorPungCount, tiles: a.honorPungTiles });
   if (!a.hasHonor) out.push(P('无字'));
   if (a.flowerCount === 0 && !a.hasHonor) out.push(P('无花无字'));
   return out;

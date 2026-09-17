@@ -81,6 +81,8 @@ interface Transport {
 - 协议再导出 `Action`/`GameEvent`/`ActionKind`/`Meld`，客户端无需直接依赖 engine 即可取类型。
 
 ### 5.1 视图增补字段（M-D/M-F）
+
+- 终局事件 `win`/`exhaustive` 带 `revealed: Record<seat, concealed>`（各家终局暗牌），供客户端终局摊牌渲染（前端基座 §11）。
 - `ViewState.names`：各家昵称（服务端经 `roomActor`/`redact` 下发），牌桌 pinfo 直接显示，不再用座位号占位。
 - `ViewState.you.drawn`：刚摸的牌（服务端 redact 从 `state.lastDrawn` 取，仅自己回合 discard 相位下发；`concealed` 已含该牌），供客户端抽出抬高显示。
 - 台数预览 `previewTai`：**非协议字段**，由客户端接引擎 `previewTai`（听牌时按自摸最佳听张复用 `scoreHand`）本地计算，渲染「💡 N台」徽章与明细浮层。

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { scoreHand, scoreAndSettle } from '../src/pipeline';
+import { scoreHand, scoreAndSettle, previewTai } from '../src/pipeline';
 import { analyze } from '../src/analyze';
 import { recognizePatterns } from '../src/recognize';
 import { winDecompositions } from '../src/winCheck';
@@ -76,7 +76,45 @@ describe('recognizePatterns · 番种识别', () => {
   it('最小胡手仅识别出 见花×1（无其它番）', () => {
     const d = winDecompositions(minimal.concealed, minimal.melds.length)[0]!;
     const ps = recognizePatterns(minimal, analyze(minimal, d));
-    expect(ps).toEqual([{ name: '见花', count: 1 }]);
+    expect(ps).toEqual([{ name: '见花', count: 1, tiles: ['H1'] }]);
+  });
+});
+
+describe('previewTai · 三态实时台数预览', () => {
+  // 13 张听牌型（minimal 去掉胡牌张 B8）
+  const ting13 = { Z1: 2, T5: 1, T6: 1, T7: 1, B2: 1, B3: 1, B4: 1, W5: 1, W6: 1, W7: 1, B6: 1, B7: 1 };
+  const melds = minimal.melds;
+  const flowers = minimal.flowers;
+
+  it('C：3n+1 已听牌 → tenpai 且台数>0', () => {
+    const p = previewTai(ting13, melds, flowers);
+    expect(p.tenpai).toBe(true);
+    expect(p.canWin).toBeFalsy();
+    expect(p.tai).toBeGreaterThan(0);
+  });
+
+  it('A：3n+2 可直接自摸 → canWin 且台数=胡牌台数', () => {
+    // 碰碰胡高台手（非最小胡，避免自摸 probe 偏移触发诈胡分支）
+    const p = previewTai(pengpeng.concealed, pengpeng.melds, []);
+    expect(p.canWin).toBe(true);
+    expect(p.tenpai).toBe(true);
+    expect(p.tai).toBeGreaterThan(0);
+  });
+
+  it('B：3n+2 未胡 → 给出打哪张可听(viaDiscard)及台数', () => {
+    const p = previewTai({ ...ting13, W9: 1 }, melds, flowers);
+    expect(p.tenpai).toBe(true);
+    expect(p.canWin).toBeFalsy();
+    expect(p.viaDiscard).toBe('W9');
+    expect(p.tai).toBeGreaterThan(0);
+  });
+
+  it('ScoreDetail 带 count/tiles（见花展开具体牌）', () => {
+    const s = scoreHand(mkHand({ concealed: { B5: 2 }, melds: pengpeng.melds, flowers: ['H1', 'H2'], winTile: 'B5', winBy: 'zimo' }));
+    const fh = s.detail.find((d) => d.name === '见花');
+    expect(fh).toBeDefined();
+    expect(fh!.count).toBe(2);
+    expect(fh!.tiles).toEqual(['H1', 'H2']);
   });
 });
 

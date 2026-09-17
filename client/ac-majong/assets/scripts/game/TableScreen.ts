@@ -1,10 +1,10 @@
-import { Node, UITransform, Graphics, Color } from 'cc';
+import { Node, UITransform, Graphics, Color, BlockInputEvents } from 'cc';
 import { Screen } from '../app/SceneRouter';
 import { Theme, rgba } from '../ui/Theme';
 import { uiLabel, uiButton, uiPanel, setButtonEnabled } from '../ui/UiKit';
 import { NetService } from './NetService';
 import { createTileNode, expandSorted } from './TileNode';
-import { chiOptions, waitingTiles, previewTai, addedKongOptions, concealedKongOptions } from '../vendor/engine/index';
+import { chiOptions, waitingTiles, previewTai, addedKongOptions, concealedKongOptions, HONOR_NAMES } from '../vendor/engine/index';
 import type { ViewState, GameEvent, Meld } from '../vendor/protocol/index';
 
 /**
@@ -35,6 +35,7 @@ export class TableScreen extends Screen {
   private net = NetService.instance;
   private mySeat = -1;
   private selectedIdx: number | null = null; // 选中手牌的位置索引（非牌 ID，避免一对牌同时抬起）
+  private revealed: Record<number, Record<string, number>> | null = null; // 终局摊牌：各家暗牌（win/exhaustive 事件下发）
   private listening = false;
 
   private statusBar!: Node;
@@ -96,6 +97,7 @@ export class TableScreen extends Screen {
 
   private render(v: ViewState): void {
     this.selectedIdx = null; // 视图刷新（手牌可能变化）时清除选中
+    if (v.phase !== 'settled' && v.phase !== 'exhaustive') this.revealed = null; // 新局开始收起摊牌
     this.mySeat = v.you.seat;
     this.renderStatus(v);
     this.renderNorth(v);
@@ -182,16 +184,27 @@ export class TableScreen extends Screen {
     // body: 明牌(左) + 牌侧横条(右)
     const body = this.mk(this.northArea, 'Body', 0, 0);
     const meldW = this.drawMelds(body, o.melds ?? [], MELD_N, 'h');
-    const edgeW = o.concealedCount * (EDGE_H.w + 1);
+    const rev = this.revealed?.[o.seat];
+    const revTiles = rev ? expandSorted(rev) : null;
+    const RT = { w: 16, h: 22 }; // 摊牌牌面尺寸
+    const edgeW = revTiles ? revTiles.length * (RT.w + 1) : o.concealedCount * (EDGE_H.w + 1);
     const totalW = meldW + (meldW ? 10 : 0) + edgeW;
     // 明牌在左
     if (meldW) body.getChildByName('Melds')?.setPosition(-totalW / 2 + meldW / 2, 6, 0);
-    // 牌侧横条在右
+    // 牌侧横条在右（终局摊牌时为面牌横排）
     const edge = this.mk(body, 'Edge', -totalW / 2 + meldW + (meldW ? 10 : 0) + edgeW / 2, 0);
-    for (let i = 0; i < o.concealedCount; i++) {
-      const e = this.drawEdge(EDGE_H.w, EDGE_H.h, 'top');
-      e.setParent(edge);
-      e.setPosition(-edgeW / 2 + i * (EDGE_H.w + 1) + EDGE_H.w / 2, 0, 0);
+    if (revTiles) {
+      revTiles.forEach((t, i) => {
+        const tn = createTileNode(t, RT.w, RT.h);
+        tn.setParent(edge);
+        tn.setPosition(-edgeW / 2 + i * (RT.w + 1) + RT.w / 2, 0, 0);
+      });
+    } else {
+      for (let i = 0; i < o.concealedCount; i++) {
+        const e = this.drawEdge(EDGE_H.w, EDGE_H.h, 'top');
+        e.setParent(edge);
+        e.setPosition(-edgeW / 2 + i * (EDGE_H.w + 1) + EDGE_H.w / 2, 0, 0);
+      }
     }
   }
 
@@ -217,15 +230,32 @@ export class TableScreen extends Screen {
     pinfo.setPosition(0, SIDE_Y + groupH / 2 - PH / 2, 0);
     body.setPosition(0, SIDE_Y - groupH / 2 + bodyH / 2, 0);
     // body 内一行水平居中：牌背竖条靠外、明牌竖排靠中央
+    const rev = this.revealed?.[o.seat];
+    const revTiles = rev ? expandSorted(rev) : null;
+    const RT = { w: 16, h: 22 }; // 摊牌牌面尺寸
+    const edgeW = revTiles ? RT.w * 2 + 3 : EDGE_V.w;
     const meldColW = meldH ? MELD_S.w : 0;
-    const rowW = EDGE_V.w + (meldColW ? 4 + meldColW : 0);
-    const edgeX = isWest ? -rowW / 2 + EDGE_V.w / 2 : rowW / 2 - EDGE_V.w / 2;
-    const meldX = isWest ? -rowW / 2 + EDGE_V.w + 4 + meldColW / 2 : rowW / 2 - EDGE_V.w - 4 - meldColW / 2;
+    const rowW = edgeW + (meldColW ? 4 + meldColW : 0);
+    const edgeX = isWest ? -rowW / 2 + edgeW / 2 : rowW / 2 - edgeW / 2;
+    const meldX = isWest ? -rowW / 2 + edgeW + 4 + meldColW / 2 : rowW / 2 - edgeW - 4 - meldColW / 2;
     const edge = this.mk(body, 'Edge', edgeX, 0);
-    for (let i = 0; i < o.concealedCount; i++) {
-      const e = this.drawEdge(EDGE_V.w, EDGE_V.h, isWest ? 'left' : 'right');
-      e.setParent(edge);
-      e.setPosition(0, edgeH / 2 - i * pitch - EDGE_V.h / 2, 0);
+    if (revTiles) {
+      // 终局摊牌：面牌双竖列（高度预算内可读）
+      const per = Math.ceil(revTiles.length / 2);
+      const pitchY = RT.h + 1;
+      revTiles.forEach((t, i) => {
+        const col = Math.floor(i / per);
+        const row = i % per;
+        const tn = createTileNode(t, RT.w, RT.h);
+        tn.setParent(edge);
+        tn.setPosition((col - 0.5) * (RT.w + 3), ((per - 1) * pitchY) / 2 - row * pitchY, 0);
+      });
+    } else {
+      for (let i = 0; i < o.concealedCount; i++) {
+        const e = this.drawEdge(EDGE_V.w, EDGE_V.h, isWest ? 'left' : 'right');
+        e.setParent(edge);
+        e.setPosition(0, edgeH / 2 - i * pitch - EDGE_V.h / 2, 0);
+      }
     }
     if (meldH) body.getChildByName('Melds')?.setPosition(meldX, 0, 0);
   }
@@ -397,6 +427,7 @@ export class TableScreen extends Screen {
       isDealer: me.seat === v.dealerSeat,
       wallRemaining: v.wallRemaining,
       lianzhuangCount: v.lianzhuangCount,
+      drawn: me.drawn ?? undefined,
     });
     const badge = uiButton(`💡 ${preview.tai}台 ▴`, () => this.toggleScorePop(preview), { variant: 'action', width: 92, height: 26, fontSize: 12 });
     badge.setParent(this.southTop);
@@ -667,9 +698,10 @@ export class TableScreen extends Screen {
   private toggleScorePop(preview: ReturnType<typeof previewTai>): void {
     const existing = this.overlay.getChildByName('ScorePop');
     if (existing) { existing.destroy(); return; }
-    const w = 190;
+    const w = 210;
     const rows = preview.detail.length;
-    const h = 60 + rows * 16 + 26;
+    const statusH = preview.tenpai ? 16 : 0;
+    const h = 60 + statusH + rows * 16 + 26;
     const pop = uiPanel(w, h, { variant: 'panel', radius: Theme.radius.lg });
     pop.name = 'ScorePop';
     pop.setParent(this.overlay);
@@ -683,8 +715,17 @@ export class TableScreen extends Screen {
       d.setPosition(0, 0, 0);
     } else {
       let y = h / 2 - 34;
+      const status = preview.canWin
+        ? `可自摸 · ${preview.tai}台`
+        : preview.viaDiscard
+          ? `打 ${tileName(preview.viaDiscard)} 听牌 · ${preview.tai}台`
+          : `听牌 · ${preview.tai}台`;
+      const st = uiLabel(status, { size: 11, color: Theme.color.goldLight, bold: true });
+      st.setParent(pop);
+      st.setPosition(0, y, 0);
+      y -= 16;
       for (const d of preview.detail) {
-        const nm = uiLabel(d.name, { size: 11, color: Theme.color.textSecondary, align: 'left', width: 110 });
+        const nm = uiLabel(`${d.name}${d.count != null && d.count > 1 ? ` ×${d.count}` : ''}`, { size: 11, color: Theme.color.textSecondary, align: 'left', width: 120 });
         nm.setParent(pop);
         nm.setPosition(-w / 2 + 12 + 55, y, 0);
         const tv = uiLabel(`+${d.tai}`, { size: 11, color: Theme.color.goldLight, bold: true, align: 'right', width: 40 });
@@ -849,6 +890,10 @@ export class TableScreen extends Screen {
 
   private onEvents(events: GameEvent[]): void {
     for (const ev of events) {
+      if (ev.type === 'win' || ev.type === 'exhaustive') {
+        this.revealed = ev.revealed ?? null; // 终局摊牌：先翻面再弹结算
+        if (this.net.view) this.render(this.net.view);
+      }
       if (ev.type === 'win' || ev.type === 'exhaustive' || ev.type === 'zhahu') this.showSettlement(ev);
     }
   }
@@ -864,7 +909,8 @@ export class TableScreen extends Screen {
     mg.fill();
     mask.setParent(this.overlay);
     const pw = isWin ? 560 : 380;
-    const ph = 300;
+    const subLines = isWin ? (ev.winners[0]?.detail ?? []).filter((d) => d.tiles && d.tiles.length).length : 0;
+    const ph = 300 + subLines * 12;
     const panel = uiPanel(pw, ph, { variant: 'gold', radius: Theme.radius.xl });
     panel.setParent(mask);
     const v = this.net.view;
@@ -885,13 +931,19 @@ export class TableScreen extends Screen {
       cl.setPosition(lx, ph / 2 - 74, 0);
       let ly = ph / 2 - 96;
       for (const d of w0.detail) {
-        const nm = uiLabel(d.name, { size: 11, color: Theme.color.textSecondary, align: 'left', width: 120 });
+        const nm = uiLabel(`${d.name}${d.count != null && d.count > 1 ? ` ×${d.count}` : ''}`, { size: 11, color: Theme.color.textSecondary, align: 'left', width: 120 });
         nm.setParent(panel);
         nm.setPosition(lx - 20, ly, 0);
         const tv = uiLabel(`+${d.tai}`, { size: 11, color: Theme.color.goldLight, bold: true, align: 'right', width: 44 });
         tv.setParent(panel);
         tv.setPosition(lx + 62, ly, 0);
         ly -= 18;
+        if (d.tiles && d.tiles.length) {
+          const tl2 = uiLabel(d.tiles.map(tileName).join('、'), { size: 9, color: Theme.color.textMuted, align: 'left', width: 120 });
+          tl2.setParent(panel);
+          tl2.setPosition(lx - 20, ly, 0);
+          ly -= 12;
+        }
       }
       const tl = uiLabel(`合计 ${w0.tai} 台`, { size: 13, color: Theme.color.gold, bold: true });
       tl.setParent(panel);
@@ -927,10 +979,39 @@ export class TableScreen extends Screen {
     cont.setParent(panel);
     cont.setPosition(showDissolve ? -95 : 0, -ph / 2 + 34, 0);
     if (showDissolve) {
-      const dis = uiButton('解散牌局', () => { mask.destroy(); this.net.dissolve(); }, { variant: 'action', width: 130, height: 44, fontSize: 14 });
+      const dis = uiButton('解散牌局', () => this.showDissolveConfirm(), { variant: 'action', width: 130, height: 44, fontSize: 14 });
       dis.setParent(panel);
       dis.setPosition(95, -ph / 2 + 34, 0);
     }
+  }
+
+  /** 解散牌局二次确认：结果页「解散牌局」易误点，先弹确认框，确认后才真正解散 */
+  private showDissolveConfirm(): void {
+    this.overlay.getChildByName('DissolveConfirm')?.destroy();
+    const mask = new Node('DissolveConfirm');
+    mask.setParent(this.overlay);
+    mask.addComponent(UITransform).setContentSize(W, H);
+    mask.addComponent(BlockInputEvents); // 阻隔下层结算页，防再次误点
+    const w = 300;
+    const h = 132;
+    const panel = uiPanel(w, h, { variant: 'panel', radius: Theme.radius.lg });
+    panel.setParent(mask);
+    const tt = uiLabel('解散牌局？', { size: 15, color: Theme.color.gold, bold: true });
+    tt.setParent(panel);
+    tt.setPosition(0, h / 2 - 26, 0);
+    const desc = uiLabel('解散后本房间对局立即结束\n当前积分仍保留至战绩', { size: 11, color: Theme.color.textSecondary, width: 260 });
+    desc.setParent(panel);
+    desc.setPosition(0, 14, 0);
+    const ok = uiButton('确认解散', () => {
+      mask.destroy();
+      this.overlay.getChildByName('Settlement')?.destroy();
+      this.net.dissolve();
+    }, { variant: 'action', width: 120, height: 38, fontSize: 13 });
+    ok.setParent(panel);
+    ok.setPosition(-70, -h / 2 + 30, 0);
+    const cancel = uiButton('取消', () => mask.destroy(), { variant: 'primary', width: 120, height: 38 });
+    cancel.setParent(panel);
+    cancel.setPosition(70, -h / 2 + 30, 0);
   }
 
   // ============ 小工具 ============
@@ -1022,10 +1103,13 @@ function windName(round: number): string {
   const winds = ['东风圈', '南风圈', '西风圈', '北风圈'];
   return winds[Math.floor((round - 1) / 4) % 4]!;
 }
-const TILE_NAMES: Record<string, string> = { W: '萬', T: '条', B: '筒', Z: '东', S: '南', X: '西', N: '北', H: '中', F: '發', P: '白' };
+const TILE_NAMES: Record<string, string> = { W: '萬', T: '条', B: '筒' };
+const FLOWER_NAMES = ['春', '夏', '秋', '冬', '梅', '兰', '竹', '菊'];
 function tileName(id: string): string {
   const head = id.charAt(0);
-  const num = id.slice(1);
-  if (head === 'W' || head === 'T' || head === 'B') return `${num}${TILE_NAMES[head]}`;
-  return TILE_NAMES[head] ?? id;
+  const num = Number(id.slice(1));
+  if (head === 'W' || head === 'T' || head === 'B') return `${id.slice(1)}${TILE_NAMES[head]}`;
+  if (head === 'Z') return HONOR_NAMES[num - 1] ?? id;
+  if (head === 'H') return FLOWER_NAMES[num - 1] ?? id;
+  return id;
 }
