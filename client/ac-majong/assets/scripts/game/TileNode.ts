@@ -20,9 +20,21 @@ export function createTileNode(tileId: string, w = TILE_W, h = TILE_H): Node {
   return node;
 }
 
+/** 牌面 SpriteFrame 缓存：命中则同步赋值，避免异步回调与重渲染销毁竞态，并降低重复载图开销 */
+const frameCache = new Map<string, SpriteFrame>();
+
 /** 给已有 Sprite 载入牌面图 */
 export function loadTileFace(sp: Sprite, tileId: string): void {
+  const cached = frameCache.get(tileId);
+  if (cached) {
+    sp.spriteFrame = cached;
+    sp.color = Color.WHITE;
+    return;
+  }
   resources.load(tileResPath(tileId), SpriteFrame, (err, frame) => {
+    // 回调可能晚于节点销毁到达（对局中每次 gameView 重渲染会 destroyAllChildren）；
+    // 此时 sp.node 为 null，再赋 spriteFrame 会触发 Sprite 读 null._uiProps 崩溃，必须跳过
+    if (!sp.isValid || !sp.node || !sp.node.isValid) return;
     if (err) {
       // 载图失败兜底：显示灰底，避免整局崩溃
       sp.spriteFrame = null;
@@ -30,6 +42,7 @@ export function loadTileFace(sp: Sprite, tileId: string): void {
       console.warn(`[TileNode] 载入牌面失败 ${tileId}:`, err.message);
       return;
     }
+    frameCache.set(tileId, frame);
     sp.spriteFrame = frame;
     sp.color = Color.WHITE;
   });

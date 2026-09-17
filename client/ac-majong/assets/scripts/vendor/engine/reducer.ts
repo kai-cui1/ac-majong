@@ -1,4 +1,4 @@
-import type { TileId, Hand } from './types';
+import type { TileId, Hand, ScoreDetail } from './types';
 import type { TableState, Response } from './table';
 import {
   addTile,
@@ -30,7 +30,7 @@ export type GameEvent =
   | { type: 'melded'; seat: number; move: string; tiles: TileId[] }
   | { type: 'kong'; seat: number; kind: string; tile: TileId }
   | { type: 'advance'; seat: number }
-  | { type: 'win'; winners: { seat: number; tai: number }[]; delta: Record<number, number>; revealed: Record<number, Record<string, number>> }
+  | { type: 'win'; winners: { seat: number; tai: number; detail: ScoreDetail[] }[]; delta: Record<number, number>; revealed: Record<number, Record<string, number>> }
   | { type: 'zhahu'; seat: number }
   | { type: 'exhaustive'; revealed: Record<number, Record<string, number>> }
   | { type: 'roundEnd'; dealerSeat: number; lianzhuangCount: number; round: number };
@@ -352,7 +352,7 @@ function settleWins(
   events: GameEvent[],
 ): void {
   const allDelta: Record<number, number> = {};
-  const winTais: { seat: number; tai: number }[] = [];
+  const winTais: { seat: number; tai: number; detail: ScoreDetail[] }[] = [];
   const zhahu: number[] = [];
   for (const seat of winners) {
     const hand = buildHand(s, seat, tile, 'dianpao', payer, flow);
@@ -366,7 +366,7 @@ function settleWins(
       zhahu.push(seat);
       continue;
     }
-    winTais.push({ seat, tai: score.total });
+    winTais.push({ seat, tai: score.total, detail: score.detail });
     for (const [k, v] of Object.entries(delta ?? {})) allDelta[Number(k)] = (allDelta[Number(k)] ?? 0) + v;
   }
   for (const seat of zhahu) applyZhahuPenalty(s, seat, events);
@@ -393,7 +393,7 @@ function doSelfWin(s: TableState, seat: number, events: GameEvent[]): void {
   }
   applyDeltas(s, delta!);
   for (const p of s.players) if (p.seat !== seat) p.zi = 0; // 被自摸者子清零
-  events.push({ type: 'win', winners: [{ seat, tai: score.total }], delta: delta!, revealed: revealedHands(s) });
+  events.push({ type: 'win', winners: [{ seat, tai: score.total, detail: score.detail }], delta: delta!, revealed: revealedHands(s) });
   endRound(s, seat, events);
 }
 

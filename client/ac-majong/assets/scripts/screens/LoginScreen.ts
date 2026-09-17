@@ -1,17 +1,22 @@
-import { Node, Label, UITransform, Graphics } from 'cc';
+import { Node, Label, UITransform, Graphics, Color } from 'cc';
 import { Screen } from '../app/SceneRouter';
 import { Theme } from '../ui/Theme';
 import { uiBackground, uiLabel, uiButton, setButtonEnabled } from '../ui/UiKit';
+import { NetService } from '../game/NetService';
+import { SERVER_URL, mockIdentity } from '../app/Config';
 
 /**
  * 登录页（P1，还原 login.html，横向重排到 844×390）。
- * M-A 为空壳：勾选协议 → 按钮可用 → 点击进大厅。
- * 真实微信登录在 M-B（identity 落库）/ M-K（code2Session）。
+ * M-B：勾选协议 → 按钮可用 → 点「微信一键登录」走真实登录链路
+ * （本地 mock 身份 → 连接服务端 auth → users 落库 + 会话 → authOk 回传资料 → 进大厅）。
+ * 真实微信 wx.login/code2Session 在 M-K 接入。
  */
 export class LoginScreen extends Screen {
   readonly name = 'login';
   private agreed = false;
+  private loggingIn = false;
   private loginBtn: Node | null = null;
+  private statusLbl: Label | null = null;
 
   build(): Node {
     const W = Theme.size.designW;
@@ -33,9 +38,14 @@ export class LoginScreen extends Screen {
     sub.setParent(root);
     sub.setPosition(0, 10, 0);
 
-    this.loginBtn = uiButton('微信一键登录', () => this.onLogin(), { variant: 'wx', width: 280, height: 48, enabled: false });
+    this.loginBtn = uiButton('微信一键登录', () => void this.onLogin(), { variant: 'wx', width: 280, height: 48, enabled: false });
     this.loginBtn.setParent(root);
     this.loginBtn.setPosition(0, -46, 0);
+
+    const statusNode = uiLabel('', { size: Theme.font.mini, color: Theme.color.textSecondary, width: 480 });
+    this.statusLbl = statusNode.getComponent(Label);
+    statusNode.setParent(root);
+    statusNode.setPosition(0, -76, 0);
 
     const agree = this.makeAgreeRow();
     agree.setParent(root);
@@ -56,9 +66,37 @@ export class LoginScreen extends Screen {
     return root;
   }
 
-  private onLogin(): void {
-    if (!this.agreed) return;
-    this.router.show('lobby');
+  /** 每次进入登录页重置交互态（从大厅返回时按钮/提示复位） */
+  onEnter(): void {
+    this.loggingIn = false;
+    if (this.loginBtn) setButtonEnabled(this.loginBtn, this.agreed);
+    this.setStatus('', Theme.color.textSecondary);
+  }
+
+  private async onLogin(): Promise<void> {
+    if (!this.agreed || this.loggingIn) return;
+    this.loggingIn = true;
+    if (this.loginBtn) setButtonEnabled(this.loginBtn, false);
+    this.setStatus('登录中…', Theme.color.textSecondary);
+    try {
+      const id = mockIdentity();
+      await NetService.instance.connect(SERVER_URL, id.token, {
+        nickname: id.nickname,
+        avatarUrl: id.avatarUrl,
+      });
+      this.router.show('lobby');
+    } catch (e) {
+      console.error('[LoginScreen] 登录失败:', e);
+      this.setStatus('连接失败，请确认服务端已启动', Theme.color.danger);
+      if (this.loginBtn) setButtonEnabled(this.loginBtn, true);
+      this.loggingIn = false;
+    }
+  }
+
+  private setStatus(text: string, color: Color): void {
+    if (!this.statusLbl) return;
+    this.statusLbl.string = text;
+    this.statusLbl.color = color;
   }
 
   /** 金色圆角方块 Logo + 🀄（最终应替换为图片资源） */

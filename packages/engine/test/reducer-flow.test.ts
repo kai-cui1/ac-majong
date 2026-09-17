@@ -71,6 +71,10 @@ describe('3c · 补牌胡 flow 标记', () => {
     expect(winEv).toBeTruthy();
     // 碰碰胡15 + 全求人8 + 无花无字3 + 自摸1 + 海底捞8 = 35
     expect(winEv!.winners[0]!.tai).toBe(35);
+    // M-F：win 事件透传台数明细（供局末结算浮层展示番种构成 + 散场回顾最高番种）
+    const detail = winEv!.winners[0]!.detail;
+    expect(detail.map((d) => d.name)).toEqual(expect.arrayContaining(['碰碰胡', '全求人', '无花无字', '自摸', '海底捞']));
+    expect(detail.reduce((a, d) => a + d.tai, 0)).toBe(35); // 明细台数合计 = 总台数
   });
 });
 

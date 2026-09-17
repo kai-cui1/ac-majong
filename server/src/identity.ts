@@ -6,6 +6,9 @@ export interface AuthContext {
 
 export interface Identity {
   userId: string;
+  /** 可选：身份源自带资料（如后续微信侧拉取）；缺省时用客户端上报的 profile */
+  nickname?: string;
+  avatarUrl?: string;
 }
 
 export interface IdentityProvider {

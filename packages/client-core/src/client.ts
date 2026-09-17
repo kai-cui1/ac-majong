@@ -1,11 +1,13 @@
 import type { Action } from '@ac-majong/engine';
-import type { ClientMsg, ServerMsg, ViewState, RoomView } from '@ac-majong/protocol';
+import type { ClientMsg, ServerMsg, ViewState, RoomView, UserProfile } from '@ac-majong/protocol';
 import type { Transport } from './transport';
 
 export interface GameClientHandlers {
+  onAuth?: (userId: string, profile: UserProfile) => void;
   onGameView?: (v: ViewState) => void;
   onRoomView?: (r: RoomView) => void;
   onEvent?: (events: ServerMsg & { t: 'event' }) => void;
+  onRoomEnd?: (m: Extract<ServerMsg, { t: 'roomEnd' }>) => void;
   onAck?: (a: Extract<ServerMsg, { t: 'ack' }>) => void;
   onClose?: () => void;
 }
@@ -17,7 +19,10 @@ export class GameClient {
   private waiters: { pred: (m: ServerMsg) => boolean; res: (m: ServerMsg) => void }[] = [];
   view: ViewState | null = null;
   room: RoomView | null = null;
+  /** 散场战绩（roomEnd）：最终排名 + 局数回顾，供散场页展示 */
+  finalResult: Extract<ServerMsg, { t: 'roomEnd' }> | null = null;
   userId: string | null = null;
+  profile: UserProfile | null = null;
 
   constructor(private transport: Transport, private handlers: GameClientHandlers = {}) {}
 
@@ -32,6 +37,8 @@ export class GameClient {
     switch (m.t) {
       case 'authOk':
         this.userId = m.userId;
+        this.profile = m.profile;
+        this.handlers.onAuth?.(m.userId, m.profile);
         break;
       case 'roomView':
         this.room = m.room;
@@ -43,6 +50,10 @@ export class GameClient {
         break;
       case 'event':
         this.handlers.onEvent?.(m);
+        break;
+      case 'roomEnd':
+        this.finalResult = m;
+        this.handlers.onRoomEnd?.(m);
         break;
       case 'ack':
         this.handlers.onAck?.(m);
@@ -72,6 +83,20 @@ export class GameClient {
     });
   }
 
+  /** 只等待此后新到达的消息（不查历史），避免累积消息（多次 ack/roomView）误命中；超时拒绝 */
+  waitForNext(pred: (m: ServerMsg) => boolean, timeout = 5000): Promise<ServerMsg> {
+    return new Promise((resolve, reject) => {
+      const to = setTimeout(() => reject(new Error('waitForNext 超时')), timeout);
+      this.waiters.push({
+        pred,
+        res: (m) => {
+          clearTimeout(to);
+          resolve(m);
+        },
+      });
+    });
+  }
+
   private send(msg: ClientMsg): void {
     this.transport.send(JSON.stringify(msg));
   }
@@ -79,8 +104,8 @@ export class GameClient {
     return ++this.seq;
   }
 
-  auth(token: string): void {
-    this.send({ t: 'auth', seq: this.nextSeq(), token });
+  auth(token: string, profile?: UserProfile): void {
+    this.send({ t: 'auth', seq: this.nextSeq(), token, profile });
   }
   create(maxRounds = 8): void {
     this.send({ t: 'create', seq: this.nextSeq(), maxRounds });
@@ -94,8 +119,20 @@ export class GameClient {
   start(): void {
     this.send({ t: 'start', seq: this.nextSeq() });
   }
+  /** 房主为空位放入 Bot 陪玩（FR-房间-08） */
+  addBot(count = 1): void {
+    this.send({ t: 'addBot', seq: this.nextSeq(), count });
+  }
+  /** 房主移除一个 Bot（真人想加入时腾位） */
+  removeBot(seat: number): void {
+    this.send({ t: 'removeBot', seq: this.nextSeq(), seat });
+  }
   nextRound(): void {
     this.send({ t: 'nextRound', seq: this.nextSeq() });
+  }
+  /** 房主主动解散牌局（不限局数时的散场入口，PRD 03 FR-房间-05） */
+  dissolve(): void {
+    this.send({ t: 'dissolve', seq: this.nextSeq() });
   }
   action(action: Action): void {
     this.send({ t: 'action', seq: this.nextSeq(), action });

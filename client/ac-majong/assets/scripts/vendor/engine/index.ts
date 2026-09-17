@@ -18,3 +18,4 @@ export * from './pipeline';
 export * from './table';
 export * from './actions';
 export * from './reducer';
+export * from './rehydrate';

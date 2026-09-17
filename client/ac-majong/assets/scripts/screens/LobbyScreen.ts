@@ -1,7 +1,8 @@
 import { Node, Label, UITransform, Graphics } from 'cc';
 import { Screen } from '../app/SceneRouter';
 import { Theme } from '../ui/Theme';
-import { uiBackground, uiLabel, uiButton, uiPanel, uiModal } from '../ui/UiKit';
+import { uiBackground, uiLabel, uiButton, uiPanel, uiModal, type Modal } from '../ui/UiKit';
+import { NetService } from '../game/NetService';
 
 /**
  * 大厅页（P2，还原 home.html，横向重排到 844×390）。M-A 空壳：
@@ -52,7 +53,10 @@ export class LobbyScreen extends Screen {
     notice.setPosition(0, -132, 0);
 
     // 返回登录（左下，验证双向切换）
-    const back = uiButton('← 返回登录', () => this.router.show('login'), { variant: 'secondary', width: 120, height: 34, fontSize: 13 });
+    const back = uiButton('← 返回登录', () => {
+      NetService.instance.disconnect();
+      this.router.show('login');
+    }, { variant: 'secondary', width: 120, height: 34, fontSize: 13 });
     back.setParent(root);
     back.setPosition(-W / 2 + 78, -H / 2 + 28, 0);
 
@@ -85,8 +89,11 @@ export class LobbyScreen extends Screen {
     return n;
   }
 
-  /** 用户信息条：头像 + 昵称 + ID + 箭头（M-A 用占位数据，真实资料在 M-B） */
+  /** 用户信息条：头像 + 昵称 + ID + 箭头（M-B：显示登录返回的真实资料） */
   private makeUserBar(): Node {
+    const net = NetService.instance;
+    const nickname = net.profile?.nickname ?? '牌友';
+    const uid = net.userId ?? '—';
     const bar = uiPanel(244, 48, { variant: 'gold', radius: Theme.radius.lg });
     bar.name = 'UserBar';
 
@@ -99,7 +106,7 @@ export class LobbyScreen extends Screen {
     const alNode = new Node('A');
     alNode.addComponent(UITransform);
     const al = alNode.addComponent(Label);
-    al.string = '我';
+    al.string = nickname.slice(0, 1);
     al.fontSize = 16;
     al.lineHeight = 20;
     al.color = Theme.color.bgWoodDark;
@@ -110,10 +117,10 @@ export class LobbyScreen extends Screen {
     av.setParent(bar);
     av.setPosition(-94, 0, 0);
 
-    const nameL = uiLabel('牌友老张', { size: 15, color: Theme.color.textPrimary, bold: true, align: 'left' });
+    const nameL = uiLabel(nickname, { size: 15, color: Theme.color.textPrimary, bold: true, align: 'left' });
     nameL.setParent(bar);
     nameL.setPosition(-14, 9, 0);
-    const idL = uiLabel('ID: 10086', { size: 11, color: Theme.color.textMuted, align: 'left' });
+    const idL = uiLabel(`ID: ${uid}`, { size: 11, color: Theme.color.textMuted, align: 'left' });
     idL.setParent(bar);
     idL.setPosition(-14, -9, 0);
     const arrow = uiLabel('›', { size: 18, color: Theme.color.textMuted });
@@ -140,19 +147,95 @@ export class LobbyScreen extends Screen {
   }
 
   private openCreate(): void {
-    const m = uiModal('创建房间', { width: 340, height: 190 });
-    const hint = uiLabel('局数上限选择（4/8/16/不限）与创建逻辑在 M-C 实现', { size: 12, color: Theme.color.textMuted, width: 280 });
-    hint.setParent(m.panel);
-    hint.setPosition(0, 6, 0);
+    const m = uiModal('创建房间', { width: 360, height: 230 });
+    const tip = uiLabel('选择局数上限（「不限」= 无限续局，直到房主解散）', { size: 12, color: Theme.color.textMuted, width: 310 });
+    tip.setParent(m.panel);
+    tip.setPosition(0, 56, 0);
+    const status = uiLabel('', { size: 12, color: Theme.color.textSecondary, width: 310 });
+    const statusLbl = status.getComponent(Label)!;
+    status.setParent(m.panel);
+    status.setPosition(0, -88, 0);
+    const opts: [string, number][] = [['4 局', 4], ['8 局', 8], ['16 局', 16], ['不限', 0]];
+    opts.forEach(([text, rounds], i) => {
+      const col = i % 2;
+      const row = Math.floor(i / 2);
+      const btn = uiButton(text, () => void this.doCreate(rounds, m, statusLbl), { variant: 'primary', width: 140, height: 44 });
+      btn.setParent(m.panel);
+      btn.setPosition(-78 + col * 156, 12 - row * 52, 0);
+    });
     m.root.setParent(this.node!);
   }
 
+  private async doCreate(maxRounds: number, m: Modal, statusLbl: Label): Promise<void> {
+    statusLbl.string = '创建中…';
+    statusLbl.color = Theme.color.textSecondary;
+    try {
+      await NetService.instance.createRoom(maxRounds);
+      m.close();
+      this.router.show('room');
+    } catch (e) {
+      console.error('[Lobby] 创建房间失败:', e);
+      statusLbl.string = '创建失败，请重试';
+      statusLbl.color = Theme.color.danger;
+    }
+  }
+
   private openJoin(): void {
-    const m = uiModal('加入房间', { width: 340, height: 190 });
-    const hint = uiLabel('6 位房间号输入与加入逻辑在 M-C 实现', { size: 12, color: Theme.color.textMuted, width: 280 });
-    hint.setParent(m.panel);
-    hint.setPosition(0, 6, 0);
+    const m = uiModal('加入房间', { width: 340, height: 320 });
+    let input = '';
+    const display = uiLabel('— — — — — —', { size: 24, color: Theme.color.gold, bold: true });
+    const displayLbl = display.getComponent(Label)!;
+    display.setParent(m.panel);
+    display.setPosition(0, 100, 0);
+    const status = uiLabel('输入 6 位房间号', { size: 12, color: Theme.color.textMuted, width: 290 });
+    const statusLbl = status.getComponent(Label)!;
+    status.setParent(m.panel);
+    status.setPosition(0, 72, 0);
+    const refresh = (): void => {
+      displayLbl.string = input.padEnd(6, '—').split('').join(' ');
+    };
+    const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '⌫', '0', '加入'];
+    keys.forEach((k, i) => {
+      const col = i % 3;
+      const row = Math.floor(i / 3);
+      const isJoin = k === '加入';
+      const btn = uiButton(k, () => {
+        if (k === '⌫') {
+          input = input.slice(0, -1);
+          refresh();
+          return;
+        }
+        if (isJoin) {
+          void this.doJoin(input, m, statusLbl);
+          return;
+        }
+        if (input.length < 6) {
+          input += k;
+          refresh();
+        }
+      }, { variant: isJoin ? 'primary' : 'action', width: 86, height: 42, fontSize: isJoin ? 15 : 18 });
+      btn.setParent(m.panel);
+      btn.setPosition(-92 + col * 92, 34 - row * 46, 0);
+    });
     m.root.setParent(this.node!);
+  }
+
+  private async doJoin(room: string, m: Modal, statusLbl: Label): Promise<void> {
+    if (room.length !== 6) {
+      statusLbl.string = '请输入 6 位房间号';
+      statusLbl.color = Theme.color.warning;
+      return;
+    }
+    statusLbl.string = '加入中…';
+    statusLbl.color = Theme.color.textSecondary;
+    try {
+      await NetService.instance.joinRoom(room);
+      m.close();
+      this.router.show('room');
+    } catch (e) {
+      statusLbl.string = e instanceof Error ? e.message : '加入失败';
+      statusLbl.color = Theme.color.danger;
+    }
   }
 
   private openRules(): void {
