@@ -79,6 +79,22 @@ describe('reducer · 荒庄与下一局', () => {
     expect(state.lianzhuangCount).toBe(1);
   });
 
+  it('诈胡 → zhahu 事件带 revealed（终局摊牌）', () => {
+    // 胡牌结构成立但仅 3 台左右（<6 且非最小胡）→ 诈胡
+    const hand = { Z1: 2, T5: 1, T6: 1, T7: 1, B2: 1, B3: 1, B4: 1, W5: 1, W6: 1, W7: 1, B6: 1, B7: 1, B8: 1 };
+    const s0 = tbl({
+      phase: 'discard', currentSeat: 0, dealerSeat: 0,
+      players: [{ ...pl(0, hand), flowers: ['H1'] }, pl(1, { W1: 1 }), pl(2, { W2: 1 }), pl(3, { W3: 1 })],
+      lastDrawn: { seat: 0, tile: 'B8' },
+    });
+    const { events } = applyAction(s0, { type: 'declareWin', seat: 0 });
+    const zh = events.find((e) => e.type === 'zhahu');
+    expect(zh).toBeDefined();
+    if (zh?.type !== 'zhahu') throw new Error('unreachable');
+    expect(Object.keys(zh.revealed).length).toBe(4);
+    expect(zh.revealed[0]).toMatchObject(hand);
+  });
+
   it('startNextRound：保留积分/子，重新发牌，局数+1，庄家17张', () => {
     const s0 = tbl({ phase: 'settled', round: 3, dealerSeat: 1 });
     s0.players[0]!.score = 500;

@@ -7,6 +7,9 @@ import { RoomManager } from './roomManager';
 import type { GameHooks } from './roomActor';
 import type { GameStore, RealtimeStore, MemberEventRow } from './persistence/entities';
 import { MemoryGameStore, MemoryRealtime } from './persistence/memory';
+import { createLogger } from './logger';
+
+const log = createLogger('gateway');
 
 interface Session {
   ws: WebSocket;
@@ -38,9 +41,9 @@ export interface Gateway {
 async function logMember(store: GameStore, e: MemberEventRow): Promise<void> {
   try {
     await store.addMemberEvent(e);
+    log.debug(`成员流水落库: room=${e.roomId} user=${e.openid} event=${e.event}`);
   } catch (err) {
-    // eslint-disable-next-line no-console
-    console.error('[gateway] 成员进出流水落库失败:', err);
+    log.error(`成员进出流水落库失败: room=${e.roomId} user=${e.openid}`, err);
   }
 }
 
@@ -52,48 +55,48 @@ export function startGateway(opts: GatewayOptions): Gateway {
   // 对局落库钩子（M-E）：开局 games+initial_states、局内动作缓冲 Redis、局末 drain→MySQL+finishGame（弱依赖 fire-and-forget）
   const gameHooks: GameHooks = {
     onGameStart(roomId, gameId, snap, dealerSeat, seed, roundNo) {
+      log.info(`对局开始: room=${roomId} game=${gameId} round=${roundNo} dealer=${dealerSeat} seed=${seed}`);
       void (async () => {
         try {
           await persistence.store.createGame({ gameId, roomId, roundNo, dealerSeat, seed, endType: null, result: null });
           await persistence.store.saveInitialState({ gameId, wall: snap.wall, hands: snap.players, lianzhuangCount: snap.lianzhuangCount });
         } catch (err) {
-          // eslint-disable-next-line no-console
-          console.error('[gateway] 对局开局落库失败:', err);
+          log.error(`对局开局落库失败: game=${gameId}`, err);
         }
       })();
     },
     onGameAction(gameId, seq, seat, action) {
+      log.trace(`动作缓冲: game=${gameId} seq=${seq} seat=${seat} type=${action.type}`);
       void (async () => {
         try {
           await persistence.realtime.bufferActions(gameId, [{ gameId, seq, seat, actionType: action.type, payload: action }]);
         } catch (err) {
-          // eslint-disable-next-line no-console
-          console.error('[gateway] 动作缓冲失败:', err);
+          log.error(`动作缓冲失败: game=${gameId} seq=${seq}`, err);
         }
       })();
     },
     onGameEnd(gameId, endType, result) {
+      log.info(`对局结束: game=${gameId} endType=${endType}`);
       void (async () => {
         try {
           const rows = await persistence.realtime.drainActions(gameId);
           if (rows.length) await persistence.store.appendActions(rows);
           await persistence.store.finishGame(gameId, endType, result, new Date());
         } catch (err) {
-          // eslint-disable-next-line no-console
-          console.error('[gateway] 对局结算落库失败:', err);
+          log.error(`对局结算落库失败: game=${gameId}`, err);
         }
       })();
     },
     // 散场落库（M-G）：rooms.final_score + status=closed（弱依赖 fire-and-forget）
     onRoomEnd(roomId, standings) {
+      log.info(`房间散场: room=${roomId} standings=${JSON.stringify(standings.map(s => `seat${s.seat}:${s.score}`))}`);
       void (async () => {
         try {
           const finalScore: Record<number, number> = {};
           for (const s of standings) finalScore[s.seat] = s.score;
           await persistence.store.closeRoom(roomId, finalScore, new Date());
         } catch (err) {
-          // eslint-disable-next-line no-console
-          console.error('[gateway] 散场落库失败:', err);
+          log.error(`散场落库失败: room=${roomId}`, err);
         }
       })();
     },
@@ -107,6 +110,7 @@ export function startGateway(opts: GatewayOptions): Gateway {
   wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
     const session: Session = { ws, userId: null, roomId: null, alive: true, headers: req.headers, profile: null };
     sessions.add(session);
+    log.info(`新连接: ip=${req.socket.remoteAddress ?? '?'} 当前在线=${sessions.size}`);
     const conn: Connection = {
       get userId() {
         return session.userId ?? '';
@@ -127,12 +131,15 @@ export function startGateway(opts: GatewayOptions): Gateway {
       try {
         msg = JSON.parse(data.toString()) as ClientMsg;
       } catch {
+        log.warn('收到无效 JSON 消息');
         return send(session, { t: 'error', reason: 'bad json' });
       }
+      log.trace(`收到消息: user=${session.userId ?? '(未鉴权)'} type=${msg.t}`);
       void handleMsg(session, conn, msg, rooms, opts.identity, opts.autoBots ?? 0, send, persistence);
     });
     ws.on('close', () => {
       sessions.delete(session);
+      log.info(`连接断开: user=${session.userId ?? '(未鉴权)'} room=${session.roomId ?? '-'} 剩余在线=${sessions.size}`);
       if (session.roomId && session.userId) rooms.get(session.roomId)?.removePlayer(session.userId);
     });
   });
@@ -174,8 +181,12 @@ async function handleMsg(
   switch (msg.t) {
     case 'auth': {
       const idn = await identity.authenticate({ token: msg.token, headers: session.headers });
-      if (!idn) return send(session, { t: 'ack', seq: msg.seq, ok: false, reason: '鉴权失败' });
+      if (!idn) {
+        log.warn(`鉴权失败: token=${msg.token?.slice(0, 8)}...`);
+        return send(session, { t: 'ack', seq: msg.seq, ok: false, reason: '鉴权失败' });
+      }
       session.userId = idn.userId;
+      log.info(`鉴权成功: user=${idn.userId}`);
       const profile: UserProfile = {
         nickname: msg.profile?.nickname ?? idn.nickname ?? '牌友',
         avatarUrl: msg.profile?.avatarUrl ?? idn.avatarUrl ?? '',
@@ -195,8 +206,7 @@ async function handleMsg(
           SESSION_TTL_SEC,
         );
       } catch (err) {
-        // eslint-disable-next-line no-console
-        console.error('[gateway] 登录落库失败:', err);
+        log.error(`登录落库失败: user=${idn.userId}`, err);
       }
       send(session, { t: 'authOk', userId: idn.userId, profile });
       return send(session, { t: 'ack', seq: msg.seq, ok: true });
@@ -206,6 +216,7 @@ async function handleMsg(
       const maxRounds = msg.maxRounds ?? 8; // 0 = 不限（无限续局至房主解散，见 PRD 03 FR-房间-01）
       const room = rooms.create(session.userId, conn, maxRounds, session.profile?.nickname);
       session.roomId = room.id;
+      log.info(`创建房间: room=${room.id} host=${session.userId} maxRounds=${maxRounds}`);
       // BL-013 M-C 接线：房间创建 → rooms 落库（弱依赖，失败不阻断建房，同登录落库策略）
       try {
         await persistence.store.createRoom({
@@ -217,8 +228,7 @@ async function handleMsg(
           status: 'idle',
         });
       } catch (err) {
-        // eslint-disable-next-line no-console
-        console.error('[gateway] 房间创建落库失败:', err);
+        log.error(`房间创建落库失败: room=${room.id}`, err);
       }
       // 房主创建 → room_member_events:create（弱依赖）
       await logMember(persistence.store, { roomId: room.id, openid: session.userId, seat: 0, event: 'create' });

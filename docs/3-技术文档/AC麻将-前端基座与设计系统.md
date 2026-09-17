@@ -158,7 +158,7 @@ abstract class Screen {
 
 ### 11.2 牌面资源加载与缓存（TileNode）
 - `resources.load` 异步载入牌面 `SpriteFrame`；模块级 `frameCache` 缓存，命中则**同步**赋值，降低重复载图与异步窗口。
-- **终局摊牌**：`win`/`exhaustive` 事件存 `revealed` 并重渲染——北家面牌横排、西/东面牌双竖列（16×22），phase 离开 settled/exhaustive 时收起。
+- **终局摊牌**：`win`/`exhaustive`/`zhahu` 三类终局事件存 `revealed` 并重渲染——北家面牌横排、西/东面牌双竖列（16×22），phase 离开 settled/exhaustive 时收起；结算浮层内另设「各家手牌」2×2 牌面区（13×18、cellLeft 布局），结果页内直接看清四家手牌。
 - **解散二次确认** `showDissolveConfirm`：结果页「解散牌局」先弹确认框（确认解散/取消），确认框挂 `BlockInputEvents` 防穿透误点，确认后才 `net.dissolve()`。
 - **台数预览浮层**：三态状态行（可自摸 · N台 / 打 X 听牌 · N台 / 听牌 · N台）+ 明细行带 `×count`；**结算明细**按张番种附小字行列出具体牌（`tileName` 支持 Z1..Z7 字牌、H1..H8 花牌）。
 - **牌面选择器** `showTileChooser`（吃/杠多解共用）：面板高度 = 标题 + 选项数×行高 + 内边距（自适应，不溢出）；每选项渲染为真实牌面组合（`createTileNode` 24×34）。
@@ -178,3 +178,8 @@ abstract class Screen {
 | 2026-09-17 | §11 补台数预览三态状态行 + 结算明细个数/具体牌展开 + tileName 字/花映射 |
 | 2026-09-17 | §11 补解散二次确认框 showDissolveConfirm（防结果页误点） |
 | 2026-09-17 | §11 补终局摊牌渲染（revealed → 北横排/西东双竖列面牌） |
+| 2026-09-17 | §11 终局摊牌覆盖诈胡（zhahu 事件同带 revealed） |
+| 2026-09-17 | §11 结算浮层增「各家手牌」2×2 牌面区（结果页内看清摊牌） |
+| 2026-09-17 | §11 摊牌时序缺陷修复：onEvents 只存 revealed 不立即 render（旧相位视图会抹掉 revealed），翻面由 settled 视图触发 |
+| 2026-09-17 | §11 pinfo 子数标签换行修复：估宽改 CJK≈字号(9)+数字≈6 并加余量（估窄致 Label 按宽折行；HTML 原型 inline span 无此问题） |
+| 2026-09-17 | §11 庄家标识优化：状态栏去连庄段；drawPinfo 增 lianzhuang 参，庄家徽章红底(danger)白字+goldLight 环 22×16，连庄>0 时框内追加「连N」金字标签 |

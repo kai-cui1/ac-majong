@@ -31,7 +31,7 @@ export type GameEvent =
   | { type: 'kong'; seat: number; kind: string; tile: TileId }
   | { type: 'advance'; seat: number }
   | { type: 'win'; winners: { seat: number; tai: number; detail: ScoreDetail[] }[]; delta: Record<number, number>; revealed: Record<number, Record<string, number>> }
-  | { type: 'zhahu'; seat: number }
+  | { type: 'zhahu'; seat: number; revealed: Record<number, Record<string, number>> }
   | { type: 'exhaustive'; revealed: Record<number, Record<string, number>> }
   | { type: 'roundEnd'; dealerSeat: number; lianzhuangCount: number; round: number };
 
@@ -402,7 +402,7 @@ function applyZhahuPenalty(s: TableState, seat: number, events: GameEvent[]): vo
   const others = s.players.length - 1;
   getPlayer(s, seat).score -= 300 * others;
   for (const p of s.players) if (p.seat !== seat) p.score += 300;
-  events.push({ type: 'zhahu', seat });
+  events.push({ type: 'zhahu', seat, revealed: revealedHands(s) });
 }
 
 /** 无人有效胡（如全诈胡）时结束本局：庄家不变、不连庄（默认，规则待明确） */

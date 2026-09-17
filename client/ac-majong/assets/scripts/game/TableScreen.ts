@@ -118,7 +118,6 @@ export class TableScreen extends Screen {
       { pre: '房 ', val: v.room },
       { pre: '第 ', val: `${v.round}/${v.maxRounds > 0 ? v.maxRounds : '∞'}`, post: ' 局' },
       { pre: '剩 ', val: `${v.wallRemaining}`, post: ' 张', valColor: low ? Theme.color.danger : undefined },
-      { pre: '连庄 ', val: `${v.lianzhuangCount}` },
       { pre: '⏱ ', val: `${cd}`, post: 's' },
     ];
     // 单行不折行（原型 white-space:nowrap）：CJK 按字号估宽、ASCII 按 6px；标签不设 width（自然宽，避免 RESIZE_HEIGHT 折行）
@@ -178,7 +177,7 @@ export class TableScreen extends Screen {
     const o = v.others.find((x) => relOf(x.seat, this.mySeat) === 2);
     if (!o) return;
     const name = this.nameOf(v, o.seat);
-    const pinfo = this.drawPinfo({ name, score: o.score, zi: o.zi, isDealer: o.seat === v.dealerSeat, isActive: this.isActive(v, o.seat) });
+    const pinfo = this.drawPinfo({ name, score: o.score, zi: o.zi, isDealer: o.seat === v.dealerSeat, isActive: this.isActive(v, o.seat), lianzhuang: v.lianzhuangCount });
     pinfo.setParent(this.northArea);
     pinfo.setPosition(0, 26, 0);
     // body: 明牌(左) + 牌侧横条(右)
@@ -225,7 +224,7 @@ export class TableScreen extends Screen {
     const GAPV = 4;
     const groupH = PH + GAPV + bodyH;
     const SIDE_Y = 12; // 整组略上移，给南家行让位
-    const pinfo = this.drawPinfo({ name, score: o.score, zi: o.zi, isDealer: o.seat === v.dealerSeat, isActive: this.isActive(v, o.seat) });
+    const pinfo = this.drawPinfo({ name, score: o.score, zi: o.zi, isDealer: o.seat === v.dealerSeat, isActive: this.isActive(v, o.seat), lianzhuang: v.lianzhuangCount });
     pinfo.setParent(area);
     pinfo.setPosition(0, SIDE_Y + groupH / 2 - PH / 2, 0);
     body.setPosition(0, SIDE_Y - groupH / 2 + bodyH / 2, 0);
@@ -403,7 +402,7 @@ export class TableScreen extends Screen {
     this.southTop.destroyAllChildren();
     let x = LEFT + 12;
     const me = v.you;
-    const pinfo = this.drawPinfo({ name: '我', score: me.score, zi: me.zi, isDealer: me.seat === v.dealerSeat, isActive: this.isActive(v, me.seat), self: true });
+    const pinfo = this.drawPinfo({ name: '我', score: me.score, zi: me.zi, isDealer: me.seat === v.dealerSeat, isActive: this.isActive(v, me.seat), self: true, lianzhuang: v.lianzhuangCount });
     const pw = pinfo.getComponent(UITransform)!.contentSize.width;
     pinfo.setParent(this.southTop);
     pinfo.setPosition(x + pw / 2, 0, 0);
@@ -440,13 +439,16 @@ export class TableScreen extends Screen {
   // ============ 组件绘制 ============
 
   /** 玩家信息条：头像+昵称(暖白)+积分(金)+子(灰)+庄家角标；active 金边 */
-  private drawPinfo(o: { name: string; score: number; zi: number; isDealer: boolean; isActive: boolean; self?: boolean }): Node {
+  private drawPinfo(o: { name: string; score: number; zi: number; isDealer: boolean; isActive: boolean; self?: boolean; lianzhuang?: number }): Node {
     const nameW = o.name.length * 11;
     const scoreStr = `${o.score >= 0 ? '+' : ''}${o.score}`;
     const scoreW = scoreStr.length * 7;
     const ziStr = `子${o.zi}`;
-    const ziW = ziStr.length * 6;
-    const dealerW = o.isDealer ? 20 : 0;
+    const ziW = 9 + String(o.zi).length * 6; // CJK 字宽≈字号(9)、数字≈6：估窄会导致 Label 换行
+    const lz = o.lianzhuang ?? 0;
+    const lzStr = o.isDealer && lz > 0 ? `连${lz}` : ''; // 连庄数移入庄家信息框
+    const lzW = lzStr ? 18 + String(lz).length * 6 : 0;
+    const dealerW = o.isDealer ? 22 + (lzW ? lzW + 4 : 0) : 0;
     const pw = 22 + 4 + nameW + 4 + scoreW + 4 + ziW + (dealerW ? 4 : 0) + dealerW + 16;
     const ph = o.self ? 26 : 24;
     const node = uiPanel(pw, ph, { variant: 'panel', radius: Theme.radius.full });
@@ -484,22 +486,33 @@ export class TableScreen extends Screen {
     sc.setParent(node);
     sc.setPosition(x + scoreW / 2, 0, 0);
     x += scoreW + 4;
-    const zi = uiLabel(ziStr, { size: 9, color: Theme.color.textMuted, align: 'left', width: ziW + 2 });
+    const zi = uiLabel(ziStr, { size: 9, color: Theme.color.textMuted, align: 'left', width: ziW + 4 });
     zi.setParent(node);
     zi.setPosition(x + ziW / 2, 0, 0);
     x += ziW;
     if (o.isDealer) {
       x += 4;
       const db = new Node('Dealer');
-      db.addComponent(UITransform).setContentSize(18, 14);
+      db.addComponent(UITransform).setContentSize(22, 16);
       const dg = db.addComponent(Graphics);
-      dg.fillColor = Theme.color.gold;
-      dg.roundRect(-9, -7, 18, 14, 5);
+      dg.fillColor = Theme.color.danger; // 红底白字+金环：庄家一眼可辨
+      dg.roundRect(-11, -8, 22, 16, 6);
       dg.fill();
-      const dl = uiLabel('庄', { size: 9, color: Theme.color.bgWoodDark, bold: true });
+      dg.strokeColor = Theme.color.goldLight;
+      dg.lineWidth = 1.5;
+      dg.roundRect(-11, -8, 22, 16, 6);
+      dg.stroke();
+      const dl = uiLabel('庄', { size: 10, color: Color.WHITE, bold: true });
       dl.setParent(db);
       db.setParent(node);
-      db.setPosition(x + 9, 0, 0);
+      db.setPosition(x + 11, 0, 0);
+      x += 22;
+      if (lzStr) {
+        x += 4;
+        const lzL = uiLabel(lzStr, { size: 9, color: Theme.color.goldLight, bold: true, align: 'left', width: lzW + 4 });
+        lzL.setParent(node);
+        lzL.setPosition(x + lzW / 2, 0, 0);
+      }
     }
     return node;
   }
@@ -890,9 +903,10 @@ export class TableScreen extends Screen {
 
   private onEvents(events: GameEvent[]): void {
     for (const ev of events) {
-      if (ev.type === 'win' || ev.type === 'exhaustive') {
-        this.revealed = ev.revealed ?? null; // 终局摊牌：先翻面再弹结算
-        if (this.net.view) this.render(this.net.view);
+      if (ev.type === 'win' || ev.type === 'exhaustive' || ev.type === 'zhahu') {
+        // 只存 revealed：此时 net.view 仍是旧相位（discard），立即 render 会被 render 的清除逻辑抹掉；
+        // 翻面渲染交由紧随其后的 settled 视图触发
+        this.revealed = ev.revealed ?? null;
       }
       if (ev.type === 'win' || ev.type === 'exhaustive' || ev.type === 'zhahu') this.showSettlement(ev);
     }
@@ -908,9 +922,11 @@ export class TableScreen extends Screen {
     mg.rect(LEFT, -TOP, W, H);
     mg.fill();
     mask.setParent(this.overlay);
-    const pw = isWin ? 560 : 380;
+    const pw = isWin || this.revealed ? 560 : 380;
     const subLines = isWin ? (ev.winners[0]?.detail ?? []).filter((d) => d.tiles && d.tiles.length).length : 0;
-    const ph = 300 + subLines * 12;
+    const hands = this.revealed;
+    const bandH = hands ? 56 : 0; // 各家手牌区高度
+    const ph = 300 + subLines * 12 + bandH;
     const panel = uiPanel(pw, ph, { variant: 'gold', radius: Theme.radius.xl });
     panel.setParent(mask);
     const v = this.net.view;
@@ -947,7 +963,7 @@ export class TableScreen extends Screen {
       }
       const tl = uiLabel(`合计 ${w0.tai} 台`, { size: 13, color: Theme.color.gold, bold: true });
       tl.setParent(panel);
-      tl.setPosition(lx, Math.max(-ph / 2 + 58, ly - 6), 0);
+      tl.setPosition(lx, Math.max(-ph / 2 + 58 + bandH, ly - 6), 0);
       const rx = pw / 4;
       const cr = uiLabel('积分变动', { size: 12, color: Theme.color.gold, bold: true });
       cr.setParent(panel);
@@ -966,22 +982,44 @@ export class TableScreen extends Screen {
       const my = v?.you.score ?? 0;
       const mt = uiLabel(`我累计 ${my >= 0 ? '+' : ''}${my}`, { size: 12, color: my >= 0 ? Theme.color.gold : Theme.color.danger, bold: true });
       mt.setParent(panel);
-      mt.setPosition(rx, Math.max(-ph / 2 + 58, ry - 4), 0);
+      mt.setPosition(rx, Math.max(-ph / 2 + 58 + bandH, ry - 4), 0);
     } else if (ev.type === 'exhaustive') {
       const desc = uiLabel('牌墙摸完，本局无人胡牌\n不计分 · 庄家连庄', { size: 13, color: Theme.color.textSecondary, width: 300 });
       desc.setParent(panel);
-      desc.setPosition(0, 10, 0);
+      desc.setPosition(0, bandH ? 40 : 10, 0);
     }
+    // 各家手牌区（终局摊牌）：2×2 牌面行，结果页内直接看清四家手牌
+    if (hands) {
+      const ht = uiLabel('各家手牌', { size: 12, color: Theme.color.gold, bold: true });
+      ht.setParent(panel);
+      ht.setPosition(0, -ph / 2 + 102, 0);
+      const RT = { w: 13, h: 18 };
+      const pitchX = 13;
+      for (let i = 0; i < 4; i++) {
+        const seat = i;
+        const cellLeft = i % 2 === 0 ? -pw / 2 + 12 : 8;
+        const cy = -ph / 2 + (i < 2 ? 86 : 64);
+        const nm = uiLabel(this.nameOf(v!, seat), { size: 10, color: Theme.color.textSecondary, align: 'left', width: 52 });
+        nm.setParent(panel);
+        nm.setPosition(cellLeft + 26, cy, 0);
+        expandSorted(hands[seat] ?? {}).forEach((t, j) => {
+          const tn = createTileNode(t, RT.w, RT.h);
+          tn.setParent(panel);
+          tn.setPosition(cellLeft + 56 + j * pitchX + RT.w / 2, cy, 0);
+        });
+      }
+    }
+    const btnY = -ph / 2 + (hands ? 26 : 34);
     const isLast = (v?.maxRounds ?? 0) > 0 && (v?.round ?? 1) >= (v?.maxRounds ?? 8);
     const isHost = this.net.room?.hostUserId != null && this.net.room.hostUserId === this.net.userId;
     const showDissolve = !isLast && (v?.maxRounds ?? 0) === 0 && isHost;
     const cont = uiButton(isLast ? '查看最终结果' : '下一局 ▶', () => { mask.destroy(); this.net.nextRound(); }, { variant: 'primary', width: showDissolve ? 170 : 200, height: 46 });
     cont.setParent(panel);
-    cont.setPosition(showDissolve ? -95 : 0, -ph / 2 + 34, 0);
+    cont.setPosition(showDissolve ? -95 : 0, btnY, 0);
     if (showDissolve) {
       const dis = uiButton('解散牌局', () => this.showDissolveConfirm(), { variant: 'action', width: 130, height: 44, fontSize: 14 });
       dis.setParent(panel);
-      dis.setPosition(95, -ph / 2 + 34, 0);
+      dis.setPosition(95, btnY, 0);
     }
   }
 

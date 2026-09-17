@@ -4,6 +4,9 @@ import type { RoomView, RoomPhase, FinalStanding, RoundReview, RoomEndReason } f
 import type { Connection } from './connection';
 import { redact } from './redact';
 import { makeBotConnection } from './devBots';
+import { createLogger } from './logger';
+
+const log = createLogger('room');
 
 export interface OpResult {
   ok: boolean;
@@ -105,6 +108,7 @@ export class RoomActor {
     this.connOf.set(userId, conn);
     const existing = this.seatOf.get(userId);
     if (existing != null) {
+      log.debug(`玩家重连: room=${this.id} user=${userId} seat=${existing}`);
       this.broadcastAll(); // 重连
       return { ok: true, seat: existing };
     }
@@ -114,6 +118,7 @@ export class RoomActor {
     this.seatOf.set(userId, seat);
     this.userAtSeat[seat] = userId;
     this.names[seat] = nickname ?? (userId.startsWith('bot-') ? '机器人' : userId);
+    log.info(`玩家加入: room=${this.id} user=${userId} seat=${seat} 当前人数=${this.seatOf.size}`);
     this.broadcastAll();
     return { ok: true, seat };
   }
@@ -130,6 +135,7 @@ export class RoomActor {
     const seed = this.seed++;
     this.state = createTable(0, seed);
     this.phase = 'playing';
+    log.info(`开局: room=${this.id} seed=${seed} 玩家=[${[...this.seatOf.keys()].join(', ')}]`);
     this.beginGame(seed);
     this.broadcastGame();
     return { ok: true };
@@ -181,9 +187,13 @@ export class RoomActor {
     if (seat == null) return { ok: false, reason: '不在房间' };
     if ('seat' in action && action.seat !== seat) return { ok: false, reason: '座位不符' };
     const kind = actionKind(action);
-    if (kind && !legalActions(this.state, seat).includes(kind)) return { ok: false, reason: `非法操作:${kind}` };
+    if (kind && !legalActions(this.state, seat).includes(kind)) {
+      log.warn(`非法操作: room=${this.id} user=${userId} seat=${seat} action=${action.type} kind=${kind}`);
+      return { ok: false, reason: `非法操作:${kind}` };
+    }
     const { state, events } = applyAction(this.state, action);
     this.state = state;
+    log.debug(`执行动作: room=${this.id} seat=${seat} type=${action.type}${events.length ? ` events=[${events.map(e => e.type).join(',')}]` : ''}`);
     this.recordAction(seat, action, events);
     this.broadcastGame(events);
     return { ok: true };
@@ -206,6 +216,7 @@ export class RoomActor {
       for (const w of end.winners) this.winCount[w.seat] = (this.winCount[w.seat] ?? 0) + 1;
       const w0 = end.winners[0]!;
       const top = [...w0.detail].sort((a, b) => b.tai - a.tai)[0];
+      log.info(`胡牌: room=${this.id} round=${this.state.round} winner=seat${w0.seat} tai=${w0.tai} topFan=${top?.name ?? '-'} zimo=${action.type === 'declareWin'}`);
       this.roundLog.push({
         round: this.state.round,
         endType: 'win',
@@ -215,6 +226,7 @@ export class RoomActor {
         zimo: action.type === 'declareWin',
       });
     } else if (end.type === 'exhaustive') {
+      log.info(`流局: room=${this.id} round=${this.state.round}`);
       this.roundLog.push({ round: this.state.round, endType: 'exhaustive', winnerSeat: null, tai: 0, topFan: null, zimo: false });
     }
   }
@@ -231,11 +243,13 @@ export class RoomActor {
     if (ph !== 'settled' && ph !== 'exhaustive') return { ok: false, reason: '本局尚未结束' };
     // maxRounds=0 表示「不限」：永不因上限结束，仅房主手动解散才 finished（PRD 03 FR-房间-01/05）
     if (this.maxRounds > 0 && this.state.round >= this.maxRounds) {
+      log.info(`达到局数上限，散场: room=${this.id} rounds=${this.state.round}/${this.maxRounds}`);
       this.finishRoom('maxRounds');
       return { ok: true };
     }
     const seed = this.seed++;
     this.state = startNextRound(this.state, seed).state;
+    log.info(`开始下一局: room=${this.id} round=${this.state.round} seed=${seed}`);
     this.beginGame(seed);
     this.broadcastGame();
     return { ok: true };
@@ -250,6 +264,7 @@ export class RoomActor {
     if (this.phase !== 'playing' || !this.state) return { ok: false, reason: '未在对局中' };
     const ph = this.state.phase;
     if (ph !== 'settled' && ph !== 'exhaustive') return { ok: false, reason: '本局进行中，暂不能解散' };
+    log.info(`房主解散: room=${this.id} host=${byUserId} totalRounds=${this.state.round}`);
     this.finishRoom('dissolve');
     return { ok: true };
   }
