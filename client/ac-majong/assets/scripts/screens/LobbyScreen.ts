@@ -1,7 +1,9 @@
 import { Node, Label, UITransform, Graphics } from 'cc';
 import { Screen } from '../app/SceneRouter';
 import { Theme } from '../ui/Theme';
-import { uiBackground, uiLabel, uiButton, uiPanel, uiModal, type Modal } from '../ui/UiKit';
+import { uiBackground, uiLabel, uiButton, uiPanel, uiModal, uiMuteToggle, type Modal } from '../ui/UiKit';
+import { openRulesModal } from '../ui/RulesModal';
+import { openSettingsModal } from '../ui/SettingsModal';
 import { NetService } from '../game/NetService';
 
 /**
@@ -46,6 +48,15 @@ export class LobbyScreen extends Screen {
     const rules = uiButton('规则说明 · 台数速查 / 算账公式', () => this.openRules(), { variant: 'secondary', width: 460, height: 40, fontSize: 13 });
     rules.setParent(root);
     rules.setPosition(0, -92, 0);
+    // M-H：设置入口（静音/返回登录/版本协议）
+    const gear = uiButton('⚙ 设置', () => openSettingsModal(this.node!, {
+      onRelogin: () => {
+        NetService.instance.disconnect();
+        this.router.show('login');
+      },
+    }), { variant: 'secondary', width: 70, height: 40, fontSize: 13 });
+    gear.setParent(root);
+    gear.setPosition(272, -92, 0);
 
     // 公告
     const notice = uiLabel('v0.1 内测版 · 仅供俱乐部成员体验，积分仅供娱乐', { size: Theme.font.small, color: Theme.color.textSecondary });
@@ -63,6 +74,11 @@ export class LobbyScreen extends Screen {
     const ver = uiLabel('AC Mahjong Club v0.1.0', { size: Theme.font.mini, color: Theme.color.textMuted });
     ver.setParent(root);
     ver.setPosition(W / 2 - 92, -H / 2 + 16, 0);
+
+    // 静音开关（BL-014 最简本地开关，右下）
+    const mute = uiMuteToggle(32);
+    mute.setParent(root);
+    mute.setPosition(W / 2 - 30, -H / 2 + 48, 0);
 
     return root;
   }
@@ -239,10 +255,6 @@ export class LobbyScreen extends Screen {
   }
 
   private openRules(): void {
-    const m = uiModal('规则说明', { width: 340, height: 190 });
-    const hint = uiLabel('完整规则页（台数速查/算账公式）在 M-H 实现', { size: 12, color: Theme.color.textMuted, width: 280 });
-    hint.setParent(m.panel);
-    hint.setPosition(0, 6, 0);
-    m.root.setParent(this.node!);
+    openRulesModal(this.node!);
   }
 }

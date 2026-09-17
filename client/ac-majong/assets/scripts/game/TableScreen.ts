@@ -1,7 +1,10 @@
-import { Node, UITransform, Graphics, Color, BlockInputEvents } from 'cc';
+import { Node, UITransform, Graphics, Color, BlockInputEvents, Label } from 'cc';
 import { Screen } from '../app/SceneRouter';
 import { Theme, rgba } from '../ui/Theme';
-import { uiLabel, uiButton, uiPanel, setButtonEnabled } from '../ui/UiKit';
+import { uiLabel, uiButton, uiPanel, setButtonEnabled, uiMuteToggle } from '../ui/UiKit';
+import { openRulesModal } from '../ui/RulesModal';
+import { openSettingsModal } from '../ui/SettingsModal';
+import { AudioManager, SfxName } from '../ui/AudioManager';
 import { NetService } from './NetService';
 import { createTileNode, expandSorted } from './TileNode';
 import { chiOptions, waitingTiles, previewTai, addedKongOptions, concealedKongOptions, HONOR_NAMES } from '../vendor/engine/index';
@@ -60,6 +63,8 @@ export class TableScreen extends Screen {
   // 自己回合展示倒计时（仅视觉：状态栏⏱ + 出牌钮环）
   private turnCd = 0;
   private turnTimer: ReturnType<typeof setInterval> | null = null;
+  // BL-014：发牌音去重（每局仅在 round 变化时播一次）
+  private lastSoundRound = -1;
 
   build(): Node {
     const root = new Node('TableScreen');
@@ -79,9 +84,15 @@ export class TableScreen extends Screen {
     this.discardBtn = this.makeDiscardBtn();
     this.discardBtn.setParent(this.southHand);
 
+    // 静音开关（BL-014 最简本地开关，右上角）
+    const mute = uiMuteToggle(30);
+    mute.setParent(root);
+    mute.setPosition(RIGHT - 24, TOP - 22, 0);
+
     this.net.onView((v) => this.render(v));
     this.net.onEvent((m) => this.onEvents(m.events));
     this.net.onRoomEnd(() => this.router.show('result'));
+    this.net.onReconnect((s) => this.showReconnect(s));
     return root;
   }
 
@@ -99,6 +110,11 @@ export class TableScreen extends Screen {
     this.selectedIdx = null; // 视图刷新（手牌可能变化）时清除选中
     if (v.phase !== 'settled' && v.phase !== 'exhaustive') this.revealed = null; // 新局开始收起摊牌
     this.mySeat = v.you.seat;
+    // BL-014：进入新的一局（round 变化且非终局相位）播发牌音
+    if (v.round !== this.lastSoundRound && v.phase !== 'settled' && v.phase !== 'exhaustive') {
+      this.lastSoundRound = v.round;
+      AudioManager.instance.play('deal');
+    }
     this.renderStatus(v);
     this.renderNorth(v);
     this.renderSide(this.westArea, v, 3); // 上家=西
@@ -177,7 +193,7 @@ export class TableScreen extends Screen {
     const o = v.others.find((x) => relOf(x.seat, this.mySeat) === 2);
     if (!o) return;
     const name = this.nameOf(v, o.seat);
-    const pinfo = this.drawPinfo({ name, score: o.score, zi: o.zi, isDealer: o.seat === v.dealerSeat, isActive: this.isActive(v, o.seat), lianzhuang: v.lianzhuangCount });
+    const pinfo = this.drawPinfo({ name, score: o.score, zi: o.zi, isDealer: o.seat === v.dealerSeat, isActive: this.isActive(v, o.seat), lianzhuang: v.lianzhuangCount, ...this.seatFlags(o.seat) });
     pinfo.setParent(this.northArea);
     pinfo.setPosition(0, 26, 0);
     // body: 明牌(左) + 牌侧横条(右)
@@ -224,7 +240,7 @@ export class TableScreen extends Screen {
     const GAPV = 4;
     const groupH = PH + GAPV + bodyH;
     const SIDE_Y = 12; // 整组略上移，给南家行让位
-    const pinfo = this.drawPinfo({ name, score: o.score, zi: o.zi, isDealer: o.seat === v.dealerSeat, isActive: this.isActive(v, o.seat), lianzhuang: v.lianzhuangCount });
+    const pinfo = this.drawPinfo({ name, score: o.score, zi: o.zi, isDealer: o.seat === v.dealerSeat, isActive: this.isActive(v, o.seat), lianzhuang: v.lianzhuangCount, ...this.seatFlags(o.seat) });
     pinfo.setParent(area);
     pinfo.setPosition(0, SIDE_Y + groupH / 2 - PH / 2, 0);
     body.setPosition(0, SIDE_Y - groupH / 2 + bodyH / 2, 0);
@@ -402,7 +418,7 @@ export class TableScreen extends Screen {
     this.southTop.destroyAllChildren();
     let x = LEFT + 12;
     const me = v.you;
-    const pinfo = this.drawPinfo({ name: '我', score: me.score, zi: me.zi, isDealer: me.seat === v.dealerSeat, isActive: this.isActive(v, me.seat), self: true, lianzhuang: v.lianzhuangCount });
+    const pinfo = this.drawPinfo({ name: '我', score: me.score, zi: me.zi, isDealer: me.seat === v.dealerSeat, isActive: this.isActive(v, me.seat), self: true, lianzhuang: v.lianzhuangCount, ...this.seatFlags(me.seat) });
     const pw = pinfo.getComponent(UITransform)!.contentSize.width;
     pinfo.setParent(this.southTop);
     pinfo.setPosition(x + pw / 2, 0, 0);
@@ -439,7 +455,7 @@ export class TableScreen extends Screen {
   // ============ 组件绘制 ============
 
   /** 玩家信息条：头像+昵称(暖白)+积分(金)+子(灰)+庄家角标；active 金边 */
-  private drawPinfo(o: { name: string; score: number; zi: number; isDealer: boolean; isActive: boolean; self?: boolean; lianzhuang?: number }): Node {
+  private drawPinfo(o: { name: string; score: number; zi: number; isDealer: boolean; isActive: boolean; self?: boolean; lianzhuang?: number; offline?: boolean; trusteed?: boolean }): Node {
     const nameW = o.name.length * 11;
     const scoreStr = `${o.score >= 0 ? '+' : ''}${o.score}`;
     const scoreW = scoreStr.length * 7;
@@ -448,8 +464,10 @@ export class TableScreen extends Screen {
     const lz = o.lianzhuang ?? 0;
     const lzStr = o.isDealer && lz > 0 ? `连${lz}` : ''; // 连庄数移入庄家信息框
     const lzW = lzStr ? 18 + String(lz).length * 6 : 0;
+    const tagStr = o.trusteed ? '托管' : o.offline ? '离线' : ''; // M-I 离线/托管标识
+    const tagW = tagStr ? 22 : 0;
     const dealerW = o.isDealer ? 22 + (lzW ? lzW + 4 : 0) : 0;
-    const pw = 22 + 4 + nameW + 4 + scoreW + 4 + ziW + (dealerW ? 4 : 0) + dealerW + 16;
+    const pw = 22 + 4 + nameW + 4 + scoreW + 4 + ziW + (dealerW ? 4 : 0) + dealerW + (tagW ? 4 + tagW : 0) + 16;
     const ph = o.self ? 26 : 24;
     const node = uiPanel(pw, ph, { variant: 'panel', radius: Theme.radius.full });
     if (o.isActive) {
@@ -512,9 +530,49 @@ export class TableScreen extends Screen {
         const lzL = uiLabel(lzStr, { size: 9, color: Theme.color.goldLight, bold: true, align: 'left', width: lzW + 4 });
         lzL.setParent(node);
         lzL.setPosition(x + lzW / 2, 0, 0);
+        x += lzW;
       }
     }
+    if (tagStr) {
+      x += 4;
+      const tg = uiLabel(tagStr, { size: 9, color: o.trusteed ? Theme.color.wxGreen : Theme.color.textMuted, bold: true, align: 'left', width: tagW + 4 });
+      tg.setParent(node);
+      tg.setPosition(x + tagW / 2, 0, 0);
+    }
     return node;
+  }
+
+  /** M-I：座位离线/托管标识（取自最新 roomView） */
+  private seatFlags(seat: number): { offline?: boolean; trusteed?: boolean } {
+    const s = this.net.room?.seats[seat];
+    return { offline: s?.offline, trusteed: s?.trusteed };
+  }
+
+  /** M-I 断线重连遮罩（FR-断线-02 客户端表现） */
+  private reconnectMask: Node | null = null;
+  private showReconnect(s: 'reconnecting' | 'restored' | 'failed'): void {
+    if (s === 'restored') {
+      if (this.reconnectMask) { this.reconnectMask.destroy(); this.reconnectMask = null; }
+      this.toast('已重连，对局已恢复');
+      return;
+    }
+    if (!this.reconnectMask) {
+      const W = Theme.size.designW;
+      const H = Theme.size.designH;
+      const mask = new Node('ReconnectMask');
+      mask.addComponent(UITransform).setContentSize(W, H);
+      const g = mask.addComponent(Graphics);
+      g.fillColor = Theme.color.mask;
+      g.rect(-W / 2, -H / 2, W, H);
+      g.fill();
+      mask.setParent(this.node);
+      const lb = uiLabel('断线重连中…', { size: 15, color: Theme.color.gold, bold: true });
+      lb.name = 'Msg';
+      lb.setParent(mask);
+      this.reconnectMask = mask;
+    }
+    const lb = this.reconnectMask.getChildByName('Msg');
+    if (lb) lb.getComponent(Label)!.string = s === 'failed' ? '重连失败：请返回登录重试' : '断线重连中…';
   }
 
   /** 明牌组（横/竖）+ 组下微型标签；返回占用宽/高 */
@@ -760,7 +818,7 @@ export class TableScreen extends Screen {
     this.cdRemain = sec;
     this.cdOnTimeout = onTimeout;
     this.cdRunning = true;
-    this.cdBar = this.mk(this.actionBarNode(), 'CdBar', 0, 22);
+    this.cdBar = this.mk(this.actionBarNode(), 'CdBar', 0, 24);
     this.cdBar.addComponent(Graphics);
     this.drawCdBar(1);
     this.cdTimer = setInterval(() => this.tickCountdown(), 1000);
@@ -774,6 +832,7 @@ export class TableScreen extends Screen {
       this.cdOnTimeout?.();
       return;
     }
+    if (this.cdRemain <= 5) AudioManager.instance.play('countdown'); // BL-014：最后 5 秒逐秒警告
     this.drawCdBar(this.cdRemain / this.cdTotal);
   }
   private drawCdBar(ratio: number): void {
@@ -863,17 +922,17 @@ export class TableScreen extends Screen {
     }
     bar.active = acts.length > 0;
     if (!acts.length) { this.stopCountdown(); return; }
-    // 浮层面板
-    const panel = uiPanel(360, 92, { variant: 'panel', radius: Theme.radius.lg });
+    // 浮层面板（加高：文案/倒计时条/按钮三层互不遮挡）
+    const panel = uiPanel(360, 112, { variant: 'panel', radius: Theme.radius.lg });
     panel.setParent(bar);
     const hint = uiLabel(hasOpt && v.lastDiscard ? `${this.nameOf(v, v.lastDiscard.seat)} 打出「${tileName(v.lastDiscard.tile)}」，你可以：` : '你可以：', { size: 11, color: Theme.color.textSecondary });
     hint.setParent(panel);
-    hint.setPosition(0, 26, 0);
+    hint.setPosition(0, 38, 0);
     let bx = -((acts.length - 1) * 62) / 2;
     for (const a of acts) {
       const btn = uiButton(a.label, a.fn, { variant: a.danger ? 'primary' : 'action', width: 56, height: 42, fontSize: 16 });
       btn.setParent(panel);
-      btn.setPosition(bx, -12, 0);
+      btn.setPosition(bx, -16, 0);
       bx += 62;
     }
     // 仅响应期才有「过」与响应倒计时；自己回合的杠/胡按钮不启动 pass 倒计时（避免非法 pass）
@@ -903,6 +962,7 @@ export class TableScreen extends Screen {
 
   private onEvents(events: GameEvent[]): void {
     for (const ev of events) {
+      this.playEventSound(ev); // BL-014：事件驱动音效（与未来 M-J 动画复用同一事件入口）
       if (ev.type === 'win' || ev.type === 'exhaustive' || ev.type === 'zhahu') {
         // 只存 revealed：此时 net.view 仍是旧相位（discard），立即 render 会被 render 的清除逻辑抹掉；
         // 翻面渲染交由紧随其后的 settled 视图触发
@@ -910,6 +970,35 @@ export class TableScreen extends Screen {
       }
       if (ev.type === 'win' || ev.type === 'exhaustive' || ev.type === 'zhahu') this.showSettlement(ev);
     }
+  }
+
+  /**
+   * 事件 → 音效映射（PRD 07 §3.2.1）。
+   * 杠三种区分（明/暗/补，依据 kong.kind）；胡统一「胡了」（win 不区分自摸/点炮）。
+   * 可响应提示仅在本家被点名时播（避免为他家响应打扰）。
+   */
+  private playEventSound(ev: GameEvent): void {
+    const a = AudioManager.instance;
+    switch (ev.type) {
+      case 'discarded': a.play('discard'); break;
+      case 'drawn': a.play('draw'); break;
+      case 'flower': a.play('flower'); break;
+      case 'melded': a.play(ev.move === 'chi' ? 'chi' : ev.move === 'pong' ? 'pong' : 'click'); break;
+      case 'kong': a.play(this.kongSfx(ev.kind)); break;
+      case 'win': a.play('win'); break;
+      case 'zhahu': a.play('zhahu'); break;
+      case 'exhaustive': a.play('exhaustive'); break;
+      case 'roundEnd': a.play('settle'); break;
+      case 'responseNeeded': if (ev.seats.includes(this.mySeat)) a.play('alert'); break;
+      default: break; // advance 等无音
+    }
+  }
+
+  /** kong.kind → 语音资源：exposed=「杠」/ kong_concealed=「暗杠」/ kong_added=「补杠」 */
+  private kongSfx(kind: string): SfxName {
+    if (kind === 'kong_concealed') return 'kong_concealed';
+    if (kind === 'kong_added') return 'kong_added';
+    return 'kong_exposed';
   }
 
   private showSettlement(ev: Extract<GameEvent, { type: 'win' | 'exhaustive' | 'zhahu' }>): void {
@@ -1098,7 +1187,20 @@ export class TableScreen extends Screen {
     bg.setParent(root);
     const exit = uiButton('✕', () => this.onExitRoom(), { variant: 'secondary', width: 28, height: 28, fontSize: 13 });
     exit.setParent(root);
-    exit.setPosition(RIGHT - 10 - 14, TOP - 6 - 14, 0);
+    exit.setPosition(RIGHT - 58, TOP - 6 - 14, 0);
+    // M-H：规则/设置入口（牌桌内弹层、不中断对局）；右上簇右→左：静音/退出/规则/设置
+    const rulesBtn = uiButton('规则', () => openRulesModal(root), { variant: 'secondary', width: 40, height: 28, fontSize: 12 });
+    rulesBtn.setParent(root);
+    rulesBtn.setPosition(RIGHT - 96, TOP - 6 - 14, 0);
+    const gearBtn = uiButton('⚙', () => openSettingsModal(root, {
+      onLeaveRoom: () => this.onExitRoom(),
+      onRelogin: () => {
+        this.net.disconnect();
+        this.router.show('login');
+      },
+    }), { variant: 'secondary', width: 28, height: 28, fontSize: 13 });
+    gearBtn.setParent(root);
+    gearBtn.setPosition(RIGHT - 134, TOP - 6 - 14, 0);
   }
 
   private toast(msg: string): void {

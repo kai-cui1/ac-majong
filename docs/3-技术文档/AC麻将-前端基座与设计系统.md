@@ -25,7 +25,8 @@ client/ac-majong/assets/scripts/
 │  └─ Config.ts       SERVER_URL + 本地 mock 身份（详见登录鉴权 §5.1）
 ├─ ui/          设计系统
 │  ├─ Theme.ts        设计令牌（color/space/radius/size/font）
-│  └─ UiKit.ts        通用组件工厂（背景/文本/按钮/面板/徽章/弹层）
+│  ├─ UiKit.ts        通用组件工厂（背景/文本/按钮/面板/徽章/弹层）
+│  └─ AudioManager.ts 音频子系统单例（SFX 播放 + 静音偏好，见 §12）
 ├─ screens/     业务屏幕（各自 build 节点树）
 │  ├─ LoginScreen.ts  登录页（见登录鉴权 §5.3）
 │  └─ LobbyScreen.ts  大厅页（见登录鉴权 §5.4）
@@ -166,6 +167,40 @@ abstract class Screen {
 - **摸牌显示**：`you.drawn` 下发的刚摸牌在排序手牌**原位抬高 10px**（抽出态，取最右一张同牌），选中抬高 18px 以区分；`drawn=null` 时回退连排。
 - **竞态守卫**：异步回调可能晚于节点销毁到达（对局中每次 `gameView` 重渲染 `destroyAllChildren`），此时 `sp.node` 为 null，再赋 `spriteFrame` 会触发 Cocos `Sprite` 读 `null._uiProps` 崩溃；回调内必须 `if (!sp.isValid || !sp.node || !sp.node.isValid) return;`。
 
+## 12. 音频子系统 `AudioManager`（`ui/AudioManager.ts`）
+
+> 对应 PRD [07-表现动画音效](../1-prd/07-表现动画音效.md) §3.2 与 FR-表现-02、PRD [08-规则页与设置](../1-prd/08-规则页与设置.md) FR-设置-01（BL-014）。**只做音效（SFX），不做 BGM**。
+
+### 12.1 职责与设计
+
+- **单例、平台无关入口**：`AudioManager` 为客户端全局单例，封装 Cocos `AudioSource`；业务层只调 `AudioManager.play(name)`，不直接接触 `AudioSource`。
+- **SFX 并发**：麻将音效短促且可能叠加（多家连续出牌/响应），用 `AudioSource.playOneShot(clip)` 播放，天然支持多实例并发，无需为每条音效建独立节点。
+- **懒加载 + 缓存**：`resources.load('audio/<name>', AudioClip)` 首次播放时载入，模块级 `Map<string, AudioClip>` 缓存；加载失败静默降级（不抛错、不阻断对局），保证缺素材时游戏仍可运行。
+- **静音持久化**：`muted` 状态存 `sys.localStorage`（key `ac_muted`），构造时读取；`setMuted(bool)` 切换并回写。静音时 `play()` 直接 return。
+
+### 12.2 触发接线
+
+| 音效来源 | 接线点 | 说明 |
+|---|---|---|
+| 牌张拟音 / 番种语音 / 可响应提示 / 结算 | `TableScreen` 消费 `NetService.onEvent` 处，按 `GameEvent` 类型映射到 `play()` | 与未来 M-J 动画复用同一事件入口；映射表见 PRD 07 §3.2.1 |
+| 按钮点击 | `UiKit.uiButton` 的 `TOUCH_END` 回调统一 `play('click')` | 一处生效，全局按钮自动带点击音 |
+| 倒计时警告 | `TableScreen` 倒计时逻辑本地触发（剩余 ≤5s） | |
+| 发牌 | 开局（首次进入 playing 相位）一次性触发 | |
+
+- **杠/胡的事件语义映射**（依据引擎 `reducer.ts`）：`kong.kind` → `exposed`=「杠」/`kong_concealed`=「暗杠」/`kong_added`=「补杠」（三种区分）；`win` 事件自摸(`declareWin`)与点炮(`resolveDiscardWin`)均发同一事件 → 统一「胡了」，**不区分**。
+
+### 12.3 资源约定
+
+- 目录 `client/ac-majong/assets/resources/audio/`，格式 **mp3**（微信小游戏兼容最佳），单条控制体积（几十 KB）。
+- 命名 = 事件资源名（见 PRD 07 §3.2.1）：`discard / draw / flower / deal / chi / pong / kong_exposed / kong_concealed / kong_added / win / zhahu / exhaustive / click / alert / countdown / settle`。
+- **素材来源**：牌张拟音 + 系统/UI 音取自 Pixabay（royalty-free 可商用）；番种中文语音用 Edge-TTS 生成。缺失资源时 `play()` 静默降级，不影响联调。
+
+### 12.4 静音开关 UI（最简，先行）
+
+- 完整设置弹层（M-H）落地前，先在大厅用户条与牌桌菜单放一个 **🔊/🔇 切换按钮**：点击调 `AudioManager.setMuted(!muted)` 并刷新图标；偏好写 `localStorage`，跨屏与重启沿用。M-H 就绪后并入设置页统一管理。
+
+---
+
 ## 维护记录
 
 | 日期 | 概要 |
@@ -183,3 +218,8 @@ abstract class Screen {
 | 2026-09-17 | §11 摊牌时序缺陷修复：onEvents 只存 revealed 不立即 render（旧相位视图会抹掉 revealed），翻面由 settled 视图触发 |
 | 2026-09-17 | §11 pinfo 子数标签换行修复：估宽改 CJK≈字号(9)+数字≈6 并加余量（估窄致 Label 按宽折行；HTML 原型 inline span 无此问题） |
 | 2026-09-17 | §11 庄家标识优化：状态栏去连庄段；drawPinfo 增 lianzhuang 参，庄家徽章红底(danger)白字+goldLight 环 22×16，连庄>0 时框内追加「连N」金字标签 |
+| 2026-09-17 | §11 响应提示框加高 92→112：hint y38 / CdBar y24 / 按钮 y-16 三层分离，修复文案与倒计时条互相遮挡 |
+| 2026-09-17 | §11 M-H 新增 `ui/RulesModal.ts`（openRulesModal：uiModal+ScrollView 分节内容，番种速查取引擎 PATTERN_TAI，实底 Graphics 底衬）与 `ui/SettingsModal.ts`（openSettingsModal：静音切换/退出房间/返回登录/版本协议钩子）；大厅「规则说明/⚙设置」+ 牌桌右上簇（右→左：静音/✕/规则/⚙）接入 |
+| 2026-09-17 | 验证基建修正：Cocos 生成 `temp/tsconfig.cocos.json` 的 types 相对路径致 CLI tsc 仅报 TS2688 并跳过语义检查（假绿）；新增 `temp/tsconfig.check.json`（修正 types 路径 + strict:false + skipLibCheck）作为唯一 CLI 检查入口；SettingsModal 补 UITransform 导入修复运行时 ReferenceError |
+| 2026-09-17 | §11 M-I 客户端：NetService 增自动重连（凭据记忆+退避 1/2/4/8s+重入记忆房间+`onReconnect` 状态回调）；TableScreen 断线遮罩（重连中/失败文案）+ pinfo「离线」(灰)/「托管」(绿)徽章（seatFlags 取 roomView） |
+| 2026-09-17 | 新增 §12 音频子系统 `AudioManager`（BL-014 游戏音效）：单例封装 `AudioSource`、SFX `playOneShot` 并发、`resources` 懒加载缓存、静音 `localStorage` 持久化；触发接线（`onEvent` 事件映射 / `uiButton` 点击音）、杠三种区分·胡不区分的事件语义、mp3 资源命名约定、最简静音开关；只做音效不做 BGM |

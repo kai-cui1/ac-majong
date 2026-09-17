@@ -140,7 +140,8 @@ export function startGateway(opts: GatewayOptions): Gateway {
     ws.on('close', () => {
       sessions.delete(session);
       log.info(`连接断开: user=${session.userId ?? '(未鉴权)'} room=${session.roomId ?? '-'} 剩余在线=${sessions.size}`);
-      if (session.roomId && session.userId) rooms.get(session.roomId)?.removePlayer(session.userId);
+      // M-I：对局中掉线→离线标记+超时托管；等待期仅清连接（座位均保留）
+      if (session.roomId && session.userId) rooms.get(session.roomId)?.playerDisconnected(session.userId);
     });
   });
 
@@ -255,7 +256,9 @@ async function handleMsg(
       if (session.roomId && session.userId) {
         const room = rooms.get(session.roomId);
         const seat = room?.roomView().seats.findIndex((s) => s?.userId === session.userId) ?? -1;
-        room?.removePlayer(session.userId);
+        // 对局中退出按断线/托管处理（PRD08 FR-设置-02）；等待期退出仅清连接
+        if (room?.phase === 'playing') room.playerDisconnected(session.userId);
+        else room?.removePlayer(session.userId);
         // 退出 → room_member_events:leave（弱依赖；Bot 不记流水）
         if (seat >= 0 && !session.userId.startsWith('bot-')) {
           await logMember(persistence.store, { roomId: session.roomId, openid: session.userId, seat, event: 'leave' });

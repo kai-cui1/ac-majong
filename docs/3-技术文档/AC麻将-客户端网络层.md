@@ -148,5 +148,6 @@ TableView 交互 → NetService.action(seat, …) → GameClient.action(Action)
 | 日期 | 概要 |
 |---|---|
 | 2026-09-16 | 首次产出（补记已实现网络层）：分层架构、`Transport` 抽象（WebTransport / WeChatTransport）、`GameClient`（状态 / `onMsg` 分派 / `waitFor` / 发送方法 / handlers）、协议与防透视、`NetService` 单例（幂等连接 / 订阅 / 动作透传）、客户端机器人 `bot.ts`、`vendor` 预编译同步（`pnpm sync:client`）、登录与对局端到端数据流、待办（M-K 微信传输 / M-I 重连）|
+| 2026-09-17 | M-I：RoomView seats 增 `offline`/`trusteed` 字段（协议同步 vendor）；NetService 自动重连与 `onReconnect` 订阅见前端基座 §11 |
 | 2026-09-17 | 补记视图增补字段（§5.1）：`ViewState.names` 昵称下发；台数预览 `previewTai` 为客户端接引擎本地计算（非协议字段） |
 | 2026-09-17 | §5.1 补 `you.drawn`：刚摸的牌下发（仅自己回合 discard 相位），供摸牌抽出抬高显示 |

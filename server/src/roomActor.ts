@@ -3,7 +3,7 @@ import { createTable, applyAction, startNextRound, legalActions, snapshotRound }
 import type { RoomView, RoomPhase, FinalStanding, RoundReview, RoomEndReason } from '@ac-majong/protocol';
 import type { Connection } from './connection';
 import { redact } from './redact';
-import { makeBotConnection } from './devBots';
+import { makeBotConnection, makeTrusteeConnection } from './devBots';
 import { createLogger } from './logger';
 
 const log = createLogger('room');
@@ -66,6 +66,11 @@ export class RoomActor {
   /** 各家展示昵称（by seat），供 ViewState.names 显示真实昵称（还原度） */
   private names: (string | null)[] = [null, null, null, null];
   private connOf = new Map<string, Connection>();
+  /** M-I：离线标记（掉线未超时的座位）与托管态（超时后服务端代打） */
+  private offlineSince = new Map<string, number>();
+  private trusteeOf = new Set<string>();
+  private trusteeTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private trusteeAfterMs: number;
   private seed: number;
   private botSeq = 0;
   private hooks?: GameHooks;
@@ -76,12 +81,13 @@ export class RoomActor {
   private roundLog: RoundReview[] = [];
   private winCount: Record<number, number> = {};
 
-  constructor(id: string, hostUserId: string, maxRounds: number, seed: number, hooks?: GameHooks) {
+  constructor(id: string, hostUserId: string, maxRounds: number, seed: number, hooks?: GameHooks, timings?: { trusteeAfterMs?: number }) {
     this.id = id;
     this.hostUserId = hostUserId;
     this.maxRounds = maxRounds;
     this.seed = seed;
     this.hooks = hooks;
+    this.trusteeAfterMs = timings?.trusteeAfterMs ?? 60_000; // D-24：掉线保留 60 秒后托管
   }
 
   getState(): TableState | null {
@@ -100,7 +106,13 @@ export class RoomActor {
       phase: this.phase,
       hostUserId: this.hostUserId,
       maxRounds: this.maxRounds,
-      seats: this.userAtSeat.map((u, seat) => (u ? { userId: u, seat, isBot: u.startsWith('bot-') } : null)),
+      seats: this.userAtSeat.map((u, seat) => (u ? {
+        userId: u,
+        seat,
+        isBot: u.startsWith('bot-'),
+        offline: this.offlineSince.has(u) || undefined,
+        trusteed: this.trusteeOf.has(u) || undefined,
+      } : null)),
     };
   }
 
@@ -109,6 +121,7 @@ export class RoomActor {
     const existing = this.seatOf.get(userId);
     if (existing != null) {
       log.debug(`玩家重连: room=${this.id} user=${userId} seat=${existing}`);
+      this.cancelOffline(userId); // 重连接管：清离线计时/卸托管代打
       this.broadcastAll(); // 重连
       return { ok: true, seat: existing };
     }
@@ -126,6 +139,41 @@ export class RoomActor {
   removePlayer(userId: string): void {
     this.connOf.delete(userId); // 座位保留以支持重连
     this.broadcastAll();
+  }
+
+  /**
+   * 掉线入口（M-I / FR-断线-01）：WS 断开/对局中主动退出均走此——
+   * 清连接 + 保留座位 + 标记离线 + 60 秒后转托管；等待期掉线仅清连接。
+   */
+  playerDisconnected(userId: string): void {
+    this.connOf.delete(userId);
+    if (this.phase === 'playing' && this.seatOf.has(userId) && !userId.startsWith('bot-') && !this.trusteeOf.has(userId)) {
+      this.offlineSince.set(userId, Date.now());
+      const t = setTimeout(() => this.enterTrustee(userId), this.trusteeAfterMs);
+      this.trusteeTimers.set(userId, t);
+      log.info(`玩家掉线: room=${this.id} user=${userId} ${this.trusteeAfterMs}ms 后转托管`);
+    }
+    this.broadcastAll();
+  }
+
+  /** 超时转托管（FR-断线-03）：挂保守代打连接，直至重连接管或本局结束 */
+  private enterTrustee(userId: string): void {
+    this.trusteeTimers.delete(userId);
+    if (!this.seatOf.has(userId) || this.connOf.has(userId)) return; // 已重连则不作动
+    this.offlineSince.delete(userId);
+    this.trusteeOf.add(userId);
+    this.connOf.set(userId, makeTrusteeConnection(this, userId));
+    log.info(`转托管: room=${this.id} user=${userId} seat=${this.seatOf.get(userId)}`);
+    this.broadcastAll();
+    if (this.state) this.broadcastGame(); // 立即给托管连接当前局面，轮到其行动时即刻代打
+  }
+
+  /** 重连接管（FR-断线-04）：清离线计时/卸托管代打连接（真实 conn 由 addPlayer 覆盖） */
+  private cancelOffline(userId: string): void {
+    const t = this.trusteeTimers.get(userId);
+    if (t) { clearTimeout(t); this.trusteeTimers.delete(userId); }
+    this.offlineSince.delete(userId);
+    if (this.trusteeOf.delete(userId)) log.info(`托管解除: room=${this.id} user=${userId}`);
   }
 
   start(byUserId: string): OpResult {
@@ -276,6 +324,8 @@ export class RoomActor {
   private finishRoom(reason: RoomEndReason): void {
     if (this.phase === 'finished') return;
     this.phase = 'finished';
+    for (const t of this.trusteeTimers.values()) clearTimeout(t); // 散场清离线计时
+    this.trusteeTimers.clear();
     const standings: FinalStanding[] = [];
     for (let seat = 0; seat < 4; seat++) {
       const u = this.userAtSeat[seat];

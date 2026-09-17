@@ -1,5 +1,6 @@
 import { Node, Label, UITransform, Graphics, Color, UIOpacity } from 'cc';
 import { Theme, rgba } from './Theme';
+import { AudioManager } from './AudioManager';
 
 /**
  * UiKit —— 通用 UI 组件工厂（还原 style.css 的组件规范）。
@@ -128,10 +129,26 @@ export function uiButton(text: string, onClick: () => void, opts: ButtonOpts = {
 
   node.on(Node.EventType.TOUCH_END, () => {
     if (disabledMap.get(node)) return;
+    AudioManager.instance.play('click'); // BL-014：全局按钮统一点击音（静音时自动跳过）
     onClick();
   });
   if (opts.enabled === false) setButtonEnabled(node, false);
   return node;
+}
+
+/**
+ * 🔊/🔇 静音切换按钮（BL-014 最简静音开关，完整设置弹层归 M-H）。
+ * 点击切 `AudioManager` 静音态（写 localStorage 持久化）并刷新图标；跨屏与重启沿用。
+ */
+export function uiMuteToggle(size = 34): Node {
+  const am = AudioManager.instance;
+  const icon = (): string => (am.muted ? '🔇' : '🔊');
+  const btn = uiButton(icon(), () => {
+    am.toggleMuted();
+    const lb = btn.getChildByName('Label')?.getComponent(Label);
+    if (lb) lb.string = icon();
+  }, { variant: 'secondary', width: size, height: size, fontSize: Math.round(size * 0.5) });
+  return btn;
 }
 
 // ============ 面板 / 卡片 ============

@@ -52,7 +52,7 @@ export interface RoomView {
   phase: RoomPhase;
   hostUserId: string;
   maxRounds: number;
-  seats: ({ userId: string; seat: number; isBot?: boolean } | null)[];
+  seats: ({ userId: string; seat: number; isBot?: boolean; offline?: boolean; trusteed?: boolean } | null)[];
 }
 
 /** 散场原因：打满局数上限 / 房主主动解散（不限局数时） */

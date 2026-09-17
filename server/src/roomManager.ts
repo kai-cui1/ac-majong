@@ -12,9 +12,9 @@ export class RoomManager {
     this.hooks = hooks;
   }
 
-  create(hostUserId: string, conn: Connection, maxRounds = 8, nickname?: string): RoomActor {
+  create(hostUserId: string, conn: Connection, maxRounds = 8, nickname?: string, timings?: { trusteeAfterMs?: number }): RoomActor {
     const id = this.genId();
-    const room = new RoomActor(id, hostUserId, maxRounds, this.seedBase++, this.hooks);
+    const room = new RoomActor(id, hostUserId, maxRounds, this.seedBase++, this.hooks, timings);
     this.rooms.set(id, room);
     room.addPlayer(hostUserId, conn, nickname);
     return room;

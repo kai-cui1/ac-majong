@@ -5,6 +5,9 @@ export type ViewListener = (v: ViewState) => void;
 export type RoomListener = (r: RoomView) => void;
 export type EventListener = (m: Extract<ServerMsg, { t: 'event' }>) => void;
 export type RoomEndListener = (m: Extract<ServerMsg, { t: 'roomEnd' }>) => void;
+/** M-I 重连状态：重连中 / 已恢复 / 放弃（用于断线遮罩 UI） */
+export type ReconnectStatus = 'reconnecting' | 'restored' | 'failed';
+export type ReconnectListener = (s: ReconnectStatus) => void;
 
 /**
  * Cocos 侧网络服务（单例）。封装 client-core.GameClient，向 UI 提供订阅式回调。
@@ -23,6 +26,12 @@ export class NetService {
   private roomListeners: RoomListener[] = [];
   private eventListeners: EventListener[] = [];
   private roomEndListeners: RoomEndListener[] = [];
+  private reconnectListeners: ReconnectListener[] = [];
+  /** M-I：重连凭据与房间记忆（意外断线后自动重连并重入房间） */
+  private cred: { url: string; token: string; profile?: UserProfile } | null = null;
+  private lastRoom: string | null = null;
+  private intentionalClose = false;
+  private reconnecting = false;
 
   onView(cb: ViewListener): void {
     this.viewListeners.push(cb);
@@ -36,6 +45,13 @@ export class NetService {
   /** 散场（打满上限/房主解散）：服务端下发 roomEnd → 切散场战绩页（M-G） */
   onRoomEnd(cb: RoomEndListener): void {
     this.roomEndListeners.push(cb);
+  }
+  /** M-I：断线重连状态订阅（牌桌遮罩/恢复提示用） */
+  onReconnect(cb: ReconnectListener): void {
+    this.reconnectListeners.push(cb);
+  }
+  get isReconnecting(): boolean {
+    return this.reconnecting;
   }
 
   get view(): ViewState | null {
@@ -66,26 +82,76 @@ export class NetService {
    */
   async connect(url: string, token: string, profile?: UserProfile): Promise<void> {
     if (this.client) return;
-    const client = new GameClient(new WebTransport(url), {
-      onAuth: (_uid, p) => {
-        this._profile = p;
-      },
-      onGameView: (v) => this.viewListeners.forEach((f) => f(v)),
-      onRoomView: (r) => this.roomListeners.forEach((f) => f(r)),
-      onEvent: (m) => this.eventListeners.forEach((f) => f(m)),
-      onRoomEnd: (m) => this.roomEndListeners.forEach((f) => f(m)),
-    });
+    this.cred = { url, token, profile };
+    this.intentionalClose = false;
+    const client = this.buildClient();
     this.client = client;
     await client.connect();
     client.auth(token, profile);
     await client.waitFor((m) => m.t === 'authOk');
   }
 
+  /** 构建 GameClient（首连与重连共用同一套订阅转发） */
+  private buildClient(): GameClient {
+    return new GameClient(new WebTransport(this.cred!.url), {
+      onAuth: (_uid, p) => {
+        this._profile = p;
+      },
+      onGameView: (v) => this.viewListeners.forEach((f) => f(v)),
+      onRoomView: (r) => {
+        this.lastRoom = r.room;
+        this.roomListeners.forEach((f) => f(r));
+      },
+      onEvent: (m) => this.eventListeners.forEach((f) => f(m)),
+      onRoomEnd: (m) => {
+        this.lastRoom = null; // 散场后不再重入
+        this.roomEndListeners.forEach((f) => f(m));
+      },
+      onClose: () => void this.handleClose(),
+    });
+  }
+
+  /**
+   * 意外断线处理（M-I / FR-断线-02）：退避重连（1/2/4/8s，上限约 60s）→
+   * 重新鉴权 → 重入记忆房间（服务端座位重绑 + 全量视图下发 = 完整恢复）。
+   */
+  private handleClose(): void {
+    if (this.intentionalClose || !this.cred || this.reconnecting) return;
+    this.client = null;
+    this.reconnecting = true;
+    this.reconnectListeners.forEach((f) => f('reconnecting'));
+    const delays = [1000, 2000, 4000, 8000, 8000, 8000, 8000, 8000];
+    const attempt = async (i: number): Promise<void> => {
+      if (!this.reconnecting) return;
+      try {
+        const client = this.buildClient();
+        await client.connect();
+        client.auth(this.cred!.token, this.cred!.profile);
+        await client.waitFor((m) => m.t === 'authOk');
+        this.client = client;
+        if (this.lastRoom) client.join(this.lastRoom); // 重入房间→服务端重绑座位+广播全量视图
+        this.reconnecting = false;
+        this.reconnectListeners.forEach((f) => f('restored'));
+      } catch {
+        if (i + 1 >= delays.length) {
+          this.reconnecting = false;
+          this.reconnectListeners.forEach((f) => f('failed'));
+          return;
+        }
+        setTimeout(() => void attempt(i + 1), delays[i]);
+      }
+    };
+    setTimeout(() => void attempt(0), delays[0] ?? 1000);
+  }
+
   /** 断开并清空会话（返回登录时调用） */
   disconnect(): void {
+    this.intentionalClose = true;
+    this.reconnecting = false;
     this.client?.close();
     this.client = null;
     this._profile = null;
+    this.lastRoom = null;
   }
 
   /** 创建房间并等待进入等待页（返回房间视图）；未连接则抛错 */

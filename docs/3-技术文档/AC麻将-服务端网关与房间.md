@@ -131,3 +131,4 @@ Connection.send（ServerMsg：gameView/roomView/event/ack/…）
 | 2026-09-16 | PRD 全量拆分与持久化（04）产出后回填交叉引用：产品需求 03-房间系统由「待拆分」占位改指真实 PRD、关联持久化由「待补」占位改指 `AC麻将-数据持久化与事件溯源.md` |
 | 2026-09-16 | M-C 文档先行：细化 `create` 的 `rooms` 落库接线（§4）与 `maxRounds`「不限」=`0`/`null` 表示、`nextRound` 不限不做上限判定（§5）、`join` 房号校验；将 Bot 从「本地自动补齐」演进为「房主主动陪玩」设计（§7 + `addBot` 协议 + `roomView.isBot`，落地 M-D）；更新 §11 接线进度（房间创建→M-C）|
 | 2026-09-16 | M-C 实现回填：§11「房间创建」转 ✅ 已接线（网关 `create` 分支 `rooms.create` 后调 `createRoom`）；`roomActor.nextRound` 已改为 `maxRounds>0 &&` 守卫（不限=0 不因上限 finished）；e2e + MySQL `rooms` 落库验证（创建/加入/入座广播/房号校验/不限=0），server 24 测试绿 |
+| 2026-09-17 | M-I 断线/托管接线：WS close 与对局中 leave 均走 `RoomActor.playerDisconnected`（离线标记+60s 计时→`enterTrustee` 挂 `makeTrusteeConnection` 保守代打）；重连 addPlayer 重绑+`cancelOffline` 卸托管；roomView seats 增 `offline`/`trusteed`；散场清计时器 |

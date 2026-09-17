@@ -6,22 +6,22 @@ import { createLogger } from './logger';
 
 const log = createLogger('bot');
 
-/** 从裁剪后的 ViewState 选择一个保守动作：能胡则胡，否则摸/打/过（不主动吃碰杠）。 */
-function pickAction(view: ViewState): Action | null {
+/** 从裁剪后的 ViewState 选择一个保守动作：canWin 时能胡则胡，否则摸/打/过（不主动吃碰杠）。 */
+function pickAction(view: ViewState, canWin: boolean): Action | null {
   const seat = view.you.seat;
   const legal = view.you.legal;
   if (view.phase === 'draw' && view.currentSeat === seat && legal.includes('draw')) {
     return { type: 'draw', seat };
   }
   if (view.phase === 'discard' && view.currentSeat === seat) {
-    if (legal.includes('win_draw')) return { type: 'declareWin', seat };
+    if (canWin && legal.includes('win_draw')) return { type: 'declareWin', seat };
     if (legal.includes('discard')) {
       const tile = Object.keys(view.you.concealed)[0];
       return tile ? { type: 'discard', seat, tile } : null;
     }
   }
   if (view.phase === 'response') {
-    if (legal.includes('win_discard')) return { type: 'respond', seat, move: 'win' };
+    if (canWin && legal.includes('win_discard')) return { type: 'respond', seat, move: 'win' };
     if (legal.includes('pass')) return { type: 'respond', seat, move: 'pass' };
   }
   return null;
@@ -33,14 +33,26 @@ function pickAction(view: ViewState): Action | null {
  * 同一套 pickAction 亦为 M-I 断线托管的策略基础。
  */
 export function makeBotConnection(room: RoomActor, userId: string, delayMs = 260): Connection {
+  return makeAutoConnection(room, userId, delayMs, true, 'Bot');
+}
+
+/**
+ * 托管代打连接（M-I / FR-断线-03）：比 Bot 更保守——自动摸打 + 响应一律「过」，
+ * **不主动吃/碰/杠/胡**，直至玩家重连接管或本局结束。
+ */
+export function makeTrusteeConnection(room: RoomActor, userId: string, delayMs = 400): Connection {
+  return makeAutoConnection(room, userId, delayMs, false, '托管');
+}
+
+function makeAutoConnection(room: RoomActor, userId: string, delayMs: number, canWin: boolean, tag: string): Connection {
   let lastActionKey = '';
   return {
     userId,
     send(msg: ServerMsg): void {
       if (msg.t !== 'gameView') return;
-      const action = pickAction(msg.view);
+      const action = pickAction(msg.view, canWin);
       if (!action) {
-        log.trace(`Bot 无可执行动作: ${userId} phase=${msg.view.phase}`);
+        log.trace(`${tag} 无可执行动作: ${userId} phase=${msg.view.phase}`);
         return;
       }
       // 去重：同一动作在同一局面下只发一次，避免重复广播堆栈
@@ -49,7 +61,7 @@ export function makeBotConnection(room: RoomActor, userId: string, delayMs = 260
         `@${msg.view.round}:${msg.view.wallRemaining}:${msg.view.lastDiscard?.tile ?? ''}`;
       if (key === lastActionKey) return;
       lastActionKey = key;
-      log.debug(`Bot 决策: ${userId} action=${action.type} delay=${delayMs}ms`);
+      log.debug(`${tag} 决策: ${userId} action=${action.type} delay=${delayMs}ms`);
       // 延迟一点，避免递归广播堆栈，也给客户端动画留时间
       setTimeout(() => room.handleAction(userId, action), delayMs);
     },
