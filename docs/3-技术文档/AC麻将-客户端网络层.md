@@ -103,7 +103,7 @@ interface Transport {
 - **只读态**：`view` / `profile` / `userId` / `connected` getters。
 - **订阅**：`onView(cb)` / `onRoom(cb)` / `onEvent(cb)`，屏幕注册后由对应 `ServerMsg` 广播驱动刷新。
 - **断连** `disconnect()`：`client.close()` + 清 `client`/`_profile`（返回登录时调用）。
-- **房间指令**：`createRoom(maxRounds=8, settings?)`（BL-017：玩法设置随建房下发，`lastSettings` 记忆供 `restart` 沿用） / `joinRoom(room)` / `start()` / `roll()` / `pickSeat(seat)`（BL-017 仪式） / `nextRound()` / `restart(maxRounds=8)`（离开旧房 + 重新建房，服务端补 Bot 并开局）。
+- **房间指令**：`createRoom(maxRounds=8, settings?)`（BL-017：玩法设置随建房下发，`lastSettings` 记忆供 `restart` 沿用） / `requestRoomList()`（BL-018：返回 `PublicRoomEntry[]`，等待器先注册再发送） / `joinRoom(room)` / `start()` / `roll()` / `pickSeat(seat)`（BL-017 仪式） / `nextRound()` / `restart(maxRounds=8)`（离开旧房 + 重新建房，服务端补 Bot 并开局）。
 - **动作透传**（`seat` 由调用方按 `view.you.seat` 提供，客户端不判定合法性）：`draw` / `discard` / `declareWin` / `kongConcealed` / `kongAdded` / `respond(move, chiTiles?)`。
 
 > 登录页如何用 `NetService.connect` + `Config.mockIdentity` 完成登录，见[登录鉴权 §5.2–5.4](./AC麻将-登录鉴权.md)。
@@ -160,3 +160,4 @@ TableView 交互 → NetService.action(seat, …) → GameClient.action(Action)
 | 2026-09-17 | §5.1 补 `you.drawn`：刚摸的牌下发（仅自己回合 discard 相位），供摸牌抽出抬高显示 |
 | 2026-09-18 | **BL-016**：`joinRoom` 兼容重进「对局中」房间（服务端直接下发 gameView 无 roomView：等待器先注册再发送，ack ok:true 后补等视图；gameView 视为加入成功）；`lastGameViewAt` 时间戳供大厅判定切牌桌；`leave` 清陈旧 view/room 缓存防误判 |
 | 2026-09-18 | **BL-017 开局仪式与摸牌位骰**：新增 §5.2——`ClientMsg` 增 `roll`/`pickSeat`/`create.settings`；`RoomView.settings/seating`、`ViewState.wallInfo/seating` 视图字段；`GameClient.roll()/pickSeat()/create(maxRounds, settings?)`；`NetService.createRoom` 带设置 + `lastSettings` 供 `restart` 沿用；骰面和固定拆分展示约定 |
+| 2026-09-18 | **BL-018 公开房间列表**：`GameClient.requestRoomList()`（`t=roomList`）；`NetService.requestRoomList()` 返回 `PublicRoomEntry[]`；大厅 onEnter 拉一次 + 5s 轮询、onExit 清定时器；建房弹层增「公开房间」开关（默认开）随 settings 下发 |

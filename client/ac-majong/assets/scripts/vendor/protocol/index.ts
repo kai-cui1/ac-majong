@@ -12,6 +12,21 @@ export interface RoomSettings {
   wallMode: 'physical' | 'random';
   /** 摸牌位骰：每局庄家掷骰定开牌点（默认关） */
   breakDice: boolean;
+  /** BL-020 先看吃再碰：吃家选定后全桌公开吃意图（副露区留空位预览），碰家看见后再决（默认开） */
+  chiFirstView: boolean;
+  /** BL-018 公开房间：开=进入大厅房间列表可被发现；关=仅房号/分享卡可入（默认开） */
+  isPublic: boolean;
+}
+
+/** BL-018 大厅公开房间列表行（仅公开且未关闭房；无积分/隐私字段） */
+export interface PublicRoomEntry {
+  room: string;
+  /** 房主昵称 */
+  host: string;
+  /** 已入座人数（含 Bot） */
+  seats: number;
+  maxRounds: number;
+  status: 'waiting' | 'playing';
 }
 
 /** BL-017 开局仪式/摸牌位骰视图（roomView 与 gameView 共用下发） */
@@ -49,6 +64,8 @@ export interface ViewState {
   wallRemaining: number;
   lianzhuangCount: number;
   lastDiscard: { seat: number; tile: string } | null;
+  /** BL-020 先看吃再碰（开关 ON 时下发）：某家已选吃的意图公开——seat=吃家，tiles=其暗牌中出的两张，called=被吃牌；吃失败/窗结束即消失 */
+  pendingChi?: { seat: number; tiles: string[]; called: string };
   /** 全局有序弃牌河（公开信息），供客户端渲染中央牌河 */
   discards: { seat: number; tile: string }[];
   you: {
@@ -161,6 +178,7 @@ export interface ReplayActionRow {
 export type ClientMsg =
   | { t: 'auth'; seq: number; token?: string; account?: { username: string; password: string }; profile?: UserProfile }
   | { t: 'create'; seq: number; maxRounds?: number; settings?: RoomSettings }
+  | { t: 'roomList'; seq: number } // BL-018：拉取公开房间列表
   | { t: 'join'; seq: number; room: string }
   | { t: 'leave'; seq: number }
   | { t: 'start'; seq: number }
@@ -178,6 +196,7 @@ export type ClientMsg =
 /** 服务端 → 客户端 */
 export type ServerMsg =
   | { t: 'authOk'; userId: string; profile: UserProfile; session?: string }
+  | { t: 'roomList'; rooms: PublicRoomEntry[] } // BL-018：公开房间列表响应
   | { t: 'roomView'; room: RoomView }
   | { t: 'gameView'; view: ViewState }
   | { t: 'event'; events: GameEvent[] }

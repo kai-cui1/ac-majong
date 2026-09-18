@@ -355,3 +355,35 @@ function driveRoomToEnd(room: RoomActor): void {
     room.handleAction(uid, a);
   }
 }
+
+describe('BL-018 公开房间列表', () => {
+  it('roomList 仅含公开且未终局房（含房主/人数/局数/状态；非公开房不下发）', async () => {
+    const port = await start();
+    // u1 建公开房
+    const c1 = client(port);
+    await c1.opened;
+    c1.send({ t: 'auth', seq: 1, token: 'u1', profile: { nickname: '张三', avatarUrl: '' } });
+    await c1.wait((m) => m.t === 'authOk');
+    c1.send({ t: 'create', seq: 2, maxRounds: 8, settings: { wallMode: 'random', breakDice: false, chiFirstView: true, isPublic: true } });
+    const pv1 = (await c1.wait((m) => m.t === 'roomView')) as Extract<ServerMsg, { t: 'roomView' }>;
+    // u2 建非公开房
+    const c2 = client(port);
+    await c2.opened;
+    c2.send({ t: 'auth', seq: 1, token: 'u2', profile: { nickname: '李四', avatarUrl: '' } });
+    await c2.wait((m) => m.t === 'authOk');
+    c2.send({ t: 'create', seq: 2, maxRounds: 4, settings: { wallMode: 'random', breakDice: false, chiFirstView: true, isPublic: false } });
+    const pv2 = (await c2.wait((m) => m.t === 'roomView')) as Extract<ServerMsg, { t: 'roomView' }>;
+    // 拉列表：含公开房（房主/人数/局数/状态），不含非公开房
+    c1.send({ t: 'roomList', seq: 3 });
+    const list = (await c1.wait((m) => m.t === 'roomList')) as Extract<ServerMsg, { t: 'roomList' }>;
+    const pub = list.rooms.find((r) => r.room === pv1.room.room);
+    expect(pub).toBeDefined();
+    expect(pub!.host).toBe('张三');
+    expect(pub!.seats).toBe(1);
+    expect(pub!.maxRounds).toBe(8);
+    expect(pub!.status).toBe('waiting');
+    expect(list.rooms.some((r) => r.room === pv2.room.room)).toBe(false);
+    c1.ws.close();
+    c2.ws.close();
+  });
+});

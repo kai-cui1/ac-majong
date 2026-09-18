@@ -144,6 +144,14 @@ describe('legalActions + 末尾限制（D-09）', () => {
     expect(legalActions(t, 1)).toContain('chi');
     expect(legalActions(t, 2)).not.toContain('chi');
   });
+  it('已响应者本窗再无合法动作（2026-09-18 bugfix：防重复点吃/碰重置倒计时）', () => {
+    const t = mkTable({ phase: 'response', lastDiscard: { seat: 0, tile: 'B5' } });
+    t.players[1]!.concealed = { B4: 1, B6: 1 };
+    expect(legalActions(t, 1)).toContain('chi');
+    t.pending[1] = { move: 'chi', chiTiles: ['B4', 'B6'] };
+    expect(legalActions(t, 1)).toEqual([]);
+    expect(legalActions(t, 2)).toContain('pass'); // 未响应方不受影响
+  });
   it('吃副记录被吃牌（FR-对局-17 横置标记数据源）', () => {
     const t = mkTable({ phase: 'response', lastDiscard: { seat: 0, tile: 'B5' } });
     t.players[1]!.concealed = { B4: 1, B6: 1 };

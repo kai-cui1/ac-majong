@@ -143,6 +143,13 @@ Connection.send（ServerMsg：gameView/roomView/event/ack/…）
 
 ---
 
+## 14. 公开房间与大厅列表（BL-018，✅ 已实现 2026-09-18）
+
+- **协议**：`RoomSettings` 增 `isPublic`（默认开；create 缺省字段网关补 true）；新增 `ClientMsg roomList{seq}`（仅登录态可拉）与 `ServerMsg roomList{rooms: PublicRoomEntry[]}`；`PublicRoomEntry = { room, host(房主昵称), seats(已入座含 Bot), maxRounds, status: waiting|playing }`，无积分/隐私字段。
+- **聚合**：`RoomActor.listEntry()` 仅 `isPublic !== false` 且 phase ∈ {waiting, seating, playing} 时返回（seating 归 waiting；finished/解散后房从 `rooms` 移除自然消失）；`RoomManager.publicRooms()` 等待先于对局中、同组按 `createdAt` 倒序、上限 20 行（FR-房间-11）。
+- **刷新**：服务端不推送；客户端进大厅拉一次 + 5s 自动轮询 + 手动 🔄 钮（弱一致可接受，PRD03 §3.3）。
+- **测试**：wsGateway.test 1 例（公开房在列且含房主/人数/局数/状态；非公开房不下发），server 67 例绿。
+
 ## 维护记录
 
 | 日期 | 概要 |
@@ -155,3 +162,8 @@ Connection.send（ServerMsg：gameView/roomView/event/ack/…）
 | 2026-09-18 | **BL-016 房间积分周期**：新增 §12——`onGameEnd` 带出累计分写 `rooms.member_scores` 账本；`genUniqueId` 双重查重房号永不复用；`join` 未命中走 `rebuildRoomFromStore` 事件溯源重建（快照+动作+Redis 缓冲重演，座位/积分/回顾恢复，Bot 挂回/真人转托管）+ `RoomActor.restore`/`createRestored`；已关闭拒绝「房间已关闭」；Bot 入座补流水；roomScore.test 5 例 + 真实环境重启重进 e2e + CDP 截图 |
 | 2026-09-18 | **BL-017 开局仪式与摸牌位骰**：新增 §13——`RoomSettings` 建房参数落库；seating 状态机（选位骰同点重掷→最大者选座重排→定庄骰四方位映射→摸牌位骰）；仪式子 initialZi；physical 物理墙固化+开牌点摸牌序；局间 roundBreak；超时自动代掷；协议 roll/pickSeat/wallInfo/seating；快照 layout/break_group 回放可复现；seatingCeremony.test 12 例 + 引擎 bl017 10 例，既有测试适配仪式驱动全绿 |
 | 2026-09-18 | 目录重构 P1：模块路径 `server/src` 更新为 `apps/game-server/src` |
+| 2026-09-18 | `run/start-server.sh` 默认值定案（用户）：Bot 数 3→**0**（陪玩改由房主等待页手动加 Bot，FR-房间-08）；鉴权默认 mock→**account**（`-i` 可切回 mock/wechat）；补 `DATABASE_URL/REDIS_URL` 本地默认（防误退内存库丢账号）；已用新脚本重启 8080（autoBots=0, persistence=sql） |
+| 2026-09-18 | **start-server 改 plain tsx 启动**：Node 25 下 `pnpm dev`（tsx watch）链实测两缺陷——跑一段时间后事件循环停摆（新 WS 握手挂起、日志停更），且 kill 子进程会被 watch 复活并重绑端口（子进程命令行不含 "tsx watch"，pkill 模式易漏）；脚本改 `pnpm --filter @ac-majong/game-server exec tsx src/index.ts`；清残留须按 PID/`tsx/dist/cli.mjs watch` 模式 |
+| 2026-09-18 | 新增 `run/start-client.sh`：一人多席位独立客户端启动器（封装 `scripts/open-player.mjs`），无参/`-h` 打印完整用法；每账号独立 Chrome profile（`.player-profiles/<账号>`），可选房号自动入座、`--fresh` 全新身份 |
+| 2026-09-18 | **BL-018 公开房间与大厅列表**：新增 §14——`RoomSettings.isPublic`（默认开）；`roomList` 请求/响应协议 + `PublicRoomEntry`；`RoomActor.listEntry()`/`createdAt`、`RoomManager.publicRooms()`（等待优先/同组创建时间倒序/上限 20）；网关 roomList 分支（仅登录态）+ create 补 isPublic 缺省；wsGateway 测试 1 例，server 67 例绿；e2e：p1 建公开房→p2 列表可见并一键加入、非公开房不下发 |
+| 2026-09-18 | **BL-020 服务端**：`RoomSettings.chiFirstView`（默认 true，create/构造/恢复三处缺省补齐）；redact 增 settings 参——开关 ON 且响应窗内存在 chi pending 时向全桌 ViewState 下发 `pendingChi{seat,tiles,called}`（公开信息，防透视原则不冲突）；OFF 不下发、时序不变 |

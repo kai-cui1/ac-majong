@@ -282,7 +282,8 @@ async function handleMsg(
     case 'create': {
       if (!session.userId) return send(session, { t: 'error', reason: '未鉴权' });
       const maxRounds = msg.maxRounds ?? 8; // 0 = 不限（无限续局至房主解散，见 PRD 03 FR-房间-01）
-      const settings = msg.settings ?? { wallMode: 'random' as const, breakDice: false }; // BL-017 玩法参数
+      const rs = msg.settings; // BL-017/BL-020/BL-018 玩法参数（缺省字段补默认：先看吃再碰/公开房间默认开）
+      const settings = { wallMode: rs?.wallMode ?? ('random' as const), breakDice: rs?.breakDice ?? false, chiFirstView: rs?.chiFirstView ?? true, isPublic: rs?.isPublic ?? true };
       // BL-016：房号全局唯一、永不复用（内存活跃房 + rooms 历史表双重查重，FR-房间-07）
       const roomId = await rooms.genUniqueId();
       const room = rooms.create(session.userId, conn, maxRounds, session.profile?.nickname, undefined, roomId, settings);
@@ -363,6 +364,11 @@ async function handleMsg(
       if (!session.roomId || !session.userId) return send(session, { t: 'error', reason: '无房间' });
       const r = rooms.get(session.roomId)?.handlePickSeat(session.userId, msg.seat) ?? { ok: false, reason: '无房间' };
       return send(session, { t: 'ack', seq: msg.seq, ok: r.ok, reason: r.reason });
+    }
+    case 'roomList': { // BL-018：大厅公开房间列表（仅登录态可拉）
+      if (!session.userId) return send(session, { t: 'error', reason: '未鉴权' });
+      send(session, { t: 'roomList', rooms: rooms.publicRooms() });
+      return send(session, { t: 'ack', seq: msg.seq, ok: true });
     }
     case 'addBot': {
       if (!session.roomId || !session.userId) return send(session, { t: 'error', reason: '无房间' });

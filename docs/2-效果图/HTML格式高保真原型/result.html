@@ -2,185 +2,131 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>AC 麻将俱乐部 — 散场战绩</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>AC 麻将俱乐部 — 结算浮层（横屏 844×390）</title>
   <link rel="stylesheet" href="style.css">
   <style>
-    .final-page {
-      min-height: 100vh;
+    /* ============================================
+       横屏结算 v3（BL-019）：牌桌底 + 居中结算浮层（对齐客户端 showSettlement v2）
+       角色横幅三态：胡方金 / 付方红 / 无关灰；右列积分变动含逐家子注
+       ============================================ */
+    .ls-page { position: relative; width: 100vw; height: 100vh; height: 100dvh; overflow: hidden;
       background:
-        radial-gradient(ellipse at top, rgba(212, 165, 55, 0.1) 0%, transparent 55%),
-        linear-gradient(to bottom, var(--color-bg-wood) 0%, var(--color-bg-table) 45%);
+        radial-gradient(ellipse at center, rgba(30, 100, 60, 0.25) 0%, transparent 60%),
+        repeating-linear-gradient(45deg, var(--color-bg-table) 0px, var(--color-bg-table) 2px, var(--color-bg-table-dark) 2px, var(--color-bg-table-dark) 4px); }
+    @media (orientation: portrait) {
+      .ls-page::before { content: '📱 请横屏手机以获得最佳体验'; position: absolute; inset: 0;
+        display: flex; align-items: center; justify-content: center;
+        background: rgba(0,0,0,0.85); color: var(--color-gold); font-size: 18px; z-index: 9999; font-weight: 600; }
     }
-    .back-btn {
-      position: absolute; top: calc(var(--header-height) / 2); left: 16px;
-      transform: translateY(-50%);
-      width: 32px; height: 32px; border-radius: 50%;
-      background: rgba(255,255,255,0.08); border: 1px solid rgba(212,165,55,0.2);
-      color: var(--color-gold); display: flex; align-items: center; justify-content: center;
-      font-size: 16px; cursor: pointer; text-decoration: none;
-    }
-
-    /* 冠军展示 */
-    .champion-header { text-align: center; padding: var(--spacing-xl) var(--spacing-lg) var(--spacing-lg); }
-    .champion-crown { font-size: 34px; margin-bottom: 4px; }
-    .champion-avatar {
-      width: 72px; height: 72px; border-radius: 50%;
-      background: linear-gradient(135deg, var(--color-gold), var(--color-gold-dark));
-      display: inline-flex; align-items: center; justify-content: center;
-      font-size: 30px; font-weight: 700; color: var(--color-bg-wood-dark);
-      border: 3px solid var(--color-gold-light);
-      box-shadow: var(--shadow-gold); margin-bottom: 10px;
-    }
-    .champion-name { font-size: 19px; font-weight: 700; color: var(--color-gold); }
-    .champion-score { font-size: 36px; font-weight: 900; font-family: var(--font-mono); color: var(--color-gold); text-shadow: 0 2px 12px rgba(212,165,55,0.3); }
-    .champion-unit { font-size: 13px; color: var(--color-text-secondary); }
-    .final-subtitle { text-align: center; font-size: 12px; color: var(--color-text-muted); margin-top: 4px; }
-
-    /* 排名列表 */
-    .rank-list { margin: var(--spacing-lg); }
-    .rank-item {
-      display: flex; align-items: center; gap: var(--spacing-md);
-      background: var(--color-bg-card);
-      border: 1px solid rgba(212, 165, 55, 0.12);
-      border-radius: var(--radius-lg);
-      padding: var(--spacing-md) var(--spacing-lg);
-      margin-bottom: var(--spacing-sm);
-    }
-    .rank-item.first {
-      border-color: var(--color-gold-dark);
-      background: linear-gradient(135deg, rgba(212,165,55,0.1), rgba(61,31,13,0.9));
-    }
-    .rank-medal { font-size: 20px; width: 30px; text-align: center; flex-shrink: 0; font-family: var(--font-mono); font-weight: 700; color: var(--color-text-muted); }
-    .rank-avatar {
-      width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 16px; font-weight: 700;
-      background: rgba(139,115,85,0.3); color: var(--color-text-secondary);
-      border: 2px solid rgba(212,165,55,0.25);
-    }
-    .rank-item.first .rank-avatar {
-      background: linear-gradient(135deg, var(--color-gold), var(--color-gold-dark));
-      color: var(--color-bg-wood-dark); border-color: var(--color-gold-light);
-    }
-    .rank-info { flex: 1; }
-    .rank-name { font-size: 15px; font-weight: 600; color: var(--color-text-primary); }
-    .rank-detail { font-size: 11px; color: var(--color-text-muted); margin-top: 1px; }
-    .rank-score { font-size: 20px; font-weight: 900; font-family: var(--font-mono); }
-    .rank-score.win { color: var(--color-gold); }
-    .rank-score.lose { color: var(--color-danger); }
-
-    /* 局数回顾 */
-    .rounds-review { margin: 0 var(--spacing-lg); }
-    .round-item {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 10px var(--spacing-md);
-      border-bottom: 1px solid rgba(255,255,255,0.05);
-      font-size: 12px;
-    }
-    .round-no { color: var(--color-text-muted); font-family: var(--font-mono); width: 52px; }
-    .round-desc { flex: 1; color: var(--color-text-secondary); }
-    .round-desc b { color: var(--color-text-primary); font-weight: 600; }
-    .round-score { font-family: var(--font-mono); font-weight: 700; color: var(--color-gold-light); }
-    .round-score.huang { color: var(--color-text-muted); }
-
-    /* 底部按钮 */
-    .final-actions { padding: var(--spacing-xl) var(--spacing-lg) 40px; display: flex; flex-direction: column; gap: var(--spacing-md); }
-    .btn-final-primary {
-      width: 100%; padding: 14px; border-radius: var(--radius-full);
+    .ls-stage { position: absolute; left: 50%; top: 50%; width: 844px; height: 390px; transform-origin: center; }
+    /* 牌桌底：暗化 + 摊牌残影_hint */
+    .rs-dim { position: absolute; inset: 0; background: rgba(0,0,0,0.55); backdrop-filter: blur(2px); }
+    .rs-hand-hint { position: absolute; left: 50%; bottom: 6px; transform: translateX(-50%); display: flex; gap: 3px; opacity: 0.35; }
+    .rs-panel { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); width: 620px; height: 356px;
+      background: linear-gradient(160deg, var(--color-bg-wood) 0%, var(--color-bg-wood-dark) 100%);
+      border: 1px solid var(--color-gold-dark); border-radius: var(--radius-xl);
+      box-shadow: 0 16px 48px rgba(0,0,0,0.6), 0 0 24px rgba(212,165,55,0.12);
+      padding: 10px 18px 12px; display: flex; flex-direction: column; }
+    .rs-title { text-align: center; font-size: 19px; font-weight: 900; color: var(--color-gold-light); letter-spacing: 2px;
+      text-shadow: 0 2px 10px rgba(212,165,55,0.35); }
+    .rs-sub { text-align: center; font-size: 9.5px; color: var(--color-text-muted); margin-top: 1px; }
+    .rs-banner { margin: 6px auto 0; width: 420px; height: 22px; border-radius: var(--radius-full);
+      display: flex; align-items: center; justify-content: center; font-size: 10.5px; font-weight: 700; }
+    .rs-banner.win { background: linear-gradient(135deg, rgba(212,165,55,0.28), rgba(212,165,55,0.12)); border: 1px solid var(--color-gold); color: var(--color-gold-light); }
+    .rs-banner.pay { background: rgba(220,80,80,0.16); border: 1px solid rgba(220,80,80,0.55); color: #f3b1b1; }
+    .rs-banner.none { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); color: var(--color-text-muted); }
+    .rs-cols { flex: 1; min-height: 0; display: flex; gap: 18px; margin-top: 7px; }
+    .rs-col { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+    .rs-col-title { font-size: 11px; font-weight: 700; color: var(--color-gold); letter-spacing: 1px; text-align: center; margin-bottom: 4px; }
+    .rs-rows { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 3px; }
+    .rs-row { display: flex; align-items: baseline; font-size: 10.5px; color: var(--color-text-secondary); }
+    .rs-row .n { flex: 1; }
+    .rs-row .v { color: var(--color-gold-light); font-weight: 700; font-family: var(--font-mono); }
+    .rs-row.total { border-top: 1px solid rgba(212,165,55,0.2); margin-top: 2px; padding-top: 3px; font-size: 11.5px; color: var(--color-text-primary); }
+    .rs-seat { display: flex; align-items: baseline; gap: 6px; font-size: 10.5px; color: var(--color-text-secondary); margin-bottom: 3px; flex-wrap: wrap; }
+    .rs-seat .n { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .rs-seat .d { font-weight: 700; font-family: var(--font-mono); }
+    .rs-seat .d.up { color: #9fe9b0; } .rs-seat .d.dn { color: #f3b1b1; } .rs-seat .d.z { color: var(--color-text-muted); }
+    .rs-seat .subnote { display: block; flex-basis: 100%; font-size: 8.5px; color: var(--color-text-muted); text-align: right; margin-top: -2px; }
+    .rs-cum { margin-top: auto; text-align: right; font-size: 11px; font-weight: 700; color: var(--color-gold-light); }
+    .rs-note { font-size: 8.5px; color: var(--color-text-muted); text-align: center; margin-top: 2px; }
+    /* 各家手牌 2×2 */
+    .rs-hands { margin-top: 6px; border-top: 1px solid rgba(212,165,55,0.15); padding-top: 5px;
+      display: grid; grid-template-columns: 1fr 1fr; gap: 3px 16px; }
+    .rs-hand { display: flex; align-items: center; gap: 6px; }
+    .rs-hand-name { width: 60px; flex: none; font-size: 8.5px; color: var(--color-text-muted); text-align: right; white-space: nowrap; overflow: hidden; }
+    .rs-tiles { display: flex; gap: 2px; }
+    .mt { width: 14px; height: 20px; border-radius: 3px; background: linear-gradient(160deg, #fdfbf4, #e8e0cc);
+      border: 1px solid #b7ab8c; display: flex; align-items: center; justify-content: center;
+      font-size: 7.5px; color: #3d3423; font-weight: 700; }
+    .mt.red { color: #a02c2c; }
+    .rs-next { margin: 7px auto 0; width: 200px; height: 34px; border-radius: var(--radius-full); cursor: pointer;
       background: linear-gradient(135deg, var(--color-gold), var(--color-gold-dark));
       color: var(--color-bg-wood-dark); border: 1px solid var(--color-gold-light);
-      font-size: 16px; font-weight: 700; cursor: pointer; letter-spacing: 2px;
-      text-align: center; text-decoration: none; font-family: var(--font-cn);
-      box-shadow: 0 4px 14px rgba(212,165,55,0.3);
-    }
-    .final-note { text-align: center; font-size: 10px; color: var(--color-text-muted); line-height: 1.7; }
+      font-size: 14px; font-weight: 700; letter-spacing: 2px; font-family: var(--font-cn);
+      display: flex; align-items: center; justify-content: center; box-shadow: 0 3px 12px rgba(212,165,55,0.3); }
   </style>
 </head>
 <body>
-  <div class="final-page page-container no-tab">
-
-    <a class="back-btn" href="home.html">←</a>
-    <div class="page-header">
-      <span class="page-header-title">散场战绩</span>
-    </div>
-
-    <!-- 冠军 -->
-    <div class="champion-header">
-      <div class="champion-crown">👑</div>
-      <div class="champion-avatar">我</div>
-      <div class="champion-name">牌友老张（我）</div>
-      <div>
-        <span class="champion-score">+520</span>
-        <span class="champion-unit">积分</span>
+  <div class="ls-page">
+    <div class="ls-stage" id="stage">
+      <div class="rs-dim"></div>
+      <div class="rs-hand-hint">
+        <span class="mt">六</span><span class="mt">六</span><span class="mt">六</span><span class="mt">9</span><span class="mt">9</span><span class="mt">9</span><span class="mt">4</span><span class="mt">4</span><span class="mt">4</span><span class="mt">8</span><span class="mt">8</span><span class="mt">8</span><span class="mt">1</span><span class="mt">1</span>
       </div>
-      <div class="final-subtitle">房间 828666 · 8 局战罢 · 庄家轮转完整</div>
-    </div>
-
-    <!-- 最终排名 -->
-    <div class="section-header" style="padding:0 var(--spacing-lg);margin-bottom:var(--spacing-md);display:flex;justify-content:space-between;">
-      <span class="section-title" style="font-size:16px;font-weight:700;">最终排名</span>
-    </div>
-    <div class="rank-list">
-      <div class="rank-item first">
-        <span class="rank-medal">🥇</span>
-        <div class="rank-avatar">我</div>
-        <div class="rank-info">
-          <div class="rank-name">牌友老张（我）</div>
-          <div class="rank-detail">胡 3 局 · 最高单局 26 台</div>
+      <div class="rs-panel">
+        <div class="rs-title">🎉 你胡 18台！</div>
+        <div class="rs-sub">第 1/8 局 · 1 台 = 1 积分</div>
+        <div class="rs-banner win">🎉 本局你为胡方 · 共收 +18 分</div>
+        <div class="rs-cols">
+          <div class="rs-col">
+            <div class="rs-col-title">台数明细</div>
+            <div class="rs-rows">
+              <div class="rs-row"><span class="n">见花</span><span class="v">+1</span></div>
+              <div class="rs-row"><span class="n">无字</span><span class="v">+1</span></div>
+              <div class="rs-row"><span class="n">胡九筒</span><span class="v">+5</span></div>
+              <div class="rs-row"><span class="n">3九筒</span><span class="v">+5</span></div>
+              <div class="rs-row"><span class="n">2暗坎（点炮胡牌张刻子不计）</span><span class="v">+2</span></div>
+              <div class="rs-row"><span class="n">对碰</span><span class="v">+1</span></div>
+              <div class="rs-row total"><span class="n">合计</span><span class="v">18 台</span></div>
+              <div class="rs-note">子/连庄加成按付方逐家计入（右列子注）</div>
+            </div>
+          </div>
+          <div class="rs-col">
+            <div class="rs-col-title">积分变动</div>
+            <div class="rs-rows">
+              <div class="rs-seat"><span class="n">凯叔（我）</span><span class="d up">+18</span>
+                <span class="subnote">胡 18 台 · 收 点炮方 1 家</span></div>
+              <div class="rs-seat"><span class="n">机器人1</span><span class="d z">+0</span></div>
+              <div class="rs-seat"><span class="n">机器人2</span><span class="d z">+0</span></div>
+              <div class="rs-seat"><span class="n">机器人3</span><span class="d dn">-18</span>
+                <span class="subnote">底 18 · 胡方子 0 · 自身子 0</span></div>
+              <div class="rs-cum">我累计 +18</div>
+            </div>
+          </div>
         </div>
-        <div class="rank-score win">+520</div>
-      </div>
-      <div class="rank-item">
-        <span class="rank-medal">🥈</span>
-        <div class="rank-avatar">令</div>
-        <div class="rank-info">
-          <div class="rank-name">令狐冲</div>
-          <div class="rank-detail">胡 2 局 · 最高单局 18 台</div>
+        <div class="rs-hands">
+          <div class="rs-hand"><span class="rs-hand-name">凯叔（胡）</span>
+            <span class="rs-tiles"><span class="mt red">六</span><span class="mt red">六</span><span class="mt red">六</span><span class="mt">9</span><span class="mt">9</span><span class="mt">9</span><span class="mt">4</span><span class="mt">4</span><span class="mt">4</span><span class="mt">8</span><span class="mt">8</span><span class="mt">8</span><span class="mt">1</span><span class="mt">1</span></span></div>
+          <div class="rs-hand"><span class="rs-hand-name">机器人1</span>
+            <span class="rs-tiles"><span class="mt red">二</span><span class="mt red">三</span><span class="mt red">五</span><span class="mt">2</span><span class="mt">3</span><span class="mt">6</span><span class="mt">7</span><span class="mt">東</span><span class="mt">北</span><span class="mt">中</span><span class="mt">發</span></span></div>
+          <div class="rs-hand"><span class="rs-hand-name">机器人3（炮）</span>
+            <span class="rs-tiles"><span class="mt red">七</span><span class="mt red">七</span><span class="mt">3</span><span class="mt">4</span><span class="mt">5</span><span class="mt">6</span><span class="mt">南</span><span class="mt">南</span><span class="mt">白</span><span class="mt">中</span></span></div>
+          <div class="rs-hand"><span class="rs-hand-name">机器人2</span>
+            <span class="rs-tiles"><span class="mt red">六</span><span class="mt red">八</span><span class="mt">2</span><span class="mt">4</span><span class="mt">5</span><span class="mt">西</span><span class="mt">北</span><span class="mt">發</span></span></div>
         </div>
-        <div class="rank-score win">+120</div>
-      </div>
-      <div class="rank-item">
-        <span class="rank-medal">🥉</span>
-        <div class="rank-avatar">蓉</div>
-        <div class="rank-info">
-          <div class="rank-name">黄蓉</div>
-          <div class="rank-detail">胡 2 局 · 荒庄 1 局</div>
-        </div>
-        <div class="rank-score lose">-240</div>
-      </div>
-      <div class="rank-item">
-        <span class="rank-medal">4</span>
-        <div class="rank-avatar">过</div>
-        <div class="rank-info">
-          <div class="rank-name">杨过</div>
-          <div class="rank-detail">胡 0 局 · 被自摸 4 次</div>
-        </div>
-        <div class="rank-score lose">-400</div>
+        <div class="rs-next">下一局 ▶</div>
       </div>
     </div>
-
-    <!-- 局数回顾 -->
-    <div class="section-header" style="padding:0 var(--spacing-lg);margin:var(--spacing-xl) 0 var(--spacing-sm);display:flex;">
-      <span class="section-title" style="font-size:16px;font-weight:700;">局数回顾</span>
-    </div>
-    <div class="rounds-review panel" style="padding:var(--spacing-sm) var(--spacing-md);">
-      <div class="round-item"><span class="round-no">第 1 局</span><span class="round-desc"><b>我</b> 自摸 · 一条龙 26 台</span><span class="round-score">+260</span></div>
-      <div class="round-item"><span class="round-no">第 2 局</span><span class="round-desc"><b>令狐冲</b> 胡杨过 · 碰碰胡 18 台</span><span class="round-score">+180</span></div>
-      <div class="round-item"><span class="round-no">第 3 局</span><span class="round-desc"><b>黄蓉</b> 自摸 · 门清一摸三 12 台</span><span class="round-score">+120</span></div>
-      <div class="round-item"><span class="round-no">第 4 局</span><span class="round-desc">荒庄流局 · 庄家连庄</span><span class="round-score huang">流</span></div>
-      <div class="round-item"><span class="round-no">第 5 局</span><span class="round-desc"><b>我</b> 胡黄蓉 · 混一色 15 台</span><span class="round-score">+150</span></div>
-      <div class="round-item"><span class="round-no">第 6 局</span><span class="round-desc"><b>我</b> 自摸 · 门清 9 台</span><span class="round-score">+110</span></div>
-      <div class="round-item"><span class="round-no">第 7 局</span><span class="round-desc"><b>黄蓉</b> 胡我 · 独独 8 台</span><span class="round-score">+80</span></div>
-      <div class="round-item"><span class="round-no">第 8 局</span><span class="round-desc"><b>令狐冲</b> 自摸 · 全求人 10 台</span><span class="round-score">+100</span></div>
-    </div>
-
-    <!-- 操作 -->
-    <div class="final-actions">
-      <a class="btn-final-primary" href="home.html">返回大厅</a>
-      <div class="final-note">房间已关闭、积分定格（D-03/BL-016）· 请按积分差线下相互结算 · 战绩仅本房间有效，不做跨房间累计</div>
-    </div>
-
   </div>
+  <script>
+    const fit = () => {
+      const s = Math.min(window.innerWidth / 844, window.innerHeight / 390);
+      document.getElementById('stage').style.transform = `translate(-50%,-50%) scale(${s})`;
+    };
+    window.addEventListener('resize', fit);
+    fit();
+  </script>
 </body>
 </html>

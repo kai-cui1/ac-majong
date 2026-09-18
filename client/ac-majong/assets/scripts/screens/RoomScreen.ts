@@ -132,7 +132,7 @@ export class RoomScreen extends Screen {
     rounds.setParent(card);
     rounds.setPosition(-64, -42, 0);
 
-    const ante = uiLabel('底注 20 积分/台', { size: 12, color: Theme.color.textSecondary });
+    const ante = uiLabel('底 1 台 = 1 积分', { size: 12, color: Theme.color.textSecondary }); // D-25：积分与台数 1:1（废除 1 台=20 倍率），对齐 room.html 房卡
     ante.setParent(card);
     ante.setPosition(66, -42, 0);
 
@@ -149,7 +149,8 @@ export class RoomScreen extends Screen {
     if (this.playLbl) {
       const wall = r.settings?.wallMode === 'physical' ? '物理牌墙' : '随机发牌';
       const brk = r.settings?.breakDice ? '摸牌位骰开' : '摸牌位骰关';
-      this.playLbl.string = `玩法 ${wall} · ${brk} · 选位仪式恒开`;
+      const cfv = r.settings?.chiFirstView !== false ? '先看吃再碰开' : '先看吃再碰关';
+      this.playLbl.string = `玩法 ${wall} · ${brk} · ${cfv} · 选位仪式恒开`;
     }
     const filled = r.seats.filter((s) => s != null).length;
     if (this.countLbl) this.countLbl.string = `${filled} / 4`;

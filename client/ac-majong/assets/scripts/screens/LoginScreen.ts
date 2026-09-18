@@ -98,6 +98,23 @@ export class LoginScreen extends Screen {
     if (IS_WEB && NetService.instance.storedSession()) void this.onSessionLogin();
   }
 
+  /** 登录成功后入口：有持久化记忆房间则自动重入（刷新/新会话恢复对局，FR-断线-02 扩展）；失败清除记忆回落大厅 */
+  private async enterAfterAuth(): Promise<void> {
+    const remembered = NetService.instance.storedLastRoom();
+    if (remembered) {
+      try {
+        const rv = await NetService.instance.joinRoom(remembered);
+        const inGame = rv.phase === 'playing' || rv.phase === 'seating' || !!NetService.instance.view;
+        this.router.show(inGame ? 'table' : 'room');
+        return;
+      } catch (e) {
+        console.warn('[LoginScreen] 记忆房间重入失败，回落大厅:', e);
+        NetService.instance.forgetLastRoom();
+      }
+    }
+    this.router.show('lobby');
+  }
+
   /** 会话令牌免密复登；失败（过期/服务端拒绝）则留在表单 */
   private async onSessionLogin(): Promise<void> {
     if (this.loggingIn) return;
@@ -105,7 +122,7 @@ export class LoginScreen extends Screen {
     this.setStatus('自动登录中…', Theme.color.textSecondary);
     try {
       await NetService.instance.connect(SERVER_URL, { token: NetService.instance.storedSession() ?? undefined });
-      this.router.show('lobby');
+      await this.enterAfterAuth();
     } catch (e) {
       console.warn('[LoginScreen] 会话复登失败:', e);
       this.setStatus(e instanceof Error ? e.message : '登录失败，请输入账号密码', Theme.color.danger);
@@ -139,7 +156,7 @@ export class LoginScreen extends Screen {
         const id = mockIdentity();
         await NetService.instance.connect(SERVER_URL, { token: id.token }, { nickname: id.nickname, avatarUrl: id.avatarUrl });
       }
-      this.router.show('lobby');
+      await this.enterAfterAuth();
     } catch (e) {
       console.error('[LoginScreen] 登录失败:', e);
       this.setStatus(e instanceof Error ? e.message : '连接失败，请确认服务端已启动', Theme.color.danger);

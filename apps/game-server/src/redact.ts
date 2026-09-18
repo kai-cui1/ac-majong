@@ -1,14 +1,22 @@
 import type { TableState } from '@ac-majong/engine';
 import { legalActions, wallRemaining, countAll } from '@ac-majong/engine';
-import type { ViewState } from '@ac-majong/protocol';
+import type { ViewState, RoomSettings } from '@ac-majong/protocol';
 
 /**
  * 按座位裁剪的视图（防透视核心）。ViewState 定义见 @ac-majong/protocol。
  * 关键：`you.concealed` 给完整暗牌；`others` 只给暗牌张数，绝不给具体牌。
+ * BL-020：`settings.chiFirstView` 开时响应窗内已选吃的意图以 `pendingChi` 全桌公开。
  */
-export function redact(state: TableState, seat: number, room: string, maxRounds: number, names: string[] = []): ViewState {
+export function redact(state: TableState, seat: number, room: string, maxRounds: number, names: string[] = [], settings?: RoomSettings): ViewState {
   const me = state.players.find((p) => p.seat === seat);
   if (!me) throw new Error(`redact: 座位不存在 ${seat}`);
+  const pendEntry =
+    settings?.chiFirstView !== false && state.phase === 'response' && state.lastDiscard
+      ? Object.entries(state.pending).find(([, p]) => p?.move === 'chi')
+      : undefined;
+  const pendingChi = pendEntry
+    ? { seat: Number(pendEntry[0]), tiles: [...(pendEntry[1]!.chiTiles ?? [])], called: state.lastDiscard!.tile }
+    : undefined;
   return {
     room,
     round: state.round,
@@ -20,6 +28,7 @@ export function redact(state: TableState, seat: number, room: string, maxRounds:
     wallRemaining: wallRemaining(state),
     lianzhuangCount: state.lianzhuangCount,
     lastDiscard: state.lastDiscard,
+    pendingChi,
     discards: state.discards.map((d) => ({ seat: d.seat, tile: d.tile })),
     you: {
       seat,

@@ -82,6 +82,9 @@ export function legalActions(state: TableState, seat: number): ActionKind[] {
     if (concealedKongOptions(p).length > 0) acts.push('kong_concealed'); // 摸杠：末尾仍可
     if (!restricted && addedKongOptions(p).length > 0) acts.push('kong_added'); // 碰杠：末尾禁
   } else if (state.phase === 'response' && state.lastDiscard && state.lastDiscard.seat !== seat) {
+    // 2026-09-18 bugfix：已响应（pending 非空）者本窗内再无合法动作——
+    // 防重复点击吃/碰重置客户端倒计时与 pending 覆盖垃圾广播
+    if (state.pending[seat]) return [];
     const tile = state.lastDiscard.tile;
     if (canWinDiscard(p, tile)) acts.push('win_discard'); // 胡不受末尾限制
     if (!restricted) {

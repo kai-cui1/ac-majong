@@ -139,6 +139,10 @@
     /* 吃副被吃牌标记（2026-09-18 v2 用户定案）：被吃牌居中竖放（展示序）+ 右上角小圆形角标（金底暗「吃」字），四家可见 */
     .meld-group .tile.called { position: relative; }
     .meld-group .tile.called::after { content: '吃'; position: absolute; top: -5px; right: -5px; width: 11px; height: 11px; border-radius: 50%; background: var(--color-gold); color: #2e2008; font-size: 8px; line-height: 11px; text-align: center; border: 1px solid rgba(46,32,8,0.6); }
+    /* BL-020 先看吃再碰（开关 ON 且吃家已选定）：「准备吃」预览=两张手牌夹一个虚线空位（被吃牌将居中），金字微标签；吃失败/窗结束收回 */
+    .meld-group.pending .gap { width: 14px; height: 19px; border: 1px dashed rgba(212,165,55,0.45); border-radius: 2px; box-sizing: border-box; }
+    .north-melds .meld-group.pending .gap { width: 16px; height: 22px; }
+    .meld-label.pending { color: var(--color-gold); }
 
     /* 北家明牌: 横排在牌条左侧（北家右手边） */
     .north-body { display: flex; align-items: flex-start; gap: 10px; }
@@ -176,12 +180,12 @@
     .river-row .tile { width: 18px; height: 25px; border-radius: 3px; margin: 0; cursor: default; }
     .river-middle {
       display: flex; align-items: center; justify-content: space-between;
-      width: 100%; gap: 8px;
+      width: 100%; gap: 8px; padding: 0 92px; /* 两侧让出墙列：侧牌河置墙列内侧 */
     }
-    /* 西/东弃牌: 横排换行, 极端容量 12列×2行=24张 */
-    .river-side { display: flex; flex-wrap: wrap; gap: 2px; max-width: 240px; flex: 1; }
-    .river-west { justify-content: flex-start; }
-    .river-east { justify-content: flex-end; }
+    /* 西/东弃牌: 6 列横排×最多4行=24 张，置墙列与风盘之间（2026-09-18 用户确认） */
+    .river-side { display: grid; grid-template-columns: repeat(6, 18px); gap: 2px; align-self: flex-start; margin-top: 74px; justify-content: start; }
+    .river-west { justify-content: start; } /* 西：自左缘(边缘)→中心 填 */
+    .river-east { direction: rtl; justify-content: start; } /* 东：自右缘(边缘)→中心 填（rtl 使首张贴右缘） */
     .river-side .tile { width: 18px; height: 25px; border-radius: 3px; margin: 0; cursor: default; }
 
     /* 最新弃牌高亮 */
@@ -223,10 +227,10 @@
       width: 100%; padding: 2px 12px 1px;
     }
     .flower-area { display: flex; gap: 3px; padding: 2px 5px; background: rgba(255,245,230,0.08); border-radius: 6px; border: 1px solid rgba(212,165,55,0.1); }
-    .flower-area .tile { width: 22px; height: 31px; border-radius: 3px; margin: 0; cursor: default; }
+    .flower-area .tile { width: 16px; height: 22px; border-radius: 3px; margin: 0; cursor: default; }
     .south-melds { display: flex; gap: 6px; align-items: flex-start; }
-    .south-melds .meld-group .tile-back { width: 24px; height: 34px; border-radius: 3px; border-width: 1px; margin: 0; }
-    .south-melds .meld-group .tile { width: 24px; height: 34px; border-radius: 3px; margin: 0; cursor: default; }
+    .south-melds .meld-group .tile-back { width: 20px; height: 28px; border-radius: 3px; border-width: 1px; margin: 0; }
+    .south-melds .meld-group .tile { width: 20px; height: 28px; border-radius: 3px; margin: 0; cursor: default; }
     .south-top-spacer { flex: 1; }
 
     /* 台数徽章（收起态，点击展开） */
@@ -248,12 +252,12 @@
     .south-hand { display: flex; gap: 3px; }
     .south-hand .tile {
       margin: 0; cursor: pointer; flex-shrink: 0;
-      width: 38px; height: 54px; border-radius: 5px;
+      width: 38px; height: 48px; border-radius: 5px;
       transition: transform 150ms ease, box-shadow 150ms ease;
     }
     .south-hand .tile:hover { transform: translateY(-6px); }
     .south-hand .tile.selected {
-      transform: translateY(-12px) scale(1.05);
+      transform: translateY(-8px) scale(1.05);
       box-shadow: 0 8px 20px rgba(0,0,0,0.35), 0 0 0 2px var(--color-gold);
     }
 
@@ -406,6 +410,11 @@
     .score-total-row { margin-top: 5px; padding-top: 5px; border-top: 1px solid rgba(212,165,55,0.15); display: flex; justify-content: space-between; align-items: center; }
     .score-total-label { color: var(--color-gold); font-weight: 600; }
     .score-total-val { color: var(--color-gold-light); font-size: 17px; font-weight: 900; font-family: var(--font-mono); text-shadow: 0 1px 4px rgba(212,165,55,0.25); }
+    /* BL-021 保底区块：块题/小计/状态行（未听牌时状态行用 .dim 灰态） */
+    .popover-sec-title { color: var(--color-text-muted); font-size: 10px; letter-spacing: 1px; margin: 2px 0 1px; }
+    .score-sec-sum { display: flex; justify-content: space-between; padding: 2px 0; color: var(--color-gold); font-weight: 700; }
+    .popover-status { margin: 6px 0 2px; padding-top: 5px; border-top: 1px solid rgba(212,165,55,0.15); color: var(--color-gold-light); font-weight: 700; text-align: center; }
+    .popover-status.dim { color: var(--color-text-secondary); font-weight: 400; }
 
     /* ====== 原型演示抽屉（仅原型用）====== */
     .demo-controls { position: absolute; top: 9px; right: 46px; z-index: 60; }
@@ -432,7 +441,7 @@
 
     /* ====== 窄屏适配（iPhone mini 等 744~812px 宽）====== */
     @media (max-width: 812px) {
-      .south-hand .tile { width: 36px; height: 51px; }
+      .south-hand .tile { width: 34px; height: 45px; }
       .south-hand { gap: 2px; }
       .confirm-discard-btn { width: 48px; height: 48px; font-size: 12px; }
       .center-river { left: 66px; right: 66px; }
@@ -444,26 +453,27 @@
       .side-melds .tile, .side-melds .tile-back { width: 12px; height: 17px; }
       .north-melds .tile, .north-melds .tile-back { width: 14px; height: 19px; }
       .meld-label { font-size: 8px; }
-      .river-row .tile, .river-side .tile { width: 18px; height: 24px; }
-      .river-side { grid-template-columns: repeat(4, 18px); }
+      .river-row .tile { width: 18px; height: 24px; }
+      .river-side { grid-template-columns: repeat(6, 16px); }
+      .river-side .tile { width: 16px; height: 22px; }
       .wind-indicator { width: 50px; height: 50px; }
-      .south-hand .tile { width: 36px; height: 50px; }
+      .south-hand .tile { width: 34px; height: 44px; }
       .south-top-row { padding-top: 2px; }
     }
     /* ====== 四边物理牌墙排（BL-017 FR-对局-20，physical 模式）====== */
     .wall-board { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
     .wall-row { position: absolute; left: 50%; transform: translateX(-50%); display: flex; gap: 2px; }
-    .wall-row.north { top: 64px; }
-    .wall-row.south { bottom: 118px; }
+    .wall-row.north { top: 71px; }
+    .wall-row.south { bottom: 125px; }
     .wall-col { position: absolute; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 2px; }
     .wall-col.west { left: 150px; }
     .wall-col.east { right: 150px; }
     .wstack { width: 10px; height: 16px; border-radius: 2px; background: linear-gradient(180deg, #f7f3e8 0 3px, #1d3a6b 3px); border: 1px solid rgba(0,0,0,0.4); }
     .wall-col .wstack { width: 16px; height: 10px; background: linear-gradient(90deg, #f7f3e8 0 3px, #1d3a6b 3px); }
-    .wstack.spent { opacity: 0.18; }
-    .wstack.skip { background: transparent; border: 1px dashed rgba(212,165,55,0.65); }
+    .wstack.half { opacity: 0.55; } /* 半栈（摸走一张）：半透 */
+    .wstack.gone { visibility: hidden; } /* 已摸：留缺口不显示（无残影） */
     .wstack.breakpt { box-shadow: 0 0 6px rgba(212,165,55,0.9); border-color: var(--color-gold); }
-    .wall-legend { position: absolute; bottom: 96px; left: 50%; transform: translateX(-50%); font-size: 9px; color: var(--color-gold); background: rgba(0,0,0,0.45); padding: 2px 10px; border-radius: 8px; border: 1px solid rgba(212,165,55,0.35); white-space: nowrap; }
+    .wall-legend { position: absolute; top: 201px; left: 50%; transform: translateX(-50%); font-size: 9px; color: var(--color-gold); background: rgba(0,0,0,0.45); padding: 2px 10px; border-radius: 8px; border: 1px solid rgba(212,165,55,0.35); white-space: nowrap; transition: opacity 0.3s; } /* 对齐 Cocos y=-16：风盘与南弃牌首行之间空带 */
 
     /* ====== 开局仪式遮罩（BL-017 FR-对局-18/19）====== */
     .seating-panel { width: 560px; }
@@ -581,6 +591,15 @@
             </div>
             <div class="meld-label">吃</div>
           </div>
+          <!-- BL-020 先看吃再碰：西家已选吃（准备吃 1/3 万夹空位等 2 万），全桌公开；碰家看见后再决 -->
+          <div class="meld-item">
+            <div class="meld-group pending">
+              <div class="tile"><img src="res/tiles/wan_1.png?v=3" alt="一萬"/></div>
+              <div class="gap"></div>
+              <div class="tile"><img src="res/tiles/wan_3.png?v=3" alt="三萬"/></div>
+            </div>
+            <div class="meld-label pending">准备吃</div>
+          </div>
           <div class="meld-item">
             <div class="meld-group">
               <div class="tile-back"></div>
@@ -686,6 +705,7 @@
           </div>
         </div>
         <div class="south-top-spacer"></div>
+        <!-- BL-021：徽章两态——听牌=💡 N台 ▴（预览台数）；未听牌=💡 保底 N台 ▴（锁定番种小计，不再显 0） -->
         <div class="score-badge" onclick="document.getElementById('scorePopover').classList.toggle('show')">
           💡 <span>20台</span> ▴
         </div>
@@ -808,6 +828,12 @@
     <!-- ====== 台数详情浮层（默认隐藏）====== -->
     <div class="score-popover" id="scorePopover">
       <div class="popover-title-row"><span>💡</span> 台数预览</div>
+      <div class="popover-sec-title">已锁定（保底）</div>
+      <div class="score-row"><span>见花 ×2</span><span class="score-row-val">+2</span></div>
+      <div class="score-row"><span>暗杠</span><span class="score-row-val">+2</span></div>
+      <div class="score-row"><span>门清</span><span class="score-row-val">+1</span></div>
+      <div class="score-sec-sum"><span>保底小计</span><span>5台</span></div>
+      <div class="popover-status">听牌 · 20台</div>
       <div class="score-row"><span>见花 ×2</span><span class="score-row-val">+2</span></div>
       <div class="score-row"><span>无字</span><span class="score-row-val">+1</span></div>
       <div class="score-row"><span>门清</span><span class="score-row-val">+1</span></div>
@@ -948,7 +974,8 @@
         pop.classList.remove('show');
       }
     });
-    /* BL-017 物理牌墙排演示：每排 18 组；南=庄家排（右端 5 组跳区虚线 + 已摸 6 组淡出 + 开牌点金框），东=上手家排（续排已摸 3 组） */
+    /* BL-017 物理牌墙排演示：每排 18 组；栈仅两态（满栈实心/半栈半透），已摸留缺口、跳区常色牌背；
+       南=庄家排（右端 5 组跳区 + g6 开牌点半栈金框 + g7~11 已摸缺口），东=上手家排（续排已摸 3 组缺口） */
     (function () {
       const mk = (id, n, cls) => {
         const c = document.getElementById(id);
@@ -961,12 +988,13 @@
       };
       mk('wallN', 18, null);
       mk('wallW', 18, null);
-      mk('wallE', 18, { 0: ' spent', 1: ' spent', 2: ' spent' });
+      mk('wallE', 18, { 0: ' gone', 1: ' gone', 2: ' gone' });
       const s = {};
-      for (let i = 0; i < 5; i++) s[17 - i] = ' skip';
-      for (let i = 5; i < 11; i++) s[17 - i] = ' spent';
-      s[6] = ' breakpt';
+      for (let g = 7; g <= 11; g++) s[18 - g] = ' gone'; // 已摸留缺口
+      s[18 - 6] = ' half breakpt'; // 开牌点 g6：半栈 + 金框
       mk('wallS', 18, s);
+      /* 开牌点图例瞬态提示（对齐 TableScreen.showWallLegend）：开局显示 5s 后淡出自隐 */
+      setTimeout(() => { const lg = document.querySelector('.wall-legend'); if (lg) lg.style.opacity = '0'; }, 5000);
     })();
   </script>
 </body>

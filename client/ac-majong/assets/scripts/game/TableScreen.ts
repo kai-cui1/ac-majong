@@ -1,4 +1,4 @@
-import { Node, UITransform, Graphics, Color, BlockInputEvents, Label, tween, Vec3 } from 'cc';
+import { Node, UITransform, Graphics, Color, BlockInputEvents, Label, tween, Tween, Vec3, UIOpacity } from 'cc';
 import { Screen } from '../app/SceneRouter';
 import { Theme, rgba } from '../ui/Theme';
 import { uiLabel, uiButton, uiPanel, setButtonEnabled, uiMuteToggle } from '../ui/UiKit';
@@ -29,9 +29,9 @@ const EDGE_H = { w: 19, h: 13 }; // 北家牌侧横
 const EDGE_V = { w: 13, h: 15 }; // 西/东牌侧竖
 const MELD_N = { w: 16, h: 22 };
 const MELD_S = { w: 14, h: 19 };
-const MELD_ME = { w: 24, h: 34 };
+const MELD_ME = { w: 20, h: 28 }; // 方案A重排：明牌行缩小贴手牌
 const RIVER_T = { w: 18, h: 25 };
-const HAND_T = { w: 38, h: 54 };
+const HAND_T = { w: 38, h: 48 }; // 方案A重排：手牌略缩下移，抬升量减小
 
 export class TableScreen extends Screen {
   readonly name = 'table';
@@ -55,6 +55,10 @@ export class TableScreen extends Screen {
   // BL-017：四边物理牌墙排（physical 模式）与开局仪式/摸牌位骰遮罩
   private wallRoot!: Node;
   private seatingRoot!: Node;
+  // BL-017：开牌点图例瞬态提示（新局显示一次、5s 自隐；操作浮层出现立即隐藏）
+  private wallLegend: Node | null = null;
+  private wallLegendRound = -1;
+  private wallLegendTween: Tween<Node> | null = null;
   private lastRoom: RoomView | null = null;
 
   // 响应倒计时（FR-对局-13）
@@ -64,6 +68,8 @@ export class TableScreen extends Screen {
   private cdBar: Node | null = null;
   private cdOnTimeout: (() => void) | null = null;
   private cdTimer: ReturnType<typeof setInterval> | null = null;
+  // 当前响应窗锚点（局序+弃牌序+弃牌）：窗内任何广播重建不得重置倒计时（2026-09-18 bugfix）
+  private cdRespKey = '';
   // 自己回合展示倒计时（仅视觉：状态栏⏱ + 出牌钮环）
   private turnCd = 0;
   private turnTimer: ReturnType<typeof setInterval> | null = null;
@@ -80,11 +86,11 @@ export class TableScreen extends Screen {
     this.westArea = this.mk(root, 'West', LEFT + 64, 0);
     this.eastArea = this.mk(root, 'East', RIGHT - 64, 0);
     this.riverArea = this.mk(root, 'River', 0, 25);
-    this.southTop = this.mk(root, 'SouthTop', 0, -100);
-    this.southHand = this.mk(root, 'SouthHand', 0, -150);
-    this.overlay = this.mk(root, 'Overlay', 0, 0);
-    // BL-017：牌墙排在牌桌层之上、遮罩之下；仪式遮罩在 overlay 之上
+    this.southTop = this.mk(root, 'SouthTop', 0, -104);
+    this.southHand = this.mk(root, 'SouthHand', 0, -156);
+    // BL-017：牌墙排在牌桌层之上、遮罩之下（2D 渲染序=兄弟顺序，必须先于 overlay 创建）；仪式遮罩在 overlay 之上
     this.wallRoot = this.mk(root, 'WallBoard', 0, 0);
+    this.overlay = this.mk(root, 'Overlay', 0, 0);
     this.seatingRoot = this.mk(root, 'SeatingLayer', 0, 0);
 
     // 出牌圆钮（手牌行右端兄弟节点，不重叠）
@@ -221,7 +227,7 @@ export class TableScreen extends Screen {
     pinfo.setPosition(0, 26, 0);
     // body: 明牌(左) + 牌侧横条(右)
     const body = this.mk(this.northArea, 'Body', 0, 0);
-    const meldW = this.drawMelds(body, o.melds ?? [], MELD_N, 'h', o.seat);
+    const meldW = this.drawMelds(body, o.melds ?? [], MELD_N, 'h', o.seat, this.pendChiFor(v, o.seat));
     const rev = this.revealed?.[o.seat];
     const revTiles = rev ? expandSorted(rev) : null;
     const RT = { w: 16, h: 22 }; // 摊牌牌面尺寸
@@ -254,7 +260,7 @@ export class TableScreen extends Screen {
     const isWest = rel === 3;
     const name = this.nameOf(v, o.seat);
     const body = this.mk(area, 'Body', 0, 0);
-    const meldH = this.drawMelds(body, o.melds ?? [], MELD_S, 'v', o.seat);
+    const meldH = this.drawMelds(body, o.melds ?? [], MELD_S, 'v', o.seat, this.pendChiFor(v, o.seat));
     // 牌背多时压缩间距，避免竖条底端压到南家信息行
     const pitch = o.concealedCount > 12 ? EDGE_V.h - 2 : EDGE_V.h + 1;
     const edgeH = o.concealedCount * pitch;
@@ -312,13 +318,13 @@ export class TableScreen extends Screen {
     const wSeat = relSeat(v, this.mySeat, 3);
     const eSeat = relSeat(v, this.mySeat, 1);
     // 北（对家）弃牌：顶部居中换行
-    this.drawRiverBlock(this.riverArea, buckets[nSeat] ?? [], 23, 0, RH / 2 - 14, 'center', latestSeat === nSeat);
+    this.drawRiverBlock(this.riverArea, buckets[nSeat] ?? [], 23, 0, RH / 2 - 36, 'center', latestSeat === nSeat);
     // 南（自己）弃牌：底部居中换行
-    this.drawRiverBlock(this.riverArea, buckets[this.mySeat] ?? [], 23, 0, -RH / 2 + 14, 'center', latestSeat === this.mySeat, true);
-    // 西（上家）弃牌：横屏原型 .river-side = 4 列靠边网格（避免横穿西墙排）
-    this.drawRiverBlock(this.riverArea, buckets[wSeat] ?? [], 4, -RW / 2 + 22, 0, 'center', latestSeat === wSeat);
-    // 东（下家）弃牌：中行靠右
-    this.drawRiverBlock(this.riverArea, buckets[eSeat] ?? [], 4, RW / 2 - 22, 0, 'center', latestSeat === eSeat);
+    this.drawRiverBlock(this.riverArea, buckets[this.mySeat] ?? [], 23, 0, -RH / 2 + 36, 'center', latestSeat === this.mySeat, true);
+    // 西（上家）弃牌：6 列横排、置于墙列与风盘之间（墙列内侧，2026-09-18 用户确认）；行内自左→右（边缘→中心），行自 y+40 向下排
+    this.drawRiverBlock(this.riverArea, buckets[wSeat] ?? [], 6, -150, 40, 'left', latestSeat === wSeat);
+    // 东（下家）弃牌：6 列横排、墙列内侧；行内自右→左（边缘→中心）
+    this.drawRiverBlock(this.riverArea, buckets[eSeat] ?? [], 6, 150, 40, 'right', latestSeat === eSeat);
 
     this.drawWindDisc(v);
   }
@@ -331,7 +337,10 @@ export class TableScreen extends Screen {
       const r = Math.floor(i / perRow);
       const c = i % perRow;
       const count = Math.min(perRow, tiles.length - r * perRow);
-      const px = (c - (count - 1) / 2) * step;
+      // align：left=列位固定自左→右填（西：边缘→中心）；right=列位镜像自右→左填（东：边缘→中心）；center=逐行居中（北/南）
+      const px = align === 'left' ? (c - (perRow - 1) / 2) * step
+        : align === 'right' ? ((perRow - 1) / 2 - c) * step
+        : (c - (count - 1) / 2) * step;
       const py = fromBottom ? cy + r * rowH : cy - r * rowH;
       return { x: px, y: py };
     };
@@ -419,7 +428,15 @@ export class TableScreen extends Screen {
       t.setParent(this.southHand);
       const sel = i === this.selectedIdx; // 按位置选中：一对牌只抬被点的那张
       const isDrawn = i === drawnIdx;
-      t.setPosition(x, sel ? 18 : isDrawn ? 10 : 0, 0);
+      t.setPosition(x, sel ? 8 : isDrawn ? 6 : 0, 0);
+      if (sel) {
+        // 方案A：抬升量减小后以金边补偿选中态辨识
+        const rg = t.addComponent(Graphics);
+        rg.strokeColor = Theme.color.gold;
+        rg.lineWidth = 2;
+        rg.roundRect(-HAND_T.w / 2 - 1, -HAND_T.h / 2 - 1, HAND_T.w + 2, HAND_T.h + 2, 4);
+        rg.stroke();
+      }
       t.on(Node.EventType.TOUCH_END, () => {
         if (!canDiscard) return;
         this.selectedIdx = this.selectedIdx === i ? null : i;
@@ -441,28 +458,32 @@ export class TableScreen extends Screen {
   }
   private renderSouthTop(v: ViewState): void {
     this.southTop.destroyAllChildren();
-    let x = LEFT + 12;
+    const x0 = LEFT + 12;
     const me = v.you;
     const pinfo = this.drawPinfo({ name: '我', score: me.score, zi: me.zi, isDealer: me.seat === v.dealerSeat, isActive: this.isActive(v, me.seat), self: true, lianzhuang: v.lianzhuangCount, ...this.seatFlags(me.seat) });
     const pw = pinfo.getComponent(UITransform)!.contentSize.width;
     pinfo.setParent(this.southTop);
-    pinfo.setPosition(x + pw / 2, 0, 0);
-    x += pw + 8;
+    pinfo.setPosition(x0 + pw / 2, 0, 0);
+    // 花牌固定槽位 x -250~-166（避开西墙列带 ±256~272，方案A重排）
     if (me.flowers.length) {
-      const fw = me.flowers.length * 25 + 10;
-      const fa = uiPanel(fw, 35, { variant: 'panel', radius: 6 });
+      const fw = me.flowers.length * 17 + 8;
+      const fa = uiPanel(fw, 26, { variant: 'panel', radius: 6 });
       fa.setParent(this.southTop);
-      fa.setPosition(x + fw / 2, 0, 0);
+      fa.setPosition(-208, 0, 0);
       me.flowers.forEach((f, i) => {
-        const t = createTileNode(f, 22, 31);
+        const t = createTileNode(f, 16, 22);
         t.setParent(fa);
-        t.setPosition(-fw / 2 + 5 + i * 25 + 11, 0, 0);
+        t.setPosition(-fw / 2 + 4 + i * 17 + 8, 0, 0);
       });
-      x += fw + 8;
     }
+    // 明牌行自 x=-160 右排；超宽（徽章左缘 115）时降为侧家规格防遮
     const meldsNode = this.mk(this.southTop, 'Melds', 0, 0);
-    const meldW = this.drawMelds(meldsNode, me.melds ?? [], MELD_ME, 'h', me.seat);
-    meldsNode.setPosition(x + meldW / 2, 0, 0);
+    let meldW = this.drawMelds(meldsNode, me.melds ?? [], MELD_ME, 'h', me.seat, this.pendChiFor(v, me.seat));
+    if (meldW > 271) {
+      meldsNode.destroyAllChildren();
+      meldW = this.drawMelds(meldsNode, me.melds ?? [], { w: 14, h: 19 }, 'h', me.seat, this.pendChiFor(v, me.seat));
+    }
+    meldsNode.setPosition(-160 + meldW / 2, 0, 0);
     const preview = previewTai(me.concealed, me.melds ?? [], me.flowers, {
       isDealer: me.seat === v.dealerSeat,
       wallRemaining: v.wallRemaining,
@@ -470,12 +491,13 @@ export class TableScreen extends Screen {
       drawn: me.drawn ?? undefined,
       myZi: me.zi,
     });
-    const badge = uiButton(`💡 ${preview.tai}台 ▴`, () => this.toggleScorePop(preview), { variant: 'action', width: 84, height: 26, fontSize: 12 });
+    // BL-021：未听牌时徽章改显保底台数（不再显 0）；听牌后仍显预览台数（天然含保底，不双计）
+    const badge = uiButton(preview.tenpai ? `💡 ${preview.tai}台 ▴` : `💡 保底 ${preview.secured}台 ▴`, () => this.toggleScorePop(preview), { variant: 'action', width: 96, height: 26, fontSize: 12 });
     badge.setParent(this.southTop);
-    badge.setPosition(206, -4, 0);
+    badge.setPosition(216, 0, 0);
     const listen = uiButton(this.listening ? '听牌✓' : '听牌', () => this.toggleListen(), { variant: 'secondary', width: 50, height: 26, fontSize: 12 });
     listen.setParent(this.southTop);
-    listen.setPosition(136, -4, 0);
+    listen.setPosition(140, 0, 0);
   }
 
   // ============ 组件绘制 ============
@@ -662,8 +684,8 @@ export class TableScreen extends Screen {
   }
 
   /** 明牌组（横/竖）+ 组下微型标签；返回占用宽/高 */
-  private drawMelds(parent: Node, melds: Meld[], size: { w: number; h: number }, orient: 'h' | 'v', seat = -1): number {
-    if (!melds.length) return 0;
+  private drawMelds(parent: Node, melds: Meld[], size: { w: number; h: number }, orient: 'h' | 'v', seat = -1, pending: { tiles: string[] } | null = null): number {
+    if (!melds.length && !pending) return 0;
     const wrap = this.mk(parent, seat >= 0 ? `Melds${seat}` : 'Melds', 0, 0);
     // 吃副展示序（2026-09-18 用户定案）：被吃牌居中竖放、其余两张按序两侧（如手 7/8 万吃 9 万 → 7-9-8）；替代旧横置方案
     const orderOf = (m: Meld): string[] => {
@@ -693,6 +715,7 @@ export class TableScreen extends Screen {
         g.setPosition(x + pen / 2, 0, 0);
         x += pen + 8;
       }
+      if (pending) x = this.drawPendingChiH(wrap, pending, size, x);
       return x;
     }
     let y = 0;
@@ -711,7 +734,83 @@ export class TableScreen extends Screen {
       g.setPosition(0, y - pen / 2, 0);
       y -= pen + 10;
     }
+    if (pending) y = this.drawPendingChiV(wrap, pending, size, y);
     return -y;
+  }
+
+  /** BL-020 先看吃再碰：吃家副露区「准备吃」预览——两张手牌夹一个虚线空位（被吃牌将居中），吃失败/窗结束随视图消失 */
+  private pendChiFor(v: ViewState, seat: number): { tiles: string[] } | null {
+    const p = v.pendingChi;
+    return p && p.seat === seat ? { tiles: p.tiles } : null;
+  }
+  private mkGapSlot(parent: Node, size: { w: number; h: number }, x: number, y: number): void {
+    const slot = this.mk(parent, 'Gap', x, y);
+    slot.addComponent(UITransform).setContentSize(size.w, size.h);
+    const gg = slot.addComponent(Graphics);
+    gg.strokeColor = rgba(212, 165, 55, 0.45);
+    gg.lineWidth = 1;
+    // Cocos Graphics 无 setLineDash：手绘 3/3 虚线矩形框
+    const hw = size.w / 2;
+    const hh = size.h / 2;
+    const dashLine = (x1: number, y1: number, x2: number, y2: number): void => {
+      const len = Math.hypot(x2 - x1, y2 - y1);
+      const n = Math.max(1, Math.floor(len / 6));
+      for (let i = 0; i < n; i++) {
+        const t1 = (i * 6) / len;
+        const t2 = Math.min(len, i * 6 + 3) / len;
+        gg.moveTo(x1 + (x2 - x1) * t1, y1 + (y2 - y1) * t1);
+        gg.lineTo(x1 + (x2 - x1) * t2, y1 + (y2 - y1) * t2);
+        gg.stroke();
+      }
+    };
+    dashLine(-hw, hh, hw, hh);
+    dashLine(hw, hh, hw, -hh);
+    dashLine(hw, -hh, -hw, -hh);
+    dashLine(-hw, -hh, -hw, hh);
+  }
+  private drawPendingChiH(wrap: Node, pending: { tiles: string[] }, size: { w: number; h: number }, x: number): number {
+    const g = this.mk(wrap, 'MPending', 0, 0);
+    let pen = 0;
+    const put = (t: string | null) => {
+      if (t) {
+        const tn = createTileNode(t, size.w, size.h);
+        tn.setParent(g);
+        tn.setPosition(pen + size.w / 2, 4, 0);
+      } else {
+        this.mkGapSlot(g, size, pen + size.w / 2, 4);
+      }
+      pen += size.w + 1;
+    };
+    put(pending.tiles[0] ?? null);
+    put(null);
+    put(pending.tiles[1] ?? null);
+    const lb = uiLabel('准备吃', { size: 9, color: Theme.color.gold });
+    lb.setParent(g);
+    lb.setPosition(pen / 2 - 4, -size.h / 2 - 4, 0);
+    g.setPosition(x + pen / 2, 0, 0);
+    return x + pen + 8;
+  }
+  private drawPendingChiV(wrap: Node, pending: { tiles: string[] }, size: { w: number; h: number }, y: number): number {
+    const g = this.mk(wrap, 'MPending', 0, 0);
+    let pen = 0;
+    const put = (t: string | null) => {
+      if (t) {
+        const tn = createTileNode(t, size.w, size.h);
+        tn.setParent(g);
+        tn.setPosition(0, -(pen + size.h / 2), 0);
+      } else {
+        this.mkGapSlot(g, size, 0, -(pen + size.h / 2));
+      }
+      pen += size.h + 1;
+    };
+    put(pending.tiles[0] ?? null);
+    put(null);
+    put(pending.tiles[1] ?? null);
+    const lb = uiLabel('准备吃', { size: 9, color: Theme.color.gold });
+    lb.setParent(g);
+    lb.setPosition(0, -pen - 6, 0);
+    g.setPosition(0, y - pen / 2, 0);
+    return y - pen - 10;
   }
 
   /** FR-对局-17（2026-09-18 v2）：吃副被吃牌标记 = 右上角小圆形角标（金底+暗「吃」字），牌身保持竖放 */
@@ -886,9 +985,10 @@ export class TableScreen extends Screen {
     const existing = this.overlay.getChildByName('ScorePop');
     if (existing) { existing.destroy(); return; }
     const w = 210;
-    const rows = preview.detail.length;
-    const statusH = preview.tenpai ? 16 : 0;
-    const h = 60 + statusH + rows * 16 + 26;
+    const rows = preview.tenpai ? preview.detail.length : 0;
+    const secRows = preview.securedDetail.length;
+    // 高 = 标题区44 + 保底块(块题+明细+小计) + 间距6 + 状态行16 + 听牌明细 + 合计24 + 底补8
+    const h = 44 + (secRows + 2) * 16 + 6 + 16 + rows * 16 + (preview.tenpai ? 24 : 0) + 8;
     const pop = uiPanel(w, h, { variant: 'panel', radius: Theme.radius.lg });
     pop.name = 'ScorePop';
     pop.setParent(this.overlay);
@@ -896,30 +996,53 @@ export class TableScreen extends Screen {
     const title = uiLabel('💡 台数预览', { size: 11, color: Theme.color.gold, bold: true });
     title.setParent(pop);
     title.setPosition(0, h / 2 - 16, 0);
-    if (!preview.tenpai) {
-      const d = uiLabel('未听牌 · 暂无台数', { size: 11, color: Theme.color.textSecondary });
-      d.setParent(pop);
-      d.setPosition(0, 0, 0);
-    } else {
-      let y = h / 2 - 34;
-      const status = preview.canWin
-        ? `可自摸 · ${preview.tai}台`
-        : preview.viaDiscard
-          ? `打 ${tileName(preview.viaDiscard)} 听牌 · ${preview.tai}台`
-          : `听牌 · ${preview.tai}台`;
-      const st = uiLabel(status, { size: 11, color: Theme.color.goldLight, bold: true });
-      st.setParent(pop);
-      st.setPosition(0, y, 0);
+    let y = h / 2 - 32;
+    // BL-021 保底区块（常显）：锁定番种明细 + 小计
+    const secT = uiLabel('已锁定（保底）', { size: 10, color: Theme.color.textMuted, align: 'left', width: w - 24 });
+    secT.setParent(pop);
+    secT.setPosition(0, y, 0);
+    y -= 16;
+    if (!secRows) {
+      const none = uiLabel('暂无锁定番种', { size: 11, color: Theme.color.textSecondary, align: 'left', width: w - 24 });
+      none.setParent(pop);
+      none.setPosition(0, y, 0);
       y -= 16;
-      for (const d of preview.detail) {
-        const nm = uiLabel(`${d.name}${d.count != null && d.count > 1 ? ` ×${d.count}` : ''}`, { size: 11, color: Theme.color.textSecondary, align: 'left', width: 120 });
-        nm.setParent(pop);
-        nm.setPosition(-w / 2 + 12 + 55, y, 0);
-        const tv = uiLabel(`+${d.tai}`, { size: 11, color: Theme.color.goldLight, bold: true, align: 'right', width: 40 });
-        tv.setParent(pop);
-        tv.setPosition(w / 2 - 12 - 20, y, 0);
-        y -= 16;
-      }
+    }
+    for (const d of preview.securedDetail) {
+      const nm = uiLabel(`${d.name}${d.count != null && d.count > 1 ? ` ×${d.count}` : ''}`, { size: 11, color: Theme.color.textSecondary, align: 'left', width: 120 });
+      nm.setParent(pop);
+      nm.setPosition(-w / 2 + 12 + 55, y, 0);
+      const tv = uiLabel(`+${d.tai}`, { size: 11, color: Theme.color.goldLight, bold: true, align: 'right', width: 40 });
+      tv.setParent(pop);
+      tv.setPosition(w / 2 - 12 - 20, y, 0);
+      y -= 16;
+    }
+    const secSum = uiLabel(`保底小计 ${preview.secured} 台`, { size: 11, color: Theme.color.gold, bold: true, align: 'left', width: w - 24 });
+    secSum.setParent(pop);
+    secSum.setPosition(0, y, 0);
+    y -= 6 + 16;
+    // 状态行 + 听牌明细（原有三态逻辑）
+    const status = preview.canWin
+      ? `可自摸 · ${preview.tai}台`
+      : preview.viaDiscard
+        ? `打 ${tileName(preview.viaDiscard)} 听牌 · ${preview.tai}台`
+        : preview.tenpai
+          ? `听牌 · ${preview.tai}台`
+          : '未听牌 · 听牌后预览台数实时更新';
+    const st = uiLabel(status, { size: 11, color: preview.tenpai ? Theme.color.goldLight : Theme.color.textSecondary, bold: preview.tenpai });
+    st.setParent(pop);
+    st.setPosition(0, y, 0);
+    y -= 16;
+    for (const d of preview.detail) {
+      const nm = uiLabel(`${d.name}${d.count != null && d.count > 1 ? ` ×${d.count}` : ''}`, { size: 11, color: Theme.color.textSecondary, align: 'left', width: 120 });
+      nm.setParent(pop);
+      nm.setPosition(-w / 2 + 12 + 55, y, 0);
+      const tv = uiLabel(`+${d.tai}`, { size: 11, color: Theme.color.goldLight, bold: true, align: 'right', width: 40 });
+      tv.setParent(pop);
+      tv.setPosition(w / 2 - 12 - 20, y, 0);
+      y -= 16;
+    }
+    if (preview.tenpai) {
       const tot = uiLabel(`合计 ${preview.tai} 台`, { size: 13, color: Theme.color.gold, bold: true });
       tot.setParent(pop);
       tot.setPosition(0, y - 8, 0);
@@ -1037,6 +1160,7 @@ export class TableScreen extends Screen {
       acts.push({ label: '过', fn: () => this.net.respond(this.mySeat, 'pass') });
     }
     bar.active = acts.length > 0;
+    if (acts.length > 0) this.hideWallLegend(); // 操作浮层出现即隐藏开牌点图例，避免重叠
     if (!acts.length) { this.stopCountdown(); return; }
     // 浮层面板（加高：文案/倒计时条/按钮三层互不遮挡）
     const panel = uiPanel(360, 112, { variant: 'panel', radius: Theme.radius.lg });
@@ -1052,8 +1176,17 @@ export class TableScreen extends Screen {
       bx += 62;
     }
     // 仅响应期才有「过」与响应倒计时；自己回合的杠/胡按钮不启动 pass 倒计时（避免非法 pass）
-    if (hasOpt) this.startCountdown(8, () => this.net.respond(this.mySeat, 'pass'));
-    else this.stopCountdown();
+    // 倒计时锚定当前响应窗：窗内视图广播/浮层重建均不重置（防重复点吃/碰刷倒计时 bug）
+    if (hasOpt && v.lastDiscard) {
+      const key = `${v.round}:${v.discards.length}:${v.lastDiscard.seat}:${v.lastDiscard.tile}`;
+      if (!this.cdRunning || this.cdRespKey !== key) {
+        this.startCountdown(8, () => this.net.respond(this.mySeat, 'pass'));
+        this.cdRespKey = key;
+      }
+    } else {
+      this.cdRespKey = '';
+      this.stopCountdown();
+    }
   }
 
   /** 自己回合杠：单解直发，多解弹选择器 */
@@ -1488,13 +1621,15 @@ export class TableScreen extends Screen {
   // ============ BL-017 四边物理牌墙排（还原 game.html wall-board，physical 模式） ============
 
   private renderWalls(v: ViewState): void {
-    this.wallRoot.destroyAllChildren();
+    // 只销毁牌墙栈；开牌点图例（WallLegend）为瞬态提示，独立管理不随重渲染销毁
+    for (const c of [...this.wallRoot.children]) if (c.name === 'WStack') c.destroy();
     const info = v.wallInfo;
     if (!info) return;
     const me = v.you.seat;
     const HS = { w: 10, h: 16, gap: 2 }; // 横排组（南/北）
     const VS = { w: 16, h: 10, gap: 2 }; // 竖列组（西/东）
-    const drawStack = (parent: Node, x: number, y: number, horiz: boolean, height: number, spent: boolean, skip: boolean, breakpt: boolean): void => {
+    // 牌墙栈仅两态：满栈(height 2)实心 / 半栈(height 1)半透；已摸(height 0)留缺口不画
+    const drawStack = (parent: Node, x: number, y: number, horiz: boolean, height: number, breakpt: boolean): void => {
       const n = new Node('WStack');
       n.addComponent(UITransform).setContentSize(horiz ? HS.w : VS.w, horiz ? HS.h : VS.h);
       n.setParent(parent);
@@ -1503,22 +1638,6 @@ export class TableScreen extends Screen {
       const w = horiz ? HS.w : VS.w;
       const h = horiz ? HS.h : VS.h;
       g.lineWidth = 1;
-      if (spent) {
-        // 已摸：淡出残影
-        g.fillColor = rgba(247, 243, 232, 0.14);
-        g.rect(-w / 2, -h / 2, w, h);
-        g.fill();
-        g.strokeColor = rgba(0, 0, 0, 0.2);
-        g.rect(-w / 2, -h / 2, w, h);
-        g.stroke();
-        return;
-      }
-      if (skip) {
-        // 跳区：金虚线空框（短划线近似 dashed）
-        g.strokeColor = rgba(212, 165, 55, 0.65);
-        this.dashRect(g, w, h);
-        return;
-      }
       // 牌背：米白顶面 + 深蓝牌身（近似原型 linear-gradient）
       g.fillColor = height >= 2 ? rgba(29, 58, 107, 1) : rgba(29, 58, 107, 0.55);
       g.rect(-w / 2, -h / 2, w, h);
@@ -1551,25 +1670,33 @@ export class TableScreen extends Screen {
       for (let i = 0; i < n; i++) {
         const gIdx = i + 1; // 组号：i=0 → g1（排右端）
         const height = stacks[i] ?? 0;
-        const spent = height === 0;
-        const skip = isBreakRow && info.breakGroups > 0 && gIdx <= info.breakGroups;
+        if (height === 0) continue; // 已摸：留缺口，不再画残影
         const breakpt = isBreakRow && gIdx === info.breakGroups + 1;
         if (rel === 0) {
           // 南：横排，g1 在最右
-          drawStack(this.wallRoot, (n - 1 - i) * (HS.w + HS.gap) - ((n - 1) * (HS.w + HS.gap)) / 2, -104, true, height, spent, skip, breakpt);
+          drawStack(this.wallRoot, (n - 1 - i) * (HS.w + HS.gap) - ((n - 1) * (HS.w + HS.gap)) / 2, -62, true, height, breakpt);
         } else if (rel === 2) {
           // 北：横排（从上方看右端=屏幕左，为与南排对称仍 g1 右）
-          drawStack(this.wallRoot, (n - 1 - i) * (HS.w + HS.gap) - ((n - 1) * (HS.w + HS.gap)) / 2, 126, true, height, spent, skip, breakpt);
+          drawStack(this.wallRoot, (n - 1 - i) * (HS.w + HS.gap) - ((n - 1) * (HS.w + HS.gap)) / 2, 116, true, height, breakpt);
         } else if (rel === 1) {
           // 东：竖列，g1 在最下（原型 .wall-col.east right:150 → x=+264）
-          drawStack(this.wallRoot, 264, (n - 1 - i) * (VS.h + VS.gap) - ((n - 1) * (VS.h + VS.gap)) / 2, false, height, spent, skip, breakpt);
+          drawStack(this.wallRoot, 264, (n - 1 - i) * (VS.h + VS.gap) - ((n - 1) * (VS.h + VS.gap)) / 2, false, height, breakpt);
         } else {
           // 西：竖列，g1 在最下（原型 .wall-col.west left:150 → x=-264）
-          drawStack(this.wallRoot, -264, (n - 1 - i) * (VS.h + VS.gap) - ((n - 1) * (VS.h + VS.gap)) / 2, false, height, spent, skip, breakpt);
+          drawStack(this.wallRoot, -264, (n - 1 - i) * (VS.h + VS.gap) - ((n - 1) * (VS.h + VS.gap)) / 2, false, height, breakpt);
         }
       }
     }
-    // 开牌点图例（还原 .wall-legend）
+    // 开牌点图例：瞬态提示——新局开局显示一次，5s 后自动淡出；操作浮层出现时立即隐藏
+    if (v.round !== this.wallLegendRound) {
+      this.wallLegendRound = v.round;
+      this.showWallLegend(info);
+    }
+  }
+  
+  /** 开牌点图例（还原 .wall-legend）：新局显示一次，tween delay 5s 后淡出自动隐藏 */
+  private showWallLegend(info: NonNullable<ViewState['wallInfo']>): void {
+    this.hideWallLegend();
     const legendText = info.breakGroups > 0
       ? `开牌点：庄家排右端起跳 ${info.breakGroups} 组 · 自第 ${info.breakGroups + 1} 组开摸 · 排尽续上手家排`
       : '开牌点：庄家排右端第 1 组开摸 · 排尽续上手家排';
@@ -1582,29 +1709,25 @@ export class TableScreen extends Screen {
     lg.stroke();
     const ll = uiLabel(legendText, { size: 9, color: Theme.color.gold });
     ll.setParent(legend);
+    legend.name = 'WallLegend';
     legend.setParent(this.wallRoot);
-    legend.setPosition(0, -48, 0);
+    legend.setPosition(0, -16, 0);
+    this.wallLegend = legend;
+    // Screen 为非 Component 基类（无调度器）：5s 自隐用 tween delay 计时，hideWallLegend 可 stop 取消
+    this.wallLegendTween = tween(legend).delay(5).call(() => {
+      this.wallLegendTween = null;
+      const n = this.wallLegend;
+      if (!n) return;
+      this.wallLegend = null;
+      const op = n.addComponent(UIOpacity);
+      tween(op).to(0.3, { opacity: 0 }).call(() => n.destroy()).start();
+    }).start();
   }
-
-  /** 金色虚线框（短划线逐段绘制，近似 CSS dashed） */
-  private dashRect(g: Graphics, w: number, h: number): void {
-    const dash = 3;
-    const gap = 2;
-    for (let x = -w / 2; x < w / 2; x += dash + gap) {
-      const x2 = Math.min(x + dash, w / 2);
-      g.moveTo(x, h / 2);
-      g.lineTo(x2, h / 2);
-      g.moveTo(x, -h / 2);
-      g.lineTo(x2, -h / 2);
-    }
-    for (let y = -h / 2; y < h / 2; y += dash + gap) {
-      const y2 = Math.min(y + dash, h / 2);
-      g.moveTo(-w / 2, y);
-      g.lineTo(-w / 2, y2);
-      g.moveTo(w / 2, y);
-      g.lineTo(w / 2, y2);
-    }
-    g.stroke();
+  
+  /** 立即隐藏开牌点图例（5s 到时自隐 / 操作浮层出现时调用，避免与浮层重叠） */
+  private hideWallLegend(): void {
+    if (this.wallLegendTween) { this.wallLegendTween.stop(); this.wallLegendTween = null; }
+    if (this.wallLegend) { this.wallLegend.destroy(); this.wallLegend = null; }
   }
 
   // ============ 小工具 ============

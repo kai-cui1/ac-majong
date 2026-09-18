@@ -1,10 +1,11 @@
-import { Node, Label, UITransform, Graphics, Color } from 'cc';
+import { Node, Label, UITransform, Graphics, Color, director, Director } from 'cc';
 import { Screen } from '../app/SceneRouter';
 import { Theme } from '../ui/Theme';
 import { uiBackground, uiLabel, uiButton, uiPanel, uiModal, uiMuteToggle, uiSwitch, type Modal } from '../ui/UiKit';
 import { openRulesModal } from '../ui/RulesModal';
 import { openSettingsModal } from '../ui/SettingsModal';
 import { NetService } from '../game/NetService';
+import type { PublicRoomEntry } from '../vendor/protocol/index';
 
 /**
  * 大厅页（P2，还原 home.html，横向重排到 844×390）。M-A 空壳：
@@ -20,69 +21,69 @@ export class LobbyScreen extends Screen {
     root.addComponent(UITransform).setContentSize(W, H);
     uiBackground('table').setParent(root);
 
-    // 品牌区（左上）
-    const logo = this.makeLogo(46);
+    // 品牌区（左上，还原原型 .lb-brand：left24 top14、logo40、gap12、title20/900、sub10）
+    const logo = this.makeLogo(40);
     logo.setParent(root);
-    logo.setPosition(-W / 2 + 56, H / 2 - 44, 0);
-    const title = uiLabel('AC 麻将', { size: 24, color: Theme.color.gold, bold: true, align: 'left' });
+    logo.setPosition(-W / 2 + 44, H / 2 - 34, 0);
+    const title = uiLabel('AC 麻将', { size: 20, color: Theme.color.gold, bold: true, align: 'left' });
     title.setParent(root);
-    title.setPosition(-W / 2 + 150, H / 2 - 38, 0);
-    const sub = uiLabel('传统台式麻将 · 自定义台数 · 好友组局', { size: 11, color: Theme.color.textMuted, align: 'left' });
+    title.getComponent(UITransform)!.anchorX = 0;
+    title.setPosition(-W / 2 + 76, H / 2 - 27, 0);
+    const sub = uiLabel('传统台式麻将 · 自定义台数 · 好友组局', { size: 10, color: Theme.color.textMuted, align: 'left' });
     sub.setParent(root);
-    sub.setPosition(-W / 2 + 150, H / 2 - 60, 0);
+    sub.getComponent(UITransform)!.anchorX = 0;
+    sub.setPosition(-W / 2 + 76, H / 2 - 45, 0);
 
-    // 用户条（右上）
+    // 用户条（右上，还原原型 .lb-user：right24 top12 216×44）
     const userBar = this.makeUserBar();
     userBar.setParent(root);
-    userBar.setPosition(W / 2 - 148, H / 2 - 48, 0);
+    userBar.setPosition(W / 2 - 132, H / 2 - 34, 0);
 
-    // 两大入口卡片
+    // 两大入口卡片（左列横卡，还原原型 .lb-entry）
     const create = this.makeEntryCard('🎲', '创建房间', '我是房主，开局组局', () => this.openCreate());
     create.setParent(root);
-    create.setPosition(-118, 4, 0);
+    create.setPosition(-248, 73, 0);
     const join = this.makeEntryCard('🚪', '加入房间', '输入房间号入座', () => this.openJoin());
     join.setParent(root);
-    join.setPosition(118, 4, 0);
+    join.setPosition(-248, -27, 0);
 
-    // 规则入口
-    const rules = uiButton('规则说明 · 台数速查 / 算账公式', () => this.openRules(), { variant: 'secondary', width: 460, height: 40, fontSize: 13 });
-    rules.setParent(root);
-    rules.setPosition(0, -92, 0);
-    // BL-012：战绩/回放入口（房间→局列表，D-30 大厅入口）
-    const replay = uiButton('🎬 战绩 / 回放', () => this.router.show('replayList'), { variant: 'secondary', width: 110, height: 40, fontSize: 13 });
+    // 次要入口三钮（还原原型 .lb-subrow）
+    const replay = uiButton('🎬 战绩/回放', () => this.router.show('replayList'), { variant: 'dark', width: 96, height: 36, fontSize: 11 });
     replay.setParent(root);
-    replay.setPosition(-272, -92, 0);
-    // M-H：设置入口（静音/返回登录/版本协议）
+    replay.setPosition(-350, -99, 0);
+    const rules = uiButton('📋 规则速查', () => this.openRules(), { variant: 'dark', width: 96, height: 36, fontSize: 11 });
+    rules.setParent(root);
+    rules.setPosition(-248, -99, 0);
     const gear = uiButton('⚙ 设置', () => openSettingsModal(this.node!, {
       onRelogin: () => {
         NetService.instance.disconnect();
         this.router.show('login');
       },
-    }), { variant: 'secondary', width: 70, height: 40, fontSize: 13 });
+    }), { variant: 'dark', width: 96, height: 36, fontSize: 11 });
     gear.setParent(root);
-    gear.setPosition(272, -92, 0);
+    gear.setPosition(-146, -99, 0);
 
-    // 公告
-    const notice = uiLabel('v0.1 内测版 · 仅供俱乐部成员体验，积分仅供娱乐', { size: Theme.font.small, color: Theme.color.textSecondary });
-    notice.setParent(root);
-    notice.setPosition(0, -132, 0);
+    // 右列：公开房间列表（BL-018，进大厅拉取 + 5s 自动轮询 + 手动钮）
+    this.buildRoomList(root);
 
-    // 返回登录（左下，验证双向切换）
+    // 返回登录（左下，还原原型 .lb-back：left24 top348 h30 padding14 font11）
     const back = uiButton('← 返回登录', () => {
       NetService.instance.disconnect();
       this.router.show('login');
-    }, { variant: 'secondary', width: 120, height: 34, fontSize: 13 });
+    }, { variant: 'dark', width: 86, height: 30, fontSize: 11, radius: 15 });
     back.setParent(root);
-    back.setPosition(-W / 2 + 78, -H / 2 + 28, 0);
+    back.setPosition(-W / 2 + 67, -H / 2 + 27, 0);
 
+    // 版本号（还原原型 .lb-ver：right64 top356 font9，右缘对齐）
     const ver = uiLabel('AC Mahjong Club v0.1.0', { size: Theme.font.mini, color: Theme.color.textMuted });
     ver.setParent(root);
-    ver.setPosition(W / 2 - 92, -H / 2 + 16, 0);
+    ver.getComponent(UITransform)!.anchorX = 1;
+    ver.setPosition(W / 2 - 64, -H / 2 + 28, 0);
 
-    // 静音开关（BL-014 最简本地开关，右下）
-    const mute = uiMuteToggle(32);
+    // 静音开关（BL-014，还原原型 .lb-mute：right24 top348 28×28）
+    const mute = uiMuteToggle(28);
     mute.setParent(root);
-    mute.setPosition(W / 2 - 30, -H / 2 + 48, 0);
+    mute.setPosition(W / 2 - 38, -H / 2 + 28, 0);
 
     return root;
   }
@@ -109,71 +110,263 @@ export class LobbyScreen extends Screen {
     return n;
   }
 
-  /** 用户信息条：头像 + 昵称 + ID + 箭头（M-B：显示登录返回的真实资料） */
+  /** 用户信息条：头像 + 昵称 + ID + 箭头（还原原型 .lb-user 216×44：padding12 gap10、avatar30、name13、id9） */
   private makeUserBar(): Node {
     const net = NetService.instance;
     const nickname = net.profile?.nickname ?? '牌友';
     const uid = net.userId ?? '—';
-    const bar = uiPanel(244, 48, { variant: 'gold', radius: Theme.radius.lg });
+    const bar = uiPanel(216, 44, { variant: 'gold', radius: Theme.radius.lg });
     bar.name = 'UserBar';
 
     const av = new Node('Avatar');
-    av.addComponent(UITransform).setContentSize(36, 36);
+    av.addComponent(UITransform).setContentSize(30, 30);
     const ag = av.addComponent(Graphics);
     ag.fillColor = Theme.color.gold;
-    ag.circle(0, 0, 18);
+    ag.circle(0, 0, 15);
     ag.fill();
     const alNode = new Node('A');
     alNode.addComponent(UITransform);
     const al = alNode.addComponent(Label);
     al.string = nickname.slice(0, 1);
-    al.fontSize = 16;
-    al.lineHeight = 20;
+    al.fontSize = 13;
+    al.lineHeight = 16;
     al.color = Theme.color.bgWoodDark;
     al.isBold = true;
     al.horizontalAlign = Label.HorizontalAlign.CENTER;
     al.verticalAlign = Label.VerticalAlign.CENTER;
     alNode.setParent(av);
     av.setParent(bar);
-    av.setPosition(-94, 0, 0);
+    av.setPosition(-81, 0, 0);
 
-    const nameL = uiLabel(nickname, { size: 15, color: Theme.color.textPrimary, bold: true, align: 'left' });
+    const nameL = uiLabel(nickname, { size: 13, color: Theme.color.textPrimary, bold: true, align: 'left' });
     nameL.setParent(bar);
-    nameL.setPosition(-14, 9, 0);
-    const idL = uiLabel(`ID: ${uid}`, { size: 11, color: Theme.color.textMuted, align: 'left' });
+    nameL.getComponent(UITransform)!.anchorX = 0;
+    nameL.setPosition(-56, 8, 0);
+    const idL = uiLabel(`ID: ${uid}`, { size: 9, color: Theme.color.textMuted, align: 'left' });
     idL.setParent(bar);
-    idL.setPosition(-14, -9, 0);
-    const arrow = uiLabel('›', { size: 18, color: Theme.color.textMuted });
+    idL.getComponent(UITransform)!.anchorX = 0;
+    idL.setPosition(-56, -8, 0);
+    const arrow = uiLabel('›', { size: 13, color: Theme.color.textMuted });
     arrow.setParent(bar);
-    arrow.setPosition(104, 0, 0);
+    arrow.setPosition(92, 0, 0);
     return bar;
   }
 
-  /** 入口卡片：图标 + 标题 + 描述，整卡可点 */
+  /** 入口卡片（横屏横卡 300×92：图标左 + 文案左对齐双行，还原原型 .lb-entry） */
   private makeEntryCard(icon: string, text: string, desc: string, onClick: () => void): Node {
-    const card = uiPanel(210, 128, { variant: 'gold', radius: Theme.radius.lg });
+    const card = uiPanel(300, 92, { variant: 'gold', radius: Theme.radius.lg });
     card.name = `Entry_${text}`;
-    const ic = uiLabel(icon, { size: 30 });
-    ic.setParent(card);
-    ic.setPosition(0, 34, 0);
-    const tx = uiLabel(text, { size: 17, color: Theme.color.textPrimary, bold: true });
+    // 图标容器（还原原型 .lb-entry-icon：46×46 圆角12 + 金色淡底描边）
+    const ib = new Node('IconBox');
+    ib.addComponent(UITransform).setContentSize(46, 46);
+    const ig = ib.addComponent(Graphics);
+    ig.fillColor = new Color(212, 165, 55, 30);
+    ig.strokeColor = new Color(212, 165, 55, 64);
+    ig.lineWidth = 1;
+    ig.roundRect(-23, -23, 46, 46, 12);
+    ig.fill();
+    ig.stroke();
+    ib.setParent(card);
+    ib.setPosition(-111, 0, 0);
+    const ic = uiLabel(icon, { size: 23 });
+    ic.setParent(ib);
+    ic.setPosition(0, 0, 0);
+    const tx = uiLabel(text, { size: 15, color: Theme.color.textPrimary, bold: true, align: 'left' });
     tx.setParent(card);
-    tx.setPosition(0, -8, 0);
-    const ds = uiLabel(desc, { size: 11, color: Theme.color.textMuted });
+    tx.getComponent(UITransform)!.anchorX = 0;
+    tx.setPosition(-74, 10, 0);
+    const ds = uiLabel(desc, { size: 10, color: Theme.color.textMuted, align: 'left' });
     ds.setParent(card);
-    ds.setPosition(0, -34, 0);
+    ds.getComponent(UITransform)!.anchorX = 0;
+    ds.setPosition(-74, -12, 0);
     card.on(Node.EventType.TOUCH_END, onClick);
     return card;
   }
 
-  /** 建房弹层（还原 home.html 创建房间弹层）：局数单行 4 项（主+副双行）+ BL-017 玩法设置双开关（默认均开）+ 创建并分享 + modal-hint */
-  private openCreate(): void {
-    const m = uiModal('创建房间', { width: 400, height: 352 });
-    const tip = uiLabel('选择局数上限', { size: 12, color: Theme.color.textMuted });
-    tip.setParent(m.panel);
-    tip.setPosition(0, 124, 0);
+  // ============ BL-018 公开房间列表 ============
+  private listBody: Node | null = null;
+  private listCount: Label | null = null;
+  private listAuto: Label | null = null;
+  private listToast: Label | null = null;
+  private listTimer: ReturnType<typeof setInterval> | null = null;
 
-    // 局数单选（默认 8 局标准局）：单行 4 项 gap8；选中=透金底+金边+金字（原型 .rounds-option.selected）
+  onEnter(): void {
+    this.refreshList();
+    this.listTimer = setInterval(() => this.refreshList(), 5000);
+    director.once(Director.EVENT_AFTER_UPDATE, () => this.alignListCount());
+  }
+  onExit(): void {
+    if (this.listTimer) { clearInterval(this.listTimer); this.listTimer = null; }
+  }
+
+  /** 右列列表面板（还原原型 .room-list）：head(标题+计数+5s 自动+手动钮) + body(≤4 行/空态) + foot */
+  private buildRoomList(root: Node): void {
+    const panel = uiPanel(480, 272, { variant: 'gold', radius: Theme.radius.lg });
+    panel.name = 'RoomList';
+    panel.setParent(root);
+    panel.setPosition(158, -17, 0);
+    // head 底纹 + head/foot 分隔线（还原原型 .room-list-head bg rgba(212,165,55,.06)+border-bottom、.room-list-foot border-top）
+    const deco = new Node('Deco');
+    deco.addComponent(UITransform);
+    const dg = deco.addComponent(Graphics);
+    dg.fillColor = new Color(212, 165, 55, 15);
+    dg.rect(-240, 102, 480, 34);
+    dg.fill();
+    dg.strokeColor = new Color(212, 165, 55, 30);
+    dg.lineWidth = 1;
+    dg.moveTo(-240, 102);
+    dg.lineTo(240, 102);
+    dg.stroke();
+    dg.strokeColor = new Color(255, 255, 255, 10);
+    dg.moveTo(-240, -112);
+    dg.lineTo(240, -112);
+    dg.stroke();
+    deco.setParent(panel);
+    const title = uiLabel('📋 公开房间', { size: 13, color: Theme.color.gold, bold: true, align: 'left' });
+    title.name = 'HeadTitle';
+    title.setParent(panel);
+    title.getComponent(UITransform)!.anchorX = 0; // 左对齐标签须显式设锚（中心锚会使标题溢出面板左缘，原型 padding 0 14px）
+    title.setPosition(-226, 119, 0);
+    const count = uiLabel('0 桌', { size: 10, color: Theme.color.textMuted, align: 'left' });
+    count.name = 'HeadCount';
+    count.setParent(panel);
+    count.getComponent(UITransform)!.anchorX = 0; // 标题右缘+gap 8（进大厅后按标题实测宽度校准，见 alignListCount）
+    count.setPosition(-141, 119, 0);
+    this.listCount = count.getComponent(Label);
+    const auto = uiLabel('5s 自动刷新', { size: 9, color: Theme.color.textMuted, align: 'right', width: 120 });
+    auto.setParent(panel);
+    auto.getComponent(UITransform)!.anchorX = 1; // 右缘与手动钮留 gap 6（原型 .room-list-refresh）
+    auto.setPosition(200, 119, 0);
+    this.listAuto = auto.getComponent(Label);
+    const refresh = uiButton('🔄', () => this.refreshList(), { variant: 'secondary', width: 20, height: 20, fontSize: 10 });
+    refresh.setParent(panel);
+    refresh.setPosition(216, 119, 0);
+    this.listBody = new Node('Body');
+    this.listBody.addComponent(UITransform).setContentSize(452, 214);
+    this.listBody.setParent(panel);
+    this.listBody.setPosition(0, -5, 0);
+    const foot = uiLabel('仅展示公开且未关闭房间 · 对局中/满员不可加入', { size: 9, color: Theme.color.textMuted });
+    foot.setParent(panel);
+    foot.setPosition(0, -124, 0);
+    const toast = uiLabel('', { size: 10, color: Theme.color.danger });
+    toast.setParent(panel);
+    toast.setPosition(0, -140, 0);
+    this.listToast = toast.getComponent(Label);
+  }
+
+  private refreshList(): void {
+    NetService.instance.requestRoomList()
+      .then((rows) => { this.stampListAuto(); this.renderList(rows); })
+      .catch(() => { this.stampListAuto(); this.renderList([]); });
+  }
+
+  /** head「5s 自动刷新 · 更新于 hh:mm:ss」（原型 .room-list-refresh / PRD03 §3.3） */
+  private stampListAuto(): void {
+    if (!this.listAuto) return;
+    const d = new Date();
+    const p = (n: number) => String(n).padStart(2, '0');
+    this.listAuto.string = `5s 自动刷新 · ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+  }
+
+  /** head 计数跟随标题实测宽度（原型 flex gap 8）：Cocos Label 宽度渲染后才可测，进大厅后校准一次 */
+  private alignListCount(): void {
+    const panel = this.node?.getChildByName('RoomList');
+    const t = panel?.getChildByName('HeadTitle');
+    const c = panel?.getChildByName('HeadCount');
+    if (!t || !c) return;
+    const w = t.getComponent(UITransform)!.contentSize.width;
+    if (w > 0) c.setPosition(-226 + w + 8, 119, 0);
+  }
+
+  private renderList(rows: PublicRoomEntry[]): void {
+    const body = this.listBody;
+    if (!body) return;
+    body.destroyAllChildren();
+    if (this.listCount) this.listCount.string = `${rows.length} 桌`;
+    if (this.listToast) this.listToast.string = '';
+    if (!rows.length) {
+      const empty = uiLabel('暂无公开房间 · 成为第一个开桌的人', { size: 12, color: Theme.color.textMuted });
+      empty.setParent(body);
+      empty.setPosition(0, 40, 0);
+      const go = uiButton('创建房间', () => this.openCreate(), { variant: 'primary', width: 120, height: 32, fontSize: 12 });
+      go.setParent(body);
+      go.setPosition(0, 0, 0);
+      return;
+    }
+    rows.slice(0, 4).forEach((r, i) => {
+      const row = new Node(`Row_${r.room}`);
+      row.addComponent(UITransform).setContentSize(452, 44);
+      row.setParent(body);
+      row.setPosition(0, 80 - i * 44, 0);
+      // 行分隔线（还原原型 .room-row border-bottom）
+      const sep = new Node('Sep');
+      sep.addComponent(UITransform);
+      const sg = sep.addComponent(Graphics);
+      sg.strokeColor = new Color(255, 255, 255, 10);
+      sg.lineWidth = 1;
+      sg.moveTo(-240, -22);
+      sg.lineTo(240, -22);
+      sg.stroke();
+      sep.setParent(row);
+      const code = uiLabel(r.room, { size: 14, color: Theme.color.goldLight, bold: true, align: 'left' });
+      code.setParent(row);
+      code.getComponent(UITransform)!.anchorX = 0;
+      code.setPosition(-226, 0, 0);
+      const host = uiLabel(`房主 ${r.host}`, { size: 11, color: Theme.color.textPrimary, align: 'left', width: 150 });
+      host.setParent(row);
+      host.getComponent(UITransform)!.anchorX = 0;
+      host.setPosition(-160, 0, 0);
+      const seats = uiLabel(`${r.seats}/4`, { size: 11, color: Theme.color.textSecondary });
+      seats.setParent(row);
+      seats.setPosition(40, 0, 0);
+      const rounds = uiLabel(r.maxRounds > 0 ? `${r.maxRounds} 局` : '不限', { size: 10, color: Theme.color.textMuted });
+      rounds.setParent(row);
+      rounds.setPosition(90, 0, 0);
+      const playing = r.status === 'playing';
+      const full = r.seats >= 4;
+      // 记忆房间（本人曾入座，刷新后服务端保留座位）→ 对局中/满员也允许「重进」
+      const mine = r.room === NetService.instance.storedLastRoom();
+      // 状态徽标胶囊（还原原型 .rr-badge：pill 描边+淡底，等待=金绿/对局中=灰）
+      const pill = new Node('BadgePill');
+      pill.addComponent(UITransform).setContentSize(42, 16);
+      const pg = pill.addComponent(Graphics);
+      pg.fillColor = playing ? new Color(255, 255, 255, 10) : new Color(159, 233, 176, 20);
+      pg.strokeColor = playing ? new Color(255, 255, 255, 38) : new Color(159, 233, 176, 102);
+      pg.lineWidth = 1;
+      pg.roundRect(-21, -8, 42, 16, 8);
+      pg.fill();
+      pg.stroke();
+      pill.setParent(row);
+      pill.setPosition(140, 0, 0);
+      const badge = uiLabel(playing ? '对局中' : '等待', { size: 9, color: playing ? Theme.color.textMuted : new Color(159, 233, 176, 255) });
+      badge.setParent(row);
+      badge.setPosition(140, 0, 0);
+      const off = (playing || full) && !mine;
+      const btn = uiButton(mine && (playing || full) ? '重进' : off ? (playing ? '对局中' : '已满') : '加入', off ? () => { /* 对局中/满员不可加入（观战预留） */ } : () => void this.joinFromList(r.room), { variant: off ? 'secondary' : 'primary', width: 64, height: 26, fontSize: 11 });
+      btn.setParent(row);
+      btn.setPosition(192, 0, 0);
+    });
+  }
+
+  private async joinFromList(room: string): Promise<void> {
+    try {
+      const rv = await NetService.instance.joinRoom(room);
+      // 与 doJoin 同路由：对局中/仪式重进直切牌桌（服务端加入期间已下发 gameView）
+      const inGame = rv.phase === 'playing' || rv.phase === 'seating' || !!NetService.instance.view;
+      this.router.show(inGame ? 'table' : 'room');
+    } catch (e) {
+      if (this.listToast) this.listToast.string = `加入失败：${(e as Error).message}`;
+    }
+  }
+
+  /** 建房弹层（还原 home.html 创建房间横屏双列弹层）：左=局数 2×2（主+副双行）；右=房间与玩法设置开关（BL-020 先看吃再碰默认开 + BL-017 两开关默认开）+ 创建并分享 + modal-hint */
+  private openCreate(): void {
+    const m = uiModal('创建房间', { width: 720, height: 300 });
+    const tip = uiLabel('选择局数上限', { size: 11, color: Theme.color.textMuted });
+    tip.setParent(m.panel);
+    tip.setPosition(-205, 104, 0);
+
+    // 局数单选（默认 8 局标准局）：2×2 gap8；选中=透金底+金边+金字（原型 .rounds-option.selected）
     let rounds = 8;
     const opts: { v: number; main: string; sub: string }[] = [
       { v: 4, main: '4 局', sub: '快餐局' },
@@ -182,6 +375,7 @@ export class LobbyScreen extends Screen {
       { v: 0, main: '不限', sub: '尽兴' },
     ];
     const btns: { node: Node; g: Graphics; main: Label; sub: Label; v: number }[] = [];
+    const grid: [number, number][] = [[-255, 66], [-155, 66], [-255, 14], [-155, 14]];
     const paint = (b: { g: Graphics; main: Label; sub: Label }, sel: boolean): void => {
       b.g.clear();
       b.g.lineWidth = 1;
@@ -217,54 +411,62 @@ export class LobbyScreen extends Screen {
         for (const x of btns) paint(x, x.v === rounds);
       });
       node.setParent(m.panel);
-      node.setPosition(-150 + i * 100, 96, 0);
+      node.setPosition(grid[i]![0], grid[i]![1], 0);
     });
 
-    // BL-017 玩法设置：两开关（默认均开）；选位仪式恒开不可关
-    const psTitle = uiLabel('玩法设置', { size: 12, color: Theme.color.textMuted });
+    // 房间与玩法设置（右列）：BL-018 公开房间默认开 + BL-020 先看吃再碰默认开 + BL-017 两开关默认开；选位仪式恒开不可关
+    const psTitle = uiLabel('房间与玩法设置', { size: 11, color: Theme.color.textMuted });
     psTitle.setParent(m.panel);
-    psTitle.setPosition(0, 58, 0);
+    psTitle.setPosition(180, 104, 0);
+    let isPublic = true; // BL-018：公开房间（默认开，进大厅列表）
+    let chiFirstView = true;
     let physical = true;
     let breakDice = true;
-    const row1 = this.makePlayRow('物理牌墙展示', '预生成固化 4 排×18 组牌堆并四边展示；关闭=随机发牌', physical, (on) => { physical = on; });
+    const rowPub = this.makePlayRow('公开房间', '开=进大厅列表可被发现；关=仅房号可入', isPublic, (on) => { isPublic = on; }, 340, 44);
+    rowPub.setParent(m.panel);
+    rowPub.setPosition(180, 84, 0);
+    const row0 = this.makePlayRow('先看吃再碰', '吃意图公开，碰家看见后再决', chiFirstView, (on) => { chiFirstView = on; }, 340, 44);
+    row0.setParent(m.panel);
+    row0.setPosition(180, 36, 0);
+    const row1 = this.makePlayRow('物理牌墙展示', '牌桌四方可见；关=随机发牌', physical, (on) => { physical = on; }, 340, 44);
     row1.setParent(m.panel);
-    row1.setPosition(0, 28, 0);
-    const row2 = this.makePlayRow('摸牌位骰', '每局庄家掷骰定开牌点（右端起跳 N 组）；关闭=庄家排右端开摸', breakDice, (on) => { breakDice = on; });
+    row1.setPosition(180, -12, 0);
+    const row2 = this.makePlayRow('摸牌位骰', '每局骰定摸牌位', breakDice, (on) => { breakDice = on; }, 340, 44);
     row2.setParent(m.panel);
-    row2.setPosition(0, -28, 0);
-    const fixed = uiLabel('选位仪式（掷骰→选座→定首庄）为每房标准流程，恒开启', { size: 10, color: Theme.color.textMuted });
+    row2.setPosition(180, -60, 0);
+    const fixed = uiLabel('固定：点炮胡 / 自摸加底 / 选位仪式恒开', { size: 9, color: Theme.color.textMuted });
     fixed.setParent(m.panel);
-    fixed.setPosition(0, -62, 0);
+    fixed.setPosition(180, -92, 0);
 
     const status = uiLabel('', { size: 11, color: Theme.color.textSecondary });
     const statusLbl = status.getComponent(Label)!;
     status.setParent(m.panel);
-    status.setPosition(0, -80, 0);
-    const submit = uiButton('创建并分享', () => void this.doCreate(rounds, { wallMode: physical ? 'physical' : 'random', breakDice }, m, statusLbl), { variant: 'primary', width: 220, height: 40, fontSize: 15 });
+    status.setPosition(-205, -40, 0);
+    const submit = uiButton('创建并分享', () => void this.doCreate(rounds, { wallMode: physical ? 'physical' : 'random', breakDice, chiFirstView, isPublic }, m, statusLbl), { variant: 'primary', width: 240, height: 38, fontSize: 15 });
     submit.setParent(m.panel);
-    submit.setPosition(0, -108, 0);
-    const hint = uiLabel('创建后生成 6 位房间号，可分享微信好友', { size: 11, color: Theme.color.textMuted });
+    submit.setPosition(-205, -80, 0);
+    const hint = uiLabel('创建后生成 6 位房间号，可分享微信好友', { size: 10, color: Theme.color.textMuted });
     hint.setParent(m.panel);
-    hint.setPosition(0, -142, 0);
+    hint.setPosition(-205, -112, 0);
 
     m.root.setParent(this.node!);
   }
 
   /** 玩法设置行（还原 .play-row）：暗底金细边 + 名称/副文案左对齐双行 + 右侧开关，整行可点切换 */
-  private makePlayRow(name: string, sub: string, initial: boolean, onChange: (on: boolean) => void): Node {
-    const row = uiPanel(376, 52, { variant: 'panel', radius: Theme.radius.md });
+  private makePlayRow(name: string, sub: string, initial: boolean, onChange: (on: boolean) => void, w = 376, h = 52): Node {
+    const row = uiPanel(w, h, { variant: 'panel', radius: Theme.radius.md });
     row.name = `PlayRow_${name}`;
-    const nameL = uiLabel(name, { size: 13, color: Theme.color.textPrimary, bold: true, align: 'left' });
+    const nameL = uiLabel(name, { size: 12, color: Theme.color.textPrimary, bold: true, align: 'left' });
     nameL.setParent(row);
     nameL.getComponent(UITransform)!.anchorX = 0;
-    nameL.setPosition(-176, 12, 0);
-    const subL = uiLabel(sub, { size: 9, color: Theme.color.textMuted, align: 'left', width: 300 });
+    nameL.setPosition(-w / 2 + 12, h / 2 - 14, 0);
+    const subL = uiLabel(sub, { size: 8.5, color: Theme.color.textMuted, align: 'left', width: w - 70 });
     subL.setParent(row);
     subL.getComponent(UITransform)!.anchorX = 0;
-    subL.setPosition(-176, -8, 0);
+    subL.setPosition(-w / 2 + 12, -h / 2 + 10, 0);
     const sw = uiSwitch(initial, onChange, { interactive: false });
     sw.node.setParent(row);
-    sw.node.setPosition(376 / 2 - 32, 0, 0);
+    sw.node.setPosition(w / 2 - 30, 0, 0);
     // 整行可点（开关不自身响应，避免双触发）
     let on = initial;
     row.on(Node.EventType.TOUCH_END, () => {
@@ -275,7 +477,7 @@ export class LobbyScreen extends Screen {
     return row;
   }
 
-  private async doCreate(maxRounds: number, settings: { wallMode: 'physical' | 'random'; breakDice: boolean }, m: Modal, statusLbl: Label): Promise<void> {
+  private async doCreate(maxRounds: number, settings: { wallMode: 'physical' | 'random'; breakDice: boolean; chiFirstView: boolean; isPublic: boolean }, m: Modal, statusLbl: Label): Promise<void> {
     statusLbl.string = '创建中…';
     statusLbl.color = Theme.color.textSecondary;
     try {

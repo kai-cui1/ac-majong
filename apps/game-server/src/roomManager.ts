@@ -1,7 +1,7 @@
 import { RoomActor, type GameHooks, type RoomRestore } from './roomActor';
 import type { Connection } from './connection';
 import type { GameStore } from '@ac-majong/persistence';
-import type { RoomSettings } from '@ac-majong/protocol';
+import type { RoomSettings, PublicRoomEntry } from '@ac-majong/protocol';
 
 /** 房间管理：创建/查询/回收，分配 6 位房间号（全局唯一、永不复用，BL-016） */
 export class RoomManager {
@@ -9,6 +9,17 @@ export class RoomManager {
   private seedBase: number;
   private hooks?: GameHooks;
   private store?: GameStore;
+
+  /** BL-018：聚合公开且未关闭房（等待先于对局中，同组按创建时间倒序，上限 20 行，FR-房间-11） */
+  publicRooms(): PublicRoomEntry[] {
+    const list: { e: PublicRoomEntry; created: number }[] = [];
+    for (const r of this.rooms.values()) {
+      const e = r.listEntry();
+      if (e) list.push({ e, created: r.createdAt });
+    }
+    list.sort((a, b) => (a.e.status === b.e.status ? b.created - a.created : a.e.status === 'waiting' ? -1 : 1));
+    return list.slice(0, 20).map((x) => x.e);
+  }
 
   constructor(seedBase = Date.now() % 1_000_000, hooks?: GameHooks, store?: GameStore) {
     this.seedBase = seedBase;

@@ -111,6 +111,10 @@ export class GameClient {
   create(maxRounds = 8, settings?: RoomSettings): void {
     this.send({ t: 'create', seq: this.nextSeq(), maxRounds, settings });
   }
+  /** BL-018：拉取大厅公开房间列表（响应 t=roomList） */
+  requestRoomList(): void {
+    this.send({ t: 'roomList', seq: this.nextSeq() });
+  }
   join(room: string): void {
     this.send({ t: 'join', seq: this.nextSeq(), room });
   }

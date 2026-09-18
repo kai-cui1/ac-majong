@@ -40,3 +40,4 @@ Thumbs.db
 *.iml
 .vscode/*
 !.vscode/extensions.json
+.player-profiles/

@@ -1,7 +1,7 @@
 import { sys } from 'cc';
 import { GameClient, WebTransport } from '../vendor/client-core/index';
 import type { Transport } from '../vendor/client-core/index';
-import type { ViewState, RoomView, ServerMsg, UserProfile, ReplayRoomSummary, ReplaySnapshot, ReplayActionRow, RoomSettings } from '../vendor/protocol/index';
+import type { ViewState, RoomView, ServerMsg, UserProfile, ReplayRoomSummary, ReplaySnapshot, ReplayActionRow, RoomSettings, PublicRoomEntry } from '../vendor/protocol/index';
 
 export type ViewListener = (v: ViewState) => void;
 export type RoomListener = (r: RoomView) => void;
@@ -34,6 +34,8 @@ export class NetService {
   /** H5 账号路线：服务端签发的会话令牌（30 天，持久化后重连/复登免密码） */
   private sessionToken: string | null = null;
   private lastRoom: string | null = null;
+  /** 持久化记忆房间（刷新/新会话后自动重入，FR-断线-02 扩展）；散场/登出清除 */
+  private static readonly LAST_ROOM_KEY = 'ac_last_room';
   private intentionalClose = false;
   private reconnecting = false;
   /** BL-016：最近一次收到 gameView 的时刻（大厅加入→对局中重进时判定切页，避免 RoomScreen 未构建错过订阅广播） */
@@ -144,6 +146,32 @@ export class NetService {
     } catch {
       /* 忽略存储异常 */
     }
+    this.forgetLastRoom(); // 登出/换账号：记忆房间属旧身份，一并清除
+  }
+
+  /** 已持久化的记忆房间号（登录成功后用于自动重入） */
+  storedLastRoom(): string | null {
+    try {
+      return sys.localStorage.getItem(NetService.LAST_ROOM_KEY);
+    } catch {
+      return null;
+    }
+  }
+
+  forgetLastRoom(): void {
+    try {
+      sys.localStorage.removeItem(NetService.LAST_ROOM_KEY);
+    } catch {
+      /* 忽略存储异常 */
+    }
+  }
+
+  private rememberLastRoom(id: string): void {
+    try {
+      sys.localStorage.setItem(NetService.LAST_ROOM_KEY, id);
+    } catch {
+      /* 忽略存储异常：仅本次会话可重入 */
+    }
   }
 
   /** 构建 GameClient（首连与重连共用同一套订阅转发）；微信端用注入的 WeChatTransport */
@@ -166,11 +194,13 @@ export class NetService {
       },
       onRoomView: (r) => {
         this.lastRoom = r.room;
+        this.rememberLastRoom(r.room);
         this.roomListeners.forEach((f) => f(r));
       },
       onEvent: (m) => this.eventListeners.forEach((f) => f(m)),
       onRoomEnd: (m) => {
         this.lastRoom = null; // 散场后不再重入
+        this.forgetLastRoom();
         this.roomEndListeners.forEach((f) => f(m));
       },
       onClose: () => void this.handleClose(),
@@ -229,6 +259,14 @@ export class NetService {
     this.client.create(maxRounds, settings);
     const m = await this.client.waitForNext((x) => x.t === 'roomView');
     return (m as Extract<ServerMsg, { t: 'roomView' }>).room;
+  }
+  /** BL-018：拉取大厅公开房间列表（仅公开且未关闭房；等待先于对局中） */
+  async requestRoomList(): Promise<PublicRoomEntry[]> {
+    if (!this.client) throw new Error('未连接');
+    const p = this.client.waitForNext((x) => x.t === 'roomList');
+    this.client.requestRoomList();
+    const m = (await p) as Extract<ServerMsg, { t: 'roomList' }>;
+    return m.rooms;
   }
   /** 加入房间并等待进入等待页；房间不存在/已满则抛错（含原因）。
    * BL-016：重进「对局中」房间时服务端直接下发 gameView（无 roomView），同样视为加入成功。 */

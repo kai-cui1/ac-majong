@@ -2,121 +2,94 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AC 麻将俱乐部 — 战绩 / 回放列表（P9，BL-012）</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>AC 麻将俱乐部 — 战绩/回放（横屏 844×390）</title>
   <link rel="stylesheet" href="style.css">
   <style>
-    .replay-page {
-      min-height: 100vh; min-height: 100dvh;
+    /* ============================================
+       横屏战绩/回放列表 v2（BL-019）：基准 844×390（对齐客户端 ReplayListScreen）
+       ============================================ */
+    .ls-page { position: relative; width: 100vw; height: 100vh; height: 100dvh; overflow: hidden;
       background:
-        radial-gradient(ellipse at top, rgba(212, 165, 55, 0.08) 0%, transparent 55%),
-        linear-gradient(to bottom, var(--color-bg-wood) 0%, var(--color-bg-table) 60%);
-      padding: 16px 14px 28px;
+        radial-gradient(ellipse at center, rgba(30, 100, 60, 0.25) 0%, transparent 60%),
+        repeating-linear-gradient(45deg, var(--color-bg-table) 0px, var(--color-bg-table) 2px, var(--color-bg-table-dark) 2px, var(--color-bg-table-dark) 4px); }
+    @media (orientation: portrait) {
+      .ls-page::before { content: '📱 请横屏手机以获得最佳体验'; position: absolute; inset: 0;
+        display: flex; align-items: center; justify-content: center;
+        background: rgba(0,0,0,0.85); color: var(--color-gold); font-size: 18px; z-index: 9999; font-weight: 600; }
     }
-    .page-head {
-      display: flex; align-items: center; gap: 10px; margin-bottom: 14px;
-    }
-    .back-btn {
-      width: 30px; height: 30px; border-radius: 50%;
-      background: rgba(0,0,0,0.45); border: 1px solid rgba(212,165,55,0.25);
-      color: var(--color-text-secondary); font-size: 14px; cursor: pointer;
-      display: flex; align-items: center; justify-content: center; text-decoration: none;
-    }
-    .page-title { font-size: 17px; font-weight: 800; color: var(--color-gold); letter-spacing: 2px; }
-    .page-sub { font-size: 10px; color: var(--color-text-muted); margin-left: auto; }
-
-    /* 房间卡（房间→局两级） */
-    .room-card {
-      background: rgba(0,0,0,0.42); border: 1px solid rgba(212,165,55,0.22);
-      border-radius: var(--radius-lg); margin-bottom: 12px; overflow: hidden;
-    }
-    .room-card-head {
-      display: flex; align-items: center; gap: 8px;
-      padding: 10px 14px; background: rgba(212,165,55,0.08);
-      cursor: pointer;
-    }
-    .room-no { font-size: 14px; font-weight: 800; color: var(--color-gold); font-family: var(--font-mono); }
-    .room-meta { font-size: 10px; color: var(--color-text-muted); }
-    .room-toggle { margin-left: auto; color: var(--color-text-muted); font-size: 12px; }
-    .round-list { padding: 4px 10px 10px; display: none; }
-    .room-card.open .round-list { display: block; }
-    .room-card.open .room-toggle { transform: rotate(90deg); }
-    .round-row {
-      display: flex; align-items: center; gap: 10px;
-      padding: 9px 6px; border-bottom: 1px solid rgba(212,165,55,0.1);
-      cursor: pointer; text-decoration: none;
-    }
-    .round-row:last-child { border-bottom: none; }
-    .round-row:hover { background: rgba(212,165,55,0.06); border-radius: 8px; }
-    .round-no { font-size: 12px; font-weight: 700; color: var(--color-text-primary); min-width: 44px; }
-    .round-end { font-size: 10px; padding: 2px 8px; border-radius: 10px; }
-    .round-end.win { color: var(--color-gold); background: rgba(212,165,55,0.14); }
-    .round-end.exhaustive { color: var(--color-text-muted); background: rgba(255,255,255,0.08); }
-    .round-winners { font-size: 11px; color: var(--color-text-secondary); flex: 1; min-width: 0; }
-    .round-tai { font-size: 11px; font-weight: 700; color: var(--color-gold); font-family: var(--font-mono); }
-    .round-play { font-size: 11px; color: var(--color-wx-green, #07c160); font-weight: 700; }
-    .empty-tip { text-align: center; color: var(--color-text-muted); font-size: 12px; padding: 60px 0; }
+    .ls-stage { position: absolute; left: 50%; top: 50%; width: 844px; height: 390px; transform-origin: center; }
+    .rl-back { position: absolute; left: 24px; top: 14px; height: 28px; padding: 0 12px; border-radius: var(--radius-full);
+      background: rgba(0,0,0,0.25); border: 1px solid rgba(212,165,55,0.15); color: var(--color-text-muted);
+      font-size: 11px; display: flex; align-items: center; cursor: pointer; }
+    .rl-title { position: absolute; left: 0; right: 0; top: 16px; text-align: center; font-size: 17px; font-weight: 700;
+      color: var(--color-gold); letter-spacing: 3px; }
+    .rl-panel { position: absolute; left: 24px; top: 52px; width: 796px; height: 300px;
+      background: var(--color-bg-card); border: 1px solid rgba(212,165,55,0.18); border-radius: var(--radius-lg);
+      overflow: hidden; display: flex; flex-direction: column; }
+    .rl-head, .rl-row { display: grid; grid-template-columns: 110px 90px 1fr 90px 150px 90px; align-items: center;
+      gap: 8px; padding: 0 18px; height: 34px; flex: none; }
+    .rl-head { background: rgba(212,165,55,0.06); border-bottom: 1px solid rgba(212,165,55,0.12);
+      font-size: 10px; color: var(--color-text-muted); letter-spacing: 1px; }
+    .rl-body { flex: 1; min-height: 0; overflow-y: auto; }
+    .rl-row { height: 42px; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 11px; color: var(--color-text-secondary); }
+    .rl-row:last-child { border-bottom: none; }
+    .rl-room { font-family: var(--font-mono); font-weight: 700; color: var(--color-gold-light); letter-spacing: 1px; }
+    .rl-res.win { color: var(--color-gold-light); font-weight: 700; }
+    .rl-res.lose { color: #f3b1b1; }
+    .rl-res.draw { color: var(--color-text-muted); }
+    .rl-tai { font-family: var(--font-mono); font-weight: 700; color: var(--color-text-primary); }
+    .rl-time { font-size: 10px; color: var(--color-text-muted); font-family: var(--font-mono); }
+    .rl-play { width: 74px; height: 26px; border-radius: var(--radius-full); cursor: pointer;
+      background: linear-gradient(135deg, var(--color-gold), var(--color-gold-dark));
+      color: var(--color-bg-wood-dark); border: 1px solid var(--color-gold-light);
+      font-size: 11px; font-weight: 700; font-family: var(--font-cn); }
+    .rl-foot { flex: none; height: 26px; display: flex; align-items: center; justify-content: center;
+      font-size: 9px; color: var(--color-text-muted); border-top: 1px solid rgba(255,255,255,0.04); }
   </style>
 </head>
 <body>
-  <div class="replay-page">
-    <div class="page-head">
-      <a class="back-btn" href="home.html">‹</a>
-      <span class="page-title">🎬 战绩 / 回放</span>
-      <span class="page-sub">仅本人参赛的对局 · 参赛四方可看（D-29）</span>
-    </div>
-
-    <!-- 房间卡 1 -->
-    <div class="room-card open">
-      <div class="room-card-head" onclick="this.parentElement.classList.toggle('open')">
-        <span class="room-no">房 828666</span>
-        <span class="room-meta">09-17 20:12 · 8 局 · 已散场</span>
-        <span class="room-toggle">›</span>
-      </div>
-      <div class="round-list">
-        <a class="round-row" href="replay-player.html">
-          <span class="round-no">第 1 局</span>
-          <span class="round-end win">自摸</span>
-          <span class="round-winners">我 · 门清一摸三+清一色</span>
-          <span class="round-tai">35 台</span>
-          <span class="round-play">回放 ▶</span>
-        </a>
-        <a class="round-row" href="replay-player.html">
-          <span class="round-no">第 2 局</span>
-          <span class="round-end win">点炮</span>
-          <span class="round-winners">令狐冲（杨过点炮）</span>
-          <span class="round-tai">12 台</span>
-          <span class="round-play">回放 ▶</span>
-        </a>
-        <a class="round-row" href="replay-player.html">
-          <span class="round-no">第 3 局</span>
-          <span class="round-end exhaustive">荒庄</span>
-          <span class="round-winners">无人胡牌 · 庄家连庄</span>
-          <span class="round-tai">—</span>
-          <span class="round-play">回放 ▶</span>
-        </a>
+  <div class="ls-page">
+    <div class="ls-stage" id="stage">
+      <div class="rl-back" onclick="location.href='home.html'">← 返回大厅</div>
+      <div class="rl-title">🎬 战绩 / 回放</div>
+      <div class="rl-panel">
+        <div class="rl-head">
+          <span>房间</span><span>局序</span><span>结果</span><span>台数</span><span>时间</span><span>操作</span>
+        </div>
+        <div class="rl-body">
+          <div class="rl-row">
+            <span class="rl-room">132702</span><span>第 3/8 局</span>
+            <span class="rl-res win">你胡（点炮·机器人3）</span><span class="rl-tai">18 台</span>
+            <span class="rl-time">2026-09-18 16:05</span><button class="rl-play">回放</button>
+          </div>
+          <div class="rl-row">
+            <span class="rl-room">132702</span><span>第 2/8 局</span>
+            <span class="rl-res lose">机器人1 胡（你点炮）</span><span class="rl-tai">-14 分</span>
+            <span class="rl-time">2026-09-18 15:52</span><button class="rl-play">回放</button>
+          </div>
+          <div class="rl-row">
+            <span class="rl-room">132702</span><span>第 1/8 局</span>
+            <span class="rl-res draw">荒庄流局</span><span class="rl-tai">0</span>
+            <span class="rl-time">2026-09-18 15:40</span><button class="rl-play">回放</button>
+          </div>
+          <div class="rl-row">
+            <span class="rl-room">828666</span><span>第 8/8 局</span>
+            <span class="rl-res win">你胡（自摸三家）</span><span class="rl-tai">26 台</span>
+            <span class="rl-time">2026-09-17 21:14</span><button class="rl-play">回放</button>
+          </div>
+        </div>
+        <div class="rl-foot">仅展示你参与的对局 · 回放为事件溯源确定性重演（四家手牌全程可见）</div>
       </div>
     </div>
-
-    <!-- 房间卡 2 -->
-    <div class="room-card">
-      <div class="room-card-head" onclick="this.parentElement.classList.toggle('open')">
-        <span class="room-no">房 517702</span>
-        <span class="room-meta">09-16 21:40 · 3 局 · 已散场</span>
-        <span class="room-toggle">›</span>
-      </div>
-      <div class="round-list">
-        <a class="round-row" href="replay-player.html">
-          <span class="round-no">第 1 局</span>
-          <span class="round-end win">自摸</span>
-          <span class="round-winners">黄蓉</span>
-          <span class="round-tai">8 台</span>
-          <span class="round-play">回放 ▶</span>
-        </a>
-      </div>
-    </div>
-
-    <div class="empty-tip" style="display:none;">还没有对局记录</div>
   </div>
+  <script>
+    const fit = () => {
+      const s = Math.min(window.innerWidth / 844, window.innerHeight / 390);
+      document.getElementById('stage').style.transform = `translate(-50%,-50%) scale(${s})`;
+    };
+    window.addEventListener('resize', fit);
+    fit();
+  </script>
 </body>
 </html>

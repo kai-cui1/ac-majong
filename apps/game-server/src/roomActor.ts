@@ -1,6 +1,6 @@
 import type { TableState, Action, GameEvent, ActionKind, RoundSnapshot } from '@ac-majong/engine';
 import { createTable, applyAction, startNextRound, legalActions, snapshotRound, buildPhysicalLayout, wallInfo } from '@ac-majong/engine';
-import type { RoomView, RoomPhase, FinalStanding, RoundReview, RoomEndReason, RoomSettings, SeatingView } from '@ac-majong/protocol';
+import type { RoomView, RoomPhase, FinalStanding, RoundReview, RoomEndReason, RoomSettings, SeatingView, PublicRoomEntry } from '@ac-majong/protocol';
 import type { Connection } from './connection';
 import { redact } from './redact';
 import { makeBotConnection, makeTrusteeConnection } from './devBots';
@@ -81,6 +81,8 @@ function actionKind(action: Action): ActionKind | null {
 export class RoomActor {
   readonly id: string;
   readonly hostUserId: string;
+  /** BL-018：创建时间戳（列表同组内倒序排序用） */
+  readonly createdAt = Date.now();
   readonly maxRounds: number;
   phase: RoomPhase = 'waiting';
   private state: TableState | null = null;
@@ -119,7 +121,7 @@ export class RoomActor {
     this.seed = seed;
     this.hooks = hooks;
     this.trusteeAfterMs = timings?.trusteeAfterMs ?? 60_000; // D-24：掉线保留 60 秒后托管
-    this.settings = settings ?? { wallMode: 'random', breakDice: false };
+    this.settings = { wallMode: 'random', breakDice: false, chiFirstView: true, isPublic: true, ...settings };
   }
 
   getState(): TableState | null {
@@ -162,6 +164,20 @@ export class RoomActor {
   }
   playerCount(): number {
     return this.seatOf.size;
+  }
+
+  /** BL-018：大厅公开房间列表行——仅公开开关 ON 且未终局时返回；排序/上限由 RoomManager 聚合 */
+  listEntry(): PublicRoomEntry | null {
+    if (this.settings.isPublic === false) return null;
+    if (this.phase !== 'waiting' && this.phase !== 'seating' && this.phase !== 'playing') return null;
+    const hostSeat = this.seatOf.get(this.hostUserId);
+    return {
+      room: this.id,
+      host: (hostSeat != null ? this.names[hostSeat] : null) ?? this.names[0] ?? this.hostUserId,
+      seats: this.playerCount(),
+      maxRounds: this.maxRounds,
+      status: this.phase === 'playing' ? 'playing' : 'waiting',
+    };
   }
 
   roomView(): RoomView {
@@ -636,7 +652,7 @@ export class RoomActor {
     for (const [userId, conn] of this.connOf) {
       const seat = this.seatOf.get(userId);
       if (seat == null) continue;
-      const view = redact(this.state, seat, this.id, this.maxRounds, names);
+      const view = redact(this.state, seat, this.id, this.maxRounds, names, this.settings);
       if (this.seating) view.seating = this.seating; // 局间摸牌位骰阶段随 gameView 下发
       if (wi) view.wallInfo = wi;
       conn.send({ t: 'gameView', view });

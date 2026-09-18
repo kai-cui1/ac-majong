@@ -2,171 +2,81 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>AC 麻将俱乐部 — 登录</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>AC 麻将俱乐部 — 登录（横屏 844×390）</title>
   <link rel="stylesheet" href="style.css">
   <style>
-    .login-page {
-      min-height: 100vh; min-height: 100dvh;
-      display: flex; flex-direction: column;
+    /* ============================================
+       横屏登录 v2（BL-019）：基准 844×390，居中纵列（对齐客户端 LoginScreen）
+       ============================================ */
+    .ls-page { position: relative; width: 100vw; height: 100vh; height: 100dvh; overflow: hidden;
       background:
-        radial-gradient(ellipse at top, rgba(212, 165, 55, 0.1) 0%, transparent 55%),
-        linear-gradient(to bottom, var(--color-bg-wood) 0%, var(--color-bg-table) 55%);
+        radial-gradient(ellipse at center, rgba(30, 100, 60, 0.25) 0%, transparent 60%),
+        repeating-linear-gradient(45deg, var(--color-bg-table) 0px, var(--color-bg-table) 2px, var(--color-bg-table-dark) 2px, var(--color-bg-table-dark) 4px); }
+    @media (orientation: portrait) {
+      .ls-page::before { content: '📱 请横屏手机以获得最佳体验'; position: absolute; inset: 0;
+        display: flex; align-items: center; justify-content: center;
+        background: rgba(0,0,0,0.85); color: var(--color-gold); font-size: 18px; z-index: 9999; font-weight: 600; }
     }
-    .login-hero {
-      flex: 1;
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-      padding: var(--spacing-xxl) var(--spacing-lg);
-      text-align: center;
-    }
-    .login-logo {
-      width: 96px; height: 96px;
+    .ls-stage { position: absolute; left: 50%; top: 50%; width: 844px; height: 390px; transform-origin: center; }
+    .lg-col { position: absolute; left: 50%; top: 0; width: 480px; height: 390px; transform: translateX(-50%);
+      display: flex; flex-direction: column; align-items: center; }
+    .lg-logo { margin-top: 14px; width: 56px; height: 56px; border-radius: 14px; border: 2px solid var(--color-gold-light);
       background: linear-gradient(145deg, #d4a537 0%, #a07d1c 50%, #8b6820 100%);
-      border-radius: 24px;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 50px;
-      box-shadow: 0 8px 32px rgba(212, 165, 55, 0.35), inset 0 2px 0 rgba(255,255,255,0.2);
-      border: 2px solid var(--color-gold-light);
-      position: relative; margin-bottom: var(--spacing-lg);
-    }
-    .login-logo::after {
-      content: ''; position: absolute; inset: -6px;
-      border: 1px solid rgba(212, 165, 55, 0.2); border-radius: 28px;
-    }
-    .login-title {
-      font-size: 30px; font-weight: 900; color: var(--color-gold);
-      letter-spacing: 8px; margin-bottom: 8px;
-      text-shadow: 0 2px 12px rgba(212, 165, 55, 0.25);
-    }
-    .login-subtitle { font-size: 13px; color: var(--color-text-muted); letter-spacing: 2px; }
-
-    /* 登录操作区 */
-    .login-actions {
-      padding: 0 var(--spacing-xl) calc(var(--spacing-xxl) + env(safe-area-inset-bottom, 0px));
-      display: flex; flex-direction: column; align-items: center;
-    }
-    .btn-wx-login {
-      width: 100%; max-width: min(320px, 100%);
-      display: flex; align-items: center; justify-content: center; gap: 10px;
-      padding: 14px; border-radius: var(--radius-full); border: none;
-      background: linear-gradient(135deg, #07c160, #06a050);
-      color: #fff; font-size: 17px; font-weight: 700; letter-spacing: 2px;
-      cursor: pointer; font-family: var(--font-cn);
-      box-shadow: 0 4px 16px rgba(7, 193, 96, 0.35);
-      transition: all var(--transition-fast);
-    }
-    .btn-wx-login:hover { transform: translateY(-1px); box-shadow: 0 6px 22px rgba(7,193,96,0.5); }
-    .btn-wx-login:disabled {
-      background: rgba(255,255,255,0.12); color: var(--color-text-muted);
-      box-shadow: none; cursor: not-allowed; transform: none;
-    }
-    .wx-icon {
-      width: 24px; height: 24px; border-radius: 50%;
-      background: rgba(255,255,255,0.2);
-      display: flex; align-items: center; justify-content: center; font-size: 14px;
-    }
-
-    /* H5 账号表单（2026-09-17 回补：账号密码路线） */
-    .acct-form {
-      width: 100%; max-width: min(320px, 100%);
-      display: flex; flex-direction: column; gap: 10px;
-      margin-bottom: var(--spacing-md);
-    }
-    .acct-input {
-      width: 100%; padding: 10px 14px;
-      background: var(--color-bg-wood-dark); color: var(--color-text);
-      border: 1px solid rgba(212,165,55,0.35); border-radius: var(--radius-md);
-      font-size: 14px; font-family: var(--font-cn); outline: none;
-    }
-    .acct-input::placeholder { color: var(--color-text-muted); }
-    .acct-input:focus { border-color: var(--color-gold); }
-    .login-status { min-height: 14px; margin-top: 6px; font-size: 10px; color: var(--color-danger, #e05b4a); }
-    .mode-note {
-      margin-top: var(--spacing-md); max-width: min(320px, 100%);
-      padding: 8px 12px; border: 1px dashed rgba(212,165,55,0.3); border-radius: var(--radius-md);
-      font-size: 10px; color: var(--color-text-muted); line-height: 1.7; text-align: center;
-    }
-
-    /* 协议勾选 */
-    .agree-row {
-      display: flex; align-items: flex-start; gap: 6px;
-      margin-top: var(--spacing-lg); max-width: min(320px, 100%);
-      font-size: 11px; color: var(--color-text-muted); line-height: 1.6;
-    }
-    .agree-row span { flex: 1; min-width: 0; }
-    .agree-checkbox {
-      width: 16px; height: 16px; border-radius: 50%; flex-shrink: 0;
-      border: 1.5px solid var(--color-text-muted); background: transparent;
-      cursor: pointer; margin-top: 1px;
-      display: flex; align-items: center; justify-content: center;
-      transition: all var(--transition-fast);
-    }
-    .agree-checkbox.checked { border-color: var(--color-gold); background: var(--color-gold); }
-    .agree-checkbox.checked::after { content: '✓'; color: var(--color-bg-wood-dark); font-size: 11px; font-weight: 900; }
-    .agree-row a { color: var(--color-gold); text-decoration: none; }
-
-    /* 健康游戏提示（合规） */
-    .health-notice {
-      margin-top: var(--spacing-xl); max-width: 320px;
-      padding: 10px 14px;
-      background: rgba(0,0,0,0.25); border: 1px solid rgba(212,165,55,0.1);
-      border-radius: var(--radius-md);
-      font-size: 10px; color: var(--color-text-muted); line-height: 1.8;
-      text-align: center;
-    }
-    .login-version { margin-top: var(--spacing-md); font-size: 10px; color: var(--color-text-muted); font-family: var(--font-mono); opacity: 0.7; }
+      display: flex; align-items: center; justify-content: center; font-size: 28px;
+      box-shadow: 0 6px 24px rgba(212,165,55,0.35), inset 0 2px 0 rgba(255,255,255,0.2); }
+    .lg-title { margin-top: 6px; font-size: 26px; font-weight: 900; color: var(--color-gold); letter-spacing: 6px;
+      text-shadow: 0 2px 12px rgba(212,165,55,0.25); }
+    .lg-sub { font-size: 11px; color: var(--color-text-muted); letter-spacing: 2px; margin-top: 2px; }
+    .lg-input { width: 320px; margin-top: 10px; padding: 9px 12px; text-align: center; font-size: 13px;
+      color: var(--color-text-primary); background: rgba(0,0,0,0.35); border: 1px solid rgba(212,165,55,0.25);
+      border-radius: var(--radius-md); outline: none; font-family: var(--font-cn); }
+    .lg-input::placeholder { color: var(--color-text-muted); }
+    .lg-input:focus { border-color: var(--color-gold); box-shadow: 0 0 12px rgba(212,165,55,0.15); }
+    .lg-btn { margin-top: 12px; width: 240px; padding: 9px 0; text-align: center; cursor: pointer;
+      background: linear-gradient(135deg, var(--color-gold), var(--color-gold-dark));
+      color: var(--color-bg-wood-dark); border: 1px solid var(--color-gold-light); border-radius: var(--radius-full);
+      font-size: 15px; font-weight: 700; letter-spacing: 3px; font-family: var(--font-cn);
+      box-shadow: 0 3px 12px rgba(212,165,55,0.3); text-decoration: none; display: block; }
+    .lg-btn:hover { transform: translateY(-1px); box-shadow: 0 5px 18px rgba(212,165,55,0.45); }
+    .lg-status { margin-top: 6px; font-size: 10px; color: var(--color-text-secondary); min-height: 14px; }
+    .lg-agree { margin-top: 4px; display: flex; align-items: center; gap: 6px; cursor: pointer; }
+    .lg-check { width: 14px; height: 14px; border-radius: 4px; border: 1px solid rgba(212,165,55,0.4);
+      background: linear-gradient(135deg, rgba(212,165,55,0.5), rgba(212,165,55,0.3));
+      display: flex; align-items: center; justify-content: center; font-size: 9px; color: var(--color-gold-light); }
+    .lg-agree-txt { font-size: 9.5px; color: var(--color-text-muted); }
+    .lg-agree-txt a { color: var(--color-gold); text-decoration: none; }
+    .lg-notice { margin-top: 6px; font-size: 9px; color: var(--color-text-muted); text-align: center; line-height: 1.5; }
+    .lg-ver { position: absolute; right: 24px; bottom: 12px; font-size: 9px; color: var(--color-text-muted); font-family: var(--font-mono); }
   </style>
 </head>
 <body>
-  <div class="login-page">
-
-    <div class="login-hero">
-      <div class="login-logo">🀄</div>
-      <div class="login-title">AC 麻将俱乐部</div>
-      <div class="login-subtitle">传统台式麻将 · 好友组局</div>
+  <div class="ls-page">
+    <div class="ls-stage" id="stage">
+      <div class="lg-col">
+        <div class="lg-logo">🀄</div>
+        <div class="lg-title">AC 麻将俱乐部</div>
+        <div class="lg-sub">传统台式麻将 · 好友组局</div>
+        <input class="lg-input" placeholder="账号（3-20 位字母/数字/下划线）" value="kaicui">
+        <input class="lg-input" type="password" placeholder="密码（6-64 位）" value="........">
+        <a class="lg-btn" href="home.html">登录 / 注册</a>
+        <div class="lg-status"></div>
+        <div class="lg-agree">
+          <span class="lg-check">✓</span>
+          <span class="lg-agree-txt">我已阅读并同意 <a>《用户协议》</a><a>《隐私政策》</a>，并确认已年满 18 周岁</span>
+        </div>
+        <div class="lg-notice">本游戏内积分均为虚拟积分，不可兑换、不可提现。适度游戏益脑，沉迷游戏伤身。</div>
+      </div>
+      <div class="lg-ver">v0.1.0 · 内测版</div>
     </div>
-
-    <div class="login-actions">
-      <!-- H5/Web 端：账号密码表单（注册即登录；有会话时免密复登，状态行提示） -->
-      <div class="acct-form">
-        <input class="acct-input" placeholder="账号（3-20 位字母/数字/下划线）" maxlength="20">
-        <input class="acct-input" type="password" placeholder="密码（至少 6 位）" maxlength="64">
-        <input class="acct-input" placeholder="昵称（可选，首次注册用）" maxlength="12">
-      </div>
-      <button class="btn-wx-login" id="loginBtn" disabled>登录 / 注册</button>
-      <div class="login-status" id="loginStatus">会话有效时自动免密复登；失败回表单并明示原因</div>
-
-      <div class="agree-row">
-        <div class="agree-checkbox" id="agreeCheck"></div>
-        <span>我已阅读并同意 <a href="#">《用户协议》</a> 和 <a href="#">《隐私政策》</a>，并确认已年满 18 周岁</span>
-      </div>
-
-      <div class="health-notice">
-        抵制不良游戏，拒绝盗版游戏。注意自我保护，谨防受骗上当。<br>
-        适度游戏益脑，沉迷游戏伤身。合理安排时间，享受健康生活。<br>
-        本游戏内积分均为虚拟积分，不可兑换、不可提现。
-      </div>
-
-      <div class="login-version">v0.1.0 · 内测版</div>
-
-      <div class="mode-note">
-        平台三态：Web/H5 = 上方账号表单；微信小游戏端 = 「微信一键登录」绿钮（云托管握手头鉴权）；原生壳 = 一键登录（mock）。<br>
-        未勾选协议时按钮置灰；勾选后变亮。
-      </div>
-    </div>
-
   </div>
-
   <script>
-    const check = document.getElementById('agreeCheck');
-    const btn = document.getElementById('loginBtn');
-    check.addEventListener('click', () => {
-      check.classList.toggle('checked');
-      btn.disabled = !check.classList.contains('checked');
-    });
-    btn.addEventListener('click', () => {
-      if (!btn.disabled) location.href = 'home.html';
-    });
+    const fit = () => {
+      const s = Math.min(window.innerWidth / 844, window.innerHeight / 390);
+      document.getElementById('stage').style.transform = `translate(-50%,-50%) scale(${s})`;
+    };
+    window.addEventListener('resize', fit);
+    fit();
   </script>
 </body>
 </html>

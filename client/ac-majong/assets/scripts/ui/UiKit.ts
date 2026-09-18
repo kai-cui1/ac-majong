@@ -64,13 +64,15 @@ export function uiLabel(text: string, opts: LabelOpts = {}): Node {
 
 // ============ 按钮 ============
 
-export type ButtonVariant = 'primary' | 'action' | 'secondary' | 'wx';
+export type ButtonVariant = 'primary' | 'action' | 'secondary' | 'wx' | 'dark';
 export interface ButtonOpts {
   variant?: ButtonVariant;
   width?: number;
   height?: number;
   fontSize?: number;
   enabled?: boolean;
+  /** 圆角覆盖（默认随 variant；原型 .lb-back/.lb-mute 需 pill/圆） */
+  radius?: number;
 }
 
 const disabledMap = new WeakMap<Node, boolean>();
@@ -102,7 +104,10 @@ export function uiButton(text: string, onClick: () => void, opts: ButtonOpts = {
       fill = Theme.color.bgCard; stroke = Theme.color.goldDark; textColor = Theme.color.gold; fontSize = opts.fontSize ?? 15; break;
     default: // secondary
       fill = rgba(0, 0, 0, 0); stroke = Theme.color.textMuted; textColor = Theme.color.textSecondary; fontSize = opts.fontSize ?? 14; lw = 1; break;
+    case 'dark': // 原型 .lb-subbtn/.lb-back/.lb-mute：黑半透填 + 淡金描边（rgba 的 a∈[0,1]）
+      fill = rgba(0, 0, 0, 0.25); stroke = rgba(212, 165, 55, 0.12); textColor = Theme.color.textSecondary; fontSize = opts.fontSize ?? 14; lw = 1; break;
   }
+  if (opts.radius != null) radius = opts.radius;
 
   const node = new Node(`Btn_${text}`);
   node.addComponent(UITransform).setContentSize(w, h);
@@ -240,7 +245,7 @@ export function uiMuteToggle(size = 34): Node {
     am.toggleMuted();
     const lb = btn.getChildByName('Label')?.getComponent(Label);
     if (lb) lb.string = icon();
-  }, { variant: 'secondary', width: size, height: size, fontSize: Math.round(size * 0.5) });
+  }, { variant: 'dark', width: size, height: size, fontSize: Math.round(size * 0.5), radius: size / 2 });
   return btn;
 }
 

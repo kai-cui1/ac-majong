@@ -2,7 +2,7 @@
 
 > **模块**：monorepo 目录结构（多系统边界）+ Admin 后台系统（`admin-server` / `admin-web`）架构蓝图。
 > **关联**：总体架构 [`AC麻将-联机架构方案.md`](./AC麻将-联机架构方案.md)｜持久化 [`AC麻将-数据持久化与事件溯源.md`](./AC麻将-数据持久化与事件溯源.md)（persistence 抽包来源、Admin 读游戏数据入口，§9「admin 全量复用预留」）｜网关房间 [`AC麻将-服务端网关与房间.md`](./AC麻将-服务端网关与房间.md)。
-> **产品**：Admin 后台为**新增系统**，其产品 PRD 另行立项（见 §8）；本文档承载「目录重构」与「Admin 技术架构」两部分设计。已定决策：Admin 后端为**独立服务**、**复用同一 MySQL 库（ac_majong）** 并经 `packages/persistence` 读游戏数据。
+> **产品**：Admin 后台为**新增系统**，其产品 PRD 另行立项（见 §8）；本文档承载「目录重构」与「Admin 技术架构」两部分设计。已定决策：Admin 后端为**独立服务**、**复用同一 MySQL 库（ac_majong）** 并经 `packages/persistence` 读游戏数据。**技术栈选型已确认（2026-09-18，见 §6）**：Fastify 5 + Session/Redis + RBAC；前端 Vite+React 18+TS+AntD 5；数据层目标全面 Drizzle 化（分 P2-a/P2-b 两阶段）。
 > 遵循[《文档总纲》](../README.md)三原则。
 
 ---
@@ -71,22 +71,36 @@ ac-majong-new/
 - **game-server 侧改造**：删除内部 `./persistence/*` 引用，改为 `import … from '@ac-majong/persistence'`；`mysql2`/`ioredis` 依赖从 game-server 移除（仅 persistence 使用），保留 `ws`。
 - **tsconfig**：包内 `tsconfig.json` 继承 `../../tsconfig.base.json`，与现有包一致。
 
-## 6. Admin 系统架构（蓝图，P2 落地）
+## 6. Admin 系统架构（技术栈已选型，P2 落地）
+
+> 选型于 2026-09-18 确认。一期范围见 backlog **BL-015 管理后台子系统一期**（管理员鉴权角色 + 用户管理 + 对局/回放仲裁 + 审计日志；看板/运营配置二期）。
 
 ### 6.1 admin-server（独立后端服务）
-- **形态**：独立 Node + TypeScript **HTTP/REST** 服务（`apps/admin-server`），独立进程/容器，可独立重启而不影响对局。
-- **鉴权**：管理员账号 + **RBAC**（会话或 JWT），与玩家侧 `x-wx-openid`/code2Session 身份体系**完全隔离**。
+- **形态**：独立 Node 20 + TypeScript(ESM) **HTTP/REST** 服务（`apps/admin-server`），独立进程/容器，可独立重启而不影响对局。工具链沿用 tsx / tsc / vitest（与 game-server 一致）。
+- **HTTP 框架**：**Fastify 5**（轻、快、内建 JSON-Schema 校验、插件化、TS 一流）；请求体/查询参数用 **zod** 统一校验与类型推导。
+- **鉴权**：**Session + RBAC**（非 JWT）。`@fastify/cookie` + `@fastify/session`（**会话存 Redis**，复用现有 ioredis 基础设施）+ `@fastify/csrf-protection`（cookie 会话必备）。管理员账号体系与玩家侧 `x-wx-openid`/code2Session **完全隔离**；角色建议 super / operator / viewer 三档，权限点控到接口。
 - **数据**：
   - **读游戏数据**：只经 `@ac-majong/persistence`（含 [04 §9](./AC麻将-数据持久化与事件溯源.md) 回放接口「admin 全量复用预留」），不直连 game-server。
-  - **自有写表**：同库 `ac_majong` 新增 `admins` / `roles` / `admin_audit_logs` 等管理表（schema 迁移随 Admin 立项产出）。
+  - **自有写表**：同库 `ac_majong` 新增 `admins` / `roles`（或 `admin_roles` 关联）/ `admin_audit_logs` 等管理表（schema 迁移见 §6.4）。
+- **回放仲裁**：admin-server 复用 `@ac-majong/engine` 的 `replayRound` 做**服务端逐帧还原**，REST 返回帧序列（初始态 + 动作 + 每步结果）；还原逻辑不入前端（受 §4 约束 admin-web 不引 `packages/*`）。
 - **不做**：不持有 WS、不持有 RoomManager、不介入对局实时链路。
 
 ### 6.2 admin-web（控制台前端）
-- **形态**：独立 SPA（`apps/admin-web`），建议 **React + Vite + TypeScript**（与 monorepo TS 体系一致）；静态构建独立部署。
+- **形态**：独立 SPA（`apps/admin-web`），**Vite + React 18 + TypeScript**（与 monorepo TS 体系一致），静态构建独立部署。
+- **UI**：**Ant Design 5 + 自建路由/布局**（不引整套 Ant Design Pro，保持轻量可控）；数据请求 **TanStack Query**；路由 **React Router 6**；少量全局态（登录管理员/权限）**Zustand**。图表（二期看板）**ECharts**。
+- **回放播放器**：复用牌面贴图（`client/ac-majong/assets/resources/tiles`）做 DOM/canvas 逐帧播放，数据来自 admin-server 回放 REST。
 - **数据**：仅调用 `admin-server` REST；不直连游戏服务端、不引 `packages/client-core`。
 
-### 6.3 部署
-- `deploy/` 按服务扩展：`game-server`（现状单实例约束不变）、`admin-server`、`admin-web`(静态)。Admin 与游戏服务**分容器**，互不阻塞。
+### 6.3 部署与安全
+- `deploy/` 按服务扩展：**三容器** `game-server`（单实例约束不变）/ `admin-server` / `admin-web`(静态)，互不阻塞。
+- **nginx 同源反代**：同一域名下 `admin-web` 静态资源 + `/api` → `admin-server`，使会话 cookie **同源**（免跨域与 SameSite 麻烦）。
+- **网络隔离**：admin **不挂微信云托管公网默认域名**；内网 / IP 白名单 / 独立域名 + HTTPS；JWT→改为 Session+RBAC+**全量操作审计**（呼应 BL-009 上线合规）。
+
+### 6.4 数据访问与迁移策略（Drizzle ORM，目标全面化·分两阶段）
+- **目标形态**：全局统一 **Drizzle ORM**；`packages/persistence` 最终重写为 **Drizzle-based 共享数据层**，仍是 game/admin 的**唯一数据入口**（保住 §4「admin 读游戏数据只经 persistence」约束）。迁移源最终由 `schema.sql` 改为 **drizzle-kit**。
+- **P2-a（admin 一期，不碰对局写链路）**：引入 `drizzle-orm` + `drizzle-kit`；对现有 `ac_majong` 库 `introspect` 生成 Drizzle schema（作为只读镜像，不改现有表结构）。**admin 自有表（admins/roles/admin_audit_logs）读写 + admin 对游戏表的只读查询**走 Drizzle；**游戏表写入仍由现有 persistence(raw mysql2) 负责**，对局落库链路零改动。persistence 向 admin 暴露 **Drizzle 只读查询面**（组合筛选/分页/聚合），写游戏表仍走 persistence 既有方法。
+- **P2-b（后续独立批次）**：把 persistence 的写路径（含 `rehydrate`/`replayRound` 还原链路）迁到 Drizzle，退役 raw mysql2 与 `schema.sql`；现有生产库做 baseline（introspect + 标记已应用）；全量回归 engine/persistence/server 测试 + 单人+Bot 完整一局 e2e + MySQL 落库抽查。
+- **降风险原则**：一期只为 admin 引入 Drizzle（自有表 + 只读），**不为 admin 去重构已 e2e 验证的对局主链路**；两阶段各为可回滚的原子批次（沿用 §7 迁移门禁风格）。
 
 ## 7. 迁移步骤与验证门禁
 
@@ -108,9 +122,10 @@ ac-majong-new/
 - **门禁**：typecheck/test/build 全绿 + `docker compose config` 校验 + `run/start-server.sh` 起服冒烟 + 单人+Bot 打完一局 e2e（验证 persistence 链路未断）。
 
 ### P2 · Admin 落地（启动 Admin 开发时）
-1. **先产出 Admin 产品 PRD**（新增 `1-prd` 模块）与 admin 表 schema 迁移。
-2. 脚手架 `apps/admin-server` + `apps/admin-web`；`deploy/` 增服务。
-- **门禁**：Admin 独立起服 + 登录 RBAC + 至少一个只读查询接口打通。
+1. **先产出 Admin 产品 PRD**（新增 `1-prd` 模块）与 admin 表 schema 迁移（admins/roles/admin_audit_logs）。
+2. 脚手架 `apps/admin-server`（Fastify 5 + Session/Redis + RBAC）+ `apps/admin-web`（Vite+React 18+AntD 5）；`deploy/` 增三容器与 nginx 同源反代。
+3. **数据层按 §6.4 分阶段**：P2-a 只为 admin 引入 Drizzle（自有表 + 游戏表只读），不碰对局写链路；P2-b 后续独立批次将 persistence 整体迁 Drizzle。
+- **门禁**：Admin 独立起服 + 登录 RBAC + 至少一个只读查询接口打通；P2-b 额外要求对局链路全量回归 e2e 绿。
 
 ## 8. 与文档先行流程的衔接
 
@@ -136,3 +151,4 @@ ac-majong-new/
 |---|---|
 | 2026-09-18 | 首次产出：目录三分法目标结构、系统依赖规则、persistence 抽包设计（P0）、Admin 系统架构蓝图（独立服务 + 同库 ac_majong，P2）、P0/P1/P2 迁移步骤与验证门禁、风险与回滚 |
 | 2026-09-18 | **P0/P1 执行完成**：persistence 抽为共享包 `@ac-majong/persistence`（源码+测试随包迁移）；`server`→`apps/game-server`（包名 `@ac-majong/game-server`）；workspace 改 `apps/*` 并清除空壳 miniwxapp；同步 Dockerfile/compose.prod/start-server/.gitignore 与 03/04/06 文档路径。门禁：typecheck/test(64+172+6)/build、compose config(dev+prod)、8082 起服冒烟 全绿 |
+| 2026-09-18 | **Admin 技术栈选型定稿**（§6 写实）：后端 Fastify 5 + zod、Session+RBAC（会话存 Redis + @fastify/csrf-protection）；前端 Vite+React 18+TS+AntD 5(自建布局)+TanStack Query+React Router 6+Zustand，ECharts 二期；部署三容器 + nginx 同源反代 + 网络隔离。数据层目标**全面 Drizzle 化**但**分 P2-a/P2-b 两阶段**（一期只为 admin 引入 Drizzle、不碰已 e2e 验证的对局写链路；二期将 persistence 整体迁 Drizzle 并退役 raw mysql2/schema.sql）；persistence 最终为 Drizzle-based 共享层、仍为唯一数据入口。同步更新 §7 P2 步骤与门禁 |

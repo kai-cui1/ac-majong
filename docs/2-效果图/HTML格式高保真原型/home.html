@@ -2,349 +2,302 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>AC 麻将俱乐部 — 大厅</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>AC 麻将俱乐部 — 大厅（横屏 844×390）</title>
   <link rel="stylesheet" href="style.css">
   <style>
-    /* 大厅特有样式 */
-    .home-hero {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 56px var(--spacing-lg) 28px;
-      text-align: center;
+    /* ============================================
+       横屏大厅 v3（BL-019 全横屏化 + BL-018 房间列表）
+       基准: 844×390 舞台居中缩放；左列=入口/次要入口，右列=公开房间列表
+       ============================================ */
+    .ls-page { position: relative; width: 100vw; height: 100vh; height: 100dvh; overflow: hidden;
+      background:
+        radial-gradient(ellipse at center, rgba(30, 100, 60, 0.25) 0%, transparent 60%),
+        repeating-linear-gradient(45deg, var(--color-bg-table) 0px, var(--color-bg-table) 2px, var(--color-bg-table-dark) 2px, var(--color-bg-table-dark) 4px);
     }
-    .home-logo {
-      width: 90px;
-      height: 90px;
+    @media (orientation: portrait) {
+      .ls-page::before { content: '📱 请横屏手机以获得最佳体验'; position: absolute; inset: 0;
+        display: flex; align-items: center; justify-content: center;
+        background: rgba(0,0,0,0.85); color: var(--color-gold); font-size: 18px; z-index: 9999; font-weight: 600; }
+    }
+    .ls-stage { position: absolute; left: 50%; top: 50%; width: 844px; height: 390px; transform-origin: center; }
+
+    /* 顶栏：品牌左 / 用户条右 */
+    .lb-brand { position: absolute; left: 24px; top: 14px; display: flex; align-items: center; gap: 12px; }
+    .lb-logo { width: 40px; height: 40px; border-radius: 10px; border: 1px solid var(--color-gold-light);
       background: linear-gradient(145deg, #d4a537 0%, #a07d1c 50%, #8b6820 100%);
-      border-radius: 20px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 46px;
-      box-shadow:
-        0 8px 32px rgba(212, 165, 55, 0.35),
-        inset 0 2px 0 rgba(255,255,255,0.2);
-      margin-bottom: var(--spacing-lg);
-      border: 2px solid var(--color-gold-light);
-      position: relative;
-    }
-    .home-logo::after {
-      content: '';
-      position: absolute;
-      inset: -6px;
-      border: 1px solid rgba(212, 165, 55, 0.2);
-      border-radius: 24px;
-    }
-    .home-title {
-      font-size: 28px;
-      font-weight: 900;
-      color: var(--color-gold);
-      letter-spacing: 8px;
-      margin-bottom: 6px;
-      text-shadow: 0 2px 12px rgba(212, 165, 55, 0.25);
-    }
-    .home-subtitle {
-      font-size: 13px;
-      color: var(--color-text-muted);
-      letter-spacing: 2px;
-    }
-
-    /* 用户信息条（点击进 profile） */
-    .user-bar {
-      display: flex; align-items: center; gap: var(--spacing-md);
-      margin: 0 var(--spacing-lg) var(--spacing-xl);
-      background: var(--color-bg-card);
-      border: 1px solid rgba(212,165,55,0.15);
-      border-radius: var(--radius-lg);
-      padding: var(--spacing-md) var(--spacing-lg);
-      text-decoration: none;
-      transition: all var(--transition-fast);
-    }
-    .user-bar:hover { border-color: var(--color-gold-dark); }
-    .user-bar-avatar {
-      width: 44px; height: 44px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center; font-size: 21px;
+      box-shadow: 0 4px 16px rgba(212,165,55,0.3); }
+    .lb-title { font-size: 20px; font-weight: 900; color: var(--color-gold); letter-spacing: 5px; line-height: 1.1; }
+    .lb-sub { font-size: 10px; color: var(--color-text-muted); letter-spacing: 1.5px; }
+    .lb-user { position: absolute; right: 24px; top: 12px; width: 216px; height: 44px;
+      display: flex; align-items: center; gap: 10px; padding: 0 12px;
+      background: var(--color-bg-card); border: 1px solid rgba(212,165,55,0.18); border-radius: var(--radius-lg); cursor: pointer; }
+    .lb-user:hover { border-color: var(--color-gold-dark); }
+    .lb-avatar { width: 30px; height: 30px; border-radius: 50%; flex: none;
       background: linear-gradient(135deg, var(--color-gold), var(--color-gold-dark));
-      display: flex; align-items: center; justify-content: center;
-      font-size: 19px; font-weight: 700; color: var(--color-bg-wood-dark);
-      border: 2px solid var(--color-gold-light); flex-shrink: 0;
-    }
-    .user-bar-info { flex: 1; display: flex; flex-direction: column; gap: 2px; }
-    .user-bar-name { font-size: 16px; font-weight: 700; color: var(--color-text-primary); }
-    .user-bar-id { font-size: 11px; color: var(--color-text-muted); font-family: var(--font-mono); }
-    .user-bar-arrow { color: var(--color-text-muted); font-size: 14px; }
+      display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700;
+      color: var(--color-bg-wood-dark); border: 1px solid var(--color-gold-light); }
+    .lb-user-info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+    .lb-user-name { font-size: 13px; font-weight: 700; color: var(--color-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .lb-user-id { font-size: 9px; color: var(--color-text-muted); font-family: var(--font-mono); }
+    .lb-user-arrow { color: var(--color-text-muted); font-size: 13px; }
 
-    /* 两大核心入口 */
-    .room-entry {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: var(--spacing-md);
-      padding: 0 var(--spacing-lg);
-      margin-bottom: var(--spacing-xl);
-    }
-    .room-entry-item {
-      background: var(--color-bg-card);
-      border: 1px solid rgba(212, 165, 55, 0.18);
-      border-radius: var(--radius-lg);
-      padding: var(--spacing-xl) var(--spacing-md);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: var(--spacing-sm);
-      cursor: pointer;
-      transition: all var(--transition-fast);
-      min-width: 0;
-    }
-    .room-entry-item:hover {
-      border-color: var(--color-gold);
-      transform: translateY(-2px);
-      box-shadow: var(--shadow-panel), 0 0 16px rgba(212,165,55,0.12);
-    }
-    .room-entry-icon {
-      width: 52px;
-      height: 52px;
-      background: linear-gradient(135deg, rgba(212, 165, 55, 0.18), rgba(212, 165, 55, 0.05));
-      border: 1px solid rgba(212,165,55,0.25);
-      border-radius: 14px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 26px;
-    }
-    .room-entry-text {
-      font-size: 16px;
-      color: var(--color-text-primary);
-      font-weight: 700;
-      letter-spacing: 1px;
-    }
-    .room-entry-desc {
-      font-size: 11px;
-      color: var(--color-text-muted);
-      text-align: center;
-    }
+    /* 左列：两大入口卡（横排图标+文案） */
+    .lb-entry { position: absolute; left: 24px; width: 300px; height: 92px;
+      background: var(--color-bg-card); border: 1px solid rgba(212,165,55,0.18); border-radius: var(--radius-lg);
+      display: flex; align-items: center; gap: 14px; padding: 0 16px; cursor: pointer; transition: all var(--transition-fast); }
+    .lb-entry:hover { border-color: var(--color-gold); transform: translateY(-1px); box-shadow: var(--shadow-panel), 0 0 14px rgba(212,165,55,0.12); }
+    .lb-entry.create { top: 76px; }
+    .lb-entry.join { top: 176px; }
+    .lb-entry-icon { width: 46px; height: 46px; flex: none; border-radius: 12px; font-size: 23px;
+      background: linear-gradient(135deg, rgba(212,165,55,0.18), rgba(212,165,55,0.05));
+      border: 1px solid rgba(212,165,55,0.25); display: flex; align-items: center; justify-content: center; }
+    .lb-entry-text { font-size: 15px; font-weight: 700; color: var(--color-text-primary); letter-spacing: 1px; }
+    .lb-entry-desc { font-size: 10px; color: var(--color-text-muted); margin-top: 2px; }
 
-    /* 次要入口 */
-    .sub-entry {
-      margin: 0 var(--spacing-lg);
-      display: flex; flex-direction: column; gap: var(--spacing-sm);
-    }
-    .sub-entry-item {
-      display: flex; align-items: center; gap: var(--spacing-md);
-      background: rgba(0,0,0,0.25);
-      border: 1px solid rgba(212,165,55,0.1);
-      border-radius: var(--radius-md);
-      padding: 12px var(--spacing-lg);
-      text-decoration: none;
-      color: var(--color-text-primary);
-      font-size: 14px;
-      transition: all var(--transition-fast);
-    }
-    .sub-entry-item:hover { border-color: rgba(212,165,55,0.3); }
-    .sub-entry-item .icon { font-size: 18px; }
-    .sub-entry-item .arrow { margin-left: auto; color: var(--color-text-muted); }
+    /* 左列：次要入口三钮 */
+    .lb-subrow { position: absolute; left: 24px; top: 276px; width: 300px; display: flex; gap: 6px; }
+    .lb-subbtn { flex: 1; height: 36px; border-radius: var(--radius-md); cursor: pointer;
+      background: rgba(0,0,0,0.25); border: 1px solid rgba(212,165,55,0.12);
+      color: var(--color-text-secondary); font-size: 11px; display: flex; align-items: center; justify-content: center; gap: 5px; }
+    .lb-subbtn:hover { border-color: rgba(212,165,55,0.35); color: var(--color-text-primary); }
 
-    /* 公告位 + 版本 */
-    .notice-bar {
-      margin: var(--spacing-xl) var(--spacing-lg) 0;
-      padding: 10px var(--spacing-lg);
-      background: rgba(212,165,55,0.06);
-      border: 1px dashed rgba(212,165,55,0.2);
-      border-radius: var(--radius-md);
-      font-size: 12px; color: var(--color-text-secondary);
-      display: flex; align-items: center; gap: 8px;
-    }
-    .version-tag {
-      text-align: center; margin-top: var(--spacing-lg);
-      font-size: 10px; color: var(--color-text-muted); font-family: var(--font-mono);
-    }
+    /* 底栏：返回 / 版本 / 静音 */
+    .lb-back { position: absolute; left: 24px; top: 348px; height: 30px; padding: 0 14px; border-radius: var(--radius-full);
+      background: rgba(0,0,0,0.25); border: 1px solid rgba(212,165,55,0.12); color: var(--color-text-muted);
+      font-size: 11px; display: flex; align-items: center; cursor: pointer; }
+    .lb-ver { position: absolute; right: 64px; top: 356px; font-size: 9px; color: var(--color-text-muted); font-family: var(--font-mono); }
+    .lb-mute { position: absolute; right: 24px; top: 348px; width: 28px; height: 28px; border-radius: 50%;
+      background: rgba(0,0,0,0.25); border: 1px solid rgba(212,165,55,0.15); color: var(--color-text-secondary);
+      display: flex; align-items: center; justify-content: center; font-size: 12px; cursor: pointer; }
 
-    /* ====== 弹层（创建/加入房间）====== */
-    .modal-mask {
-      position: fixed; inset: 0; z-index: 500;
-      background: rgba(0,0,0,0.65); backdrop-filter: blur(4px);
-      display: flex; align-items: center; justify-content: center;
-      opacity: 0; pointer-events: none;
-      transition: opacity var(--transition-normal);
-    }
+    /* 右列：公开房间列表（BL-018） */
+    .room-list { position: absolute; left: 340px; top: 76px; width: 480px; height: 272px;
+      background: var(--color-bg-card); border: 1px solid rgba(212,165,55,0.18); border-radius: var(--radius-lg);
+      overflow: hidden; display: flex; flex-direction: column; }
+    .room-list-head { display: flex; align-items: center; gap: 8px; padding: 0 14px; height: 34px; flex: none;
+      border-bottom: 1px solid rgba(212,165,55,0.12); background: rgba(212,165,55,0.06); }
+    .room-list-title { font-size: 13px; font-weight: 700; color: var(--color-gold); letter-spacing: 1px; }
+    .room-list-count { font-size: 10px; color: var(--color-text-muted); font-family: var(--font-mono); }
+    .room-list-refresh { margin-left: auto; display: flex; align-items: center; gap: 6px; font-size: 9px; color: var(--color-text-muted); font-family: var(--font-mono); }
+    .room-list-refresh .btn { width: 20px; height: 20px; border-radius: 50%; line-height: 1;
+      background: rgba(255,255,255,0.06); border: 1px solid rgba(212,165,55,0.25); color: var(--color-gold); cursor: pointer; font-size: 10px; }
+    .room-list-body { flex: 1; min-height: 0; overflow-y: auto; }
+    .room-row { display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 14px; border-bottom: 1px solid rgba(255,255,255,0.04); }
+    .room-row.off { opacity: 0.45; }
+    .rr-code { font-family: var(--font-mono); font-size: 14px; font-weight: 700; color: var(--color-gold-light); letter-spacing: 1px; }
+    .rr-host { flex: 1; min-width: 0; font-size: 11px; color: var(--color-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .rr-seats { font-size: 11px; color: var(--color-text-secondary); font-family: var(--font-mono); }
+    .rr-rounds { font-size: 10px; color: var(--color-text-muted); width: 30px; text-align: center; }
+    .rr-badge { font-size: 9px; padding: 2px 7px; border-radius: var(--radius-full); border: 1px solid; }
+    .rr-badge.waiting { color: #9fe9b0; border-color: rgba(159,233,176,0.4); background: rgba(159,233,176,0.08); }
+    .rr-badge.playing { color: var(--color-text-muted); border-color: rgba(255,255,255,0.15); background: rgba(255,255,255,0.04); }
+    .rr-join { flex: none; padding: 5px 13px; border-radius: var(--radius-full);
+      background: linear-gradient(135deg, var(--color-gold), var(--color-gold-dark));
+      color: var(--color-bg-wood-dark); border: 1px solid var(--color-gold-light); font-size: 11px; font-weight: 700; cursor: pointer; font-family: var(--font-cn); }
+    .rr-join[disabled] { background: rgba(255,255,255,0.06); color: var(--color-text-muted); border-color: rgba(255,255,255,0.1); cursor: not-allowed; }
+    .room-list-foot { flex: none; height: 24px; display: flex; align-items: center; justify-content: center;
+      font-size: 9px; color: var(--color-text-muted); border-top: 1px solid rgba(255,255,255,0.04); }
+    .room-list-empty { padding: 40px 14px; text-align: center; color: var(--color-text-muted); font-size: 12px; }
+
+    /* ====== 弹层（横屏创建/加入） ====== */
+    .modal-mask { position: fixed; inset: 0; z-index: 500; background: rgba(0,0,0,0.65); backdrop-filter: blur(4px);
+      display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity var(--transition-normal); }
     .modal-mask.show { opacity: 1; pointer-events: auto; }
-    .modal-panel {
-      width: 320px; max-width: 88vw;
-      background: linear-gradient(160deg, var(--color-bg-wood) 0%, var(--color-bg-wood-dark) 100%);
-      border: 1px solid var(--color-gold-dark);
-      border-radius: var(--radius-xl);
-      padding: var(--spacing-xl);
+    .modal-panel { position: relative; background: linear-gradient(160deg, var(--color-bg-wood) 0%, var(--color-bg-wood-dark) 100%);
+      border: 1px solid var(--color-gold-dark); border-radius: var(--radius-xl); padding: 12px 18px;
       box-shadow: 0 16px 48px rgba(0,0,0,0.5), 0 0 24px rgba(212,165,55,0.1);
-      transform: translateY(12px);
-      transition: transform var(--transition-normal);
-    }
+      transform: translateY(12px); transition: transform var(--transition-normal); }
     .modal-mask.show .modal-panel { transform: translateY(0); }
-    .modal-title {
-      text-align: center; font-size: 18px; font-weight: 700;
-      color: var(--color-gold); letter-spacing: 3px;
-      margin-bottom: var(--spacing-lg);
-    }
-    .modal-close {
-      position: absolute; top: 12px; right: 14px;
-      width: 28px; height: 28px; border-radius: 50%;
-      background: rgba(255,255,255,0.06); border: none;
-      color: var(--color-text-muted); font-size: 14px; cursor: pointer;
-    }
-    .modal-panel { position: relative; }
-
-    /* 局数选项 */
-    .rounds-group { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: var(--spacing-xl); }
-    .rounds-option {
-      padding: 12px 0; text-align: center;
-      background: rgba(0,0,0,0.3); border: 1px solid rgba(212,165,55,0.2);
-      border-radius: var(--radius-md); cursor: pointer;
-      color: var(--color-text-secondary); font-size: 14px; font-weight: 600;
-      transition: all var(--transition-fast);
-      font-family: var(--font-cn);
-    }
+    .modal-title { text-align: center; font-size: 16px; font-weight: 700; color: var(--color-gold); letter-spacing: 3px; margin-bottom: 8px; }
+    .modal-close { position: absolute; top: 10px; right: 12px; width: 26px; height: 26px; border-radius: 50%;
+      background: rgba(255,255,255,0.06); border: none; color: var(--color-text-muted); font-size: 13px; cursor: pointer; }
+    /* 创建弹层：横屏双列 720×自适应（≤370 高） */
+    .create-panel { width: 720px; }
+    .create-cols { display: flex; gap: 18px; }
+    .create-col { flex: 1; min-width: 0; }
+    .col-label { font-size: 10px; color: var(--color-text-muted); text-align: center; margin-bottom: 6px; }
+    .rounds-group { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .rounds-option { padding: 9px 0; text-align: center; background: rgba(0,0,0,0.3); border: 1px solid rgba(212,165,55,0.2);
+      border-radius: var(--radius-md); cursor: pointer; color: var(--color-text-secondary); font-size: 13px; font-weight: 600;
+      transition: all var(--transition-fast); font-family: var(--font-cn); }
     .rounds-option:hover { border-color: var(--color-gold-dark); }
-    .rounds-option.selected {
-      background: linear-gradient(135deg, rgba(212,165,55,0.25), rgba(212,165,55,0.1));
-      border-color: var(--color-gold); color: var(--color-gold-light);
-    }
+    .rounds-option.selected { background: linear-gradient(135deg, rgba(212,165,55,0.25), rgba(212,165,55,0.1)); border-color: var(--color-gold); color: var(--color-gold-light); }
     .rounds-option .sub { display: block; font-size: 9px; color: var(--color-text-muted); margin-top: 2px; font-weight: 400; }
     .rounds-option.selected .sub { color: var(--color-gold); }
-
-    /* 房间号输入 */
-    .room-code-input {
-      width: 100%; padding: 14px 8px; text-align: center;
-      font-size: 26px; font-weight: 700; letter-spacing: 8px;
-      font-family: var(--font-mono); color: var(--color-gold-light);
-      background: rgba(0,0,0,0.35); border: 1px solid rgba(212,165,55,0.3);
-      border-radius: var(--radius-md); outline: none;
-      margin-bottom: var(--spacing-xl);
-    }
-    .room-code-input::placeholder { color: var(--color-text-muted); letter-spacing: 10px; }
-    .room-code-input:focus { border-color: var(--color-gold); box-shadow: 0 0 12px rgba(212,165,55,0.15); }
-
-    .modal-submit {
-      width: 100%; padding: 13px;
-      background: linear-gradient(135deg, var(--color-gold), var(--color-gold-dark));
-      color: var(--color-bg-wood-dark); border: 1px solid var(--color-gold-light);
-      border-radius: var(--radius-full); font-size: 16px; font-weight: 700;
-      cursor: pointer; letter-spacing: 3px; font-family: var(--font-cn);
-      box-shadow: 0 3px 12px rgba(212,165,55,0.3);
-      transition: all var(--transition-fast);
-      display: block; text-align: center; text-decoration: none;
-    }
-    .modal-submit:hover { transform: translateY(-1px); box-shadow: 0 5px 18px rgba(212,165,55,0.45); }
-
-    .modal-hint { text-align: center; font-size: 11px; color: var(--color-text-muted); margin-top: var(--spacing-md); }
-
-    /* 玩法设置开关（BL-017：牌墙模式/摸牌位骰；选位仪式恒开） */
-    .play-settings { margin-bottom: var(--spacing-xl); display: flex; flex-direction: column; gap: 10px; }
-    .play-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; background: rgba(0,0,0,0.3); border: 1px solid rgba(212,165,55,0.2); border-radius: var(--radius-md); cursor: pointer; }
-    .play-name { font-size: 13px; color: var(--color-text-primary); font-weight: 600; }
-    .play-sub { display: block; font-size: 9px; color: var(--color-text-muted); margin-top: 2px; font-weight: 400; }
-    .switch { position: relative; width: 40px; height: 22px; flex: none; border-radius: 11px; background: rgba(255,255,255,0.12); border: 1px solid rgba(212,165,55,0.25); transition: all var(--transition-fast); }
-    .switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--color-text-secondary); transition: all var(--transition-fast); }
+    .play-settings { display: flex; flex-direction: column; gap: 6px; }
+    .play-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 10px;
+      background: rgba(0,0,0,0.3); border: 1px solid rgba(212,165,55,0.2); border-radius: var(--radius-md); cursor: pointer; }
+    .play-name { font-size: 11.5px; color: var(--color-text-primary); font-weight: 600; }
+    .play-sub { display: block; font-size: 8px; color: var(--color-text-muted); margin-top: 1px; font-weight: 400; }
+    .switch { position: relative; width: 38px; height: 20px; flex: none; border-radius: 10px; background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(212,165,55,0.25); transition: all var(--transition-fast); }
+    .switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%;
+      background: var(--color-text-secondary); transition: all var(--transition-fast); }
     .switch.on { background: linear-gradient(135deg, rgba(212,165,55,0.5), rgba(212,165,55,0.3)); border-color: var(--color-gold); }
-    .switch.on::after { left: 20px; background: var(--color-gold-light); }
-    .play-fixed { font-size: 9px; color: var(--color-text-muted); text-align: center; }
+    .switch.on::after { left: 19px; background: var(--color-gold-light); }
+    .play-fixed { font-size: 8.5px; color: var(--color-text-muted); text-align: center; margin-top: 2px; }
+    .create-foot { margin-top: 8px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+    .modal-submit { width: 240px; padding: 8px; background: linear-gradient(135deg, var(--color-gold), var(--color-gold-dark));
+      color: var(--color-bg-wood-dark); border: 1px solid var(--color-gold-light); border-radius: var(--radius-full);
+      font-size: 14px; font-weight: 700; cursor: pointer; letter-spacing: 3px; font-family: var(--font-cn);
+      box-shadow: 0 3px 12px rgba(212,165,55,0.3); text-align: center; text-decoration: none; display: block; }
+    .modal-submit:hover { transform: translateY(-1px); box-shadow: 0 5px 18px rgba(212,165,55,0.45); }
+    .modal-hint { text-align: center; font-size: 10px; color: var(--color-text-muted); }
+    /* 加入弹层 */
+    .join-panel { width: 360px; }
+    .room-code-input { width: 100%; padding: 12px 8px; text-align: center; font-size: 24px; font-weight: 700; letter-spacing: 8px;
+      font-family: var(--font-mono); color: var(--color-gold-light); background: rgba(0,0,0,0.35);
+      border: 1px solid rgba(212,165,55,0.3); border-radius: var(--radius-md); outline: none; margin-bottom: 14px; }
+    .room-code-input::placeholder { color: var(--color-text-muted); letter-spacing: 10px; }
+    .join-panel .modal-submit { width: 100%; }
+    .join-panel .modal-hint { margin-top: 8px; }
   </style>
 </head>
-<body class="bg-table">
-  <div class="page-container">
+<body>
+  <div class="ls-page">
+    <div class="ls-stage" id="stage">
 
-    <!-- Hero 区域 -->
-    <div class="home-hero">
-      <div class="home-logo">🀄</div>
-      <div class="home-title">AC 麻将</div>
-      <div class="home-subtitle">传统台式麻将 · 自定义台数 · 好友组局</div>
-    </div>
-
-    <!-- 用户信息条 -->
-    <a class="user-bar" href="profile.html">
-      <div class="user-bar-avatar">我</div>
-      <div class="user-bar-info">
-        <span class="user-bar-name">牌友老张</span>
-        <span class="user-bar-id">ID: 10086</span>
+      <!-- 顶栏 -->
+      <div class="lb-brand">
+        <div class="lb-logo">🀄</div>
+        <div>
+          <div class="lb-title">AC 麻将</div>
+          <div class="lb-sub">传统台式麻将 · 自定义台数 · 好友组局</div>
+        </div>
       </div>
-      <span class="user-bar-arrow">›</span>
-    </a>
-
-    <!-- 两大核心入口 -->
-    <div class="room-entry">
-      <div class="room-entry-item" onclick="document.getElementById('createModal').classList.add('show')">
-        <div class="room-entry-icon">🎲</div>
-        <span class="room-entry-text">创建房间</span>
-        <span class="room-entry-desc">我是房主，开局组局</span>
+      <!-- 用户条（BL-019：profile 页废弃，昵称/ID 信息承载于此） -->
+      <div class="lb-user" title="个人资料已并入大厅用户条">
+        <div class="lb-avatar">我</div>
+        <div class="lb-user-info">
+          <span class="lb-user-name">牌友老张</span>
+          <span class="lb-user-id">ID: 10086 · 累计 +128 分</span>
+        </div>
+        <span class="lb-user-arrow">›</span>
       </div>
-      <div class="room-entry-item" onclick="document.getElementById('joinModal').classList.add('show')">
-        <div class="room-entry-icon">🚪</div>
-        <span class="room-entry-text">加入房间</span>
-        <span class="room-entry-desc">输入房间号入座</span>
+
+      <!-- 左列：两大入口 -->
+      <div class="lb-entry create" onclick="document.getElementById('createModal').classList.add('show')">
+        <div class="lb-entry-icon">🎲</div>
+        <div>
+          <div class="lb-entry-text">创建房间</div>
+          <div class="lb-entry-desc">我是房主，开局组局</div>
+        </div>
       </div>
-    </div>
+      <div class="lb-entry join" onclick="document.getElementById('joinModal').classList.add('show')">
+        <div class="lb-entry-icon">🚪</div>
+        <div>
+          <div class="lb-entry-text">加入房间</div>
+          <div class="lb-entry-desc">输入房间号入座</div>
+        </div>
+      </div>
+      <div class="lb-subrow">
+        <div class="lb-subbtn" onclick="location.href='replay-list.html'">🎬 战绩/回放</div>
+        <div class="lb-subbtn" onclick="location.href='rules.html'">📋 规则速查</div>
+        <div class="lb-subbtn" onclick="location.href='settings.html'"> 设置</div>
+      </div>
 
-    <!-- 次要入口（2026-09-17 回补：战绩/回放入口 D-30 + ⚙设置钮） -->
-    <div class="sub-entry">
-      <a class="sub-entry-item" href="replay-list.html">
-        <span class="icon">🎬</span>
-        <span>战绩 / 回放 · 历史对局重看</span>
-        <span class="arrow">›</span>
-      </a>
-    </div>
-    <div class="sub-entry" style="display:flex; gap:10px; align-items:stretch;">
-      <a class="sub-entry-item" href="rules.html" style="flex:1;">
-        <span class="icon">📋</span>
-        <span>规则说明 · 台数速查 / 算账公式</span>
-        <span class="arrow">›</span>
-      </a>
-      <a class="sub-entry-item" href="settings.html" style="flex:0 0 96px; justify-content:center;">
-        <span class="icon">⚙</span>
-        <span>设置</span>
-      </a>
-    </div>
+      <!-- 右列：公开房间列表（BL-018：仅列公开且未关闭房；5s 自动刷新+手动钮；空态见 PRD03 §3.3） -->
+      <div class="room-list">
+        <div class="room-list-head">
+          <span class="room-list-title">📋 公开房间</span>
+          <span class="room-list-count">4 桌</span>
+          <span class="room-list-refresh"><span>5s 自动刷新 · 18:20:31</span><button class="btn" title="手动刷新">🔄</button></span>
+        </div>
+        <div class="room-list-body">
+          <div class="room-row">
+            <span class="rr-code">132702</span>
+            <span class="rr-host">房主 凯叔</span>
+            <span class="rr-seats">2/4</span>
+            <span class="rr-rounds">8 局</span>
+            <span class="rr-badge waiting">等待</span>
+            <button class="rr-join">加入</button>
+          </div>
+          <div class="room-row">
+            <span class="rr-code">458103</span>
+            <span class="rr-host">房主 小李</span>
+            <span class="rr-seats">3/4</span>
+            <span class="rr-rounds">不限</span>
+            <span class="rr-badge waiting">等待</span>
+            <button class="rr-join">加入</button>
+          </div>
+          <div class="room-row off">
+            <span class="rr-code">828666</span>
+            <span class="rr-host">房主 老王</span>
+            <span class="rr-seats">4/4</span>
+            <span class="rr-rounds">16 局</span>
+            <span class="rr-badge playing">对局中</span>
+            <button class="rr-join" disabled>对局中</button>
+          </div>
+          <!-- 重进态（2026-09-18）：本人记忆房间（曾入座、服务端保留座位）→ 对局中/满员仍显示可点「重进」，点击直切牌桌 -->
+          <div class="room-row">
+            <span class="rr-code">542367</span>
+            <span class="rr-host">房主 凯叔（我）</span>
+            <span class="rr-seats">4/4</span>
+            <span class="rr-rounds">不限</span>
+            <span class="rr-badge playing">对局中</span>
+            <button class="rr-join">重进</button>
+          </div>
+        </div>
+        <div class="room-list-foot">仅展示公开且未关闭房间 · 对局中/满员不可加入（本人记忆房间除外，显示「重进」）</div>
+      </div>
 
-    <!-- 公告位 -->
-    <div class="notice-bar">
-      <span>📢</span>
-      <span>v0.1 内测版 · 仅供俱乐部成员体验，积分仅供娱乐</span>
+      <!-- 底栏 -->
+      <div class="lb-back" onclick="location.href='login.html'">← 返回登录</div>
+      <div class="lb-ver">AC Mahjong Club v0.1.0</div>
+      <div class="lb-mute">🔊</div>
     </div>
-    <div class="version-tag">AC Mahjong Club v0.1.0</div>
-
-    <div style="height: 24px;"></div>
   </div>
 
-  <!-- ====== 弹层：创建房间 ====== -->
+  <!-- ====== 弹层：创建房间（横屏双列） ====== -->
   <div class="modal-mask" id="createModal" onclick="if(event.target===this)this.classList.remove('show')">
-    <div class="modal-panel">
+    <div class="modal-panel create-panel">
       <button class="modal-close" onclick="document.getElementById('createModal').classList.remove('show')">✕</button>
       <div class="modal-title">创建房间</div>
-      <div style="font-size:12px;color:var(--color-text-muted);margin-bottom:10px;text-align:center;">选择局数上限</div>
-      <div class="rounds-group" id="roundsGroup">
-        <div class="rounds-option" data-v="4">4 局<span class="sub">快餐局</span></div>
-        <div class="rounds-option selected" data-v="8">8 局<span class="sub">标准局</span></div>
-        <div class="rounds-option" data-v="16">16 局<span class="sub">酣战局</span></div>
-        <div class="rounds-option" data-v="0">不限<span class="sub">尽兴</span></div>
-      </div>
-      <!-- BL-017 玩法设置：两开关（默认均开，2026-09-18 用户调整）；选位仪式为每房 标准流程不可关 -->
-      <div style="font-size:12px;color:var(--color-text-muted);margin-bottom:8px;text-align:center;">玩法设置</div>
-      <div class="play-settings">
-        <div class="play-row" onclick="this.querySelector('.switch').classList.toggle('on')">
-          <span class="play-name">物理牌墙展示<span class="play-sub">预生成固化 4 排×18 组牌堆并四边展示；关闭=随机发牌</span></span>
-          <span class="switch on"></span>
+      <div class="create-cols">
+        <div class="create-col">
+          <div class="col-label">选择局数上限</div>
+          <div class="rounds-group" id="roundsGroup">
+            <div class="rounds-option" data-v="4">4 局<span class="sub">快餐局</span></div>
+            <div class="rounds-option selected" data-v="8">8 局<span class="sub">标准局</span></div>
+            <div class="rounds-option" data-v="16">16 局<span class="sub">酣战局</span></div>
+            <div class="rounds-option" data-v="0">不限<span class="sub">尽兴</span></div>
+          </div>
         </div>
-        <div class="play-row" onclick="this.querySelector('.switch').classList.toggle('on')">
-          <span class="play-name">摸牌位骰<span class="play-sub">每局庄家掷骰定开牌点（右端起跳 N 组）；关闭=庄家排右端开摸</span></span>
-          <span class="switch on"></span>
+        <div class="create-col">
+          <div class="col-label">房间与玩法设置</div>
+          <div class="play-settings">
+            <div class="play-row" onclick="this.querySelector('.switch').classList.toggle('on')">
+              <span class="play-name">公开房间<span class="play-sub">开启=大厅房间列表可见；关闭=仅房间号/分享卡可入</span></span>
+              <span class="switch on"></span>
+            </div>
+            <div class="play-row" onclick="this.querySelector('.switch').classList.toggle('on')">
+              <span class="play-name">先看吃再碰<span class="play-sub">吃家选定后全桌公开吃意图（副露区留空位预览）</span></span>
+              <span class="switch on"></span>
+            </div>
+            <div class="play-row" onclick="this.querySelector('.switch').classList.toggle('on')">
+              <span class="play-name">物理牌墙展示<span class="play-sub">预生成固化 4 排×18 组牌堆并四边展示；关闭=随机发牌</span></span>
+              <span class="switch on"></span>
+            </div>
+            <div class="play-row" onclick="this.querySelector('.switch').classList.toggle('on')">
+              <span class="play-name">摸牌位骰<span class="play-sub">每局庄家掷骰定开牌点；关闭=庄家排右端开摸</span></span>
+              <span class="switch on"></span>
+            </div>
+            <div class="play-fixed">选位仪式（掷骰→选座→定首庄）为每房标准流程，恒开启</div>
+          </div>
         </div>
-        <div class="play-fixed">选位仪式（掷骰→选座→定首庄）为每房标准流程，恒开启</div>
       </div>
-      <a class="modal-submit" href="room.html">创建并分享</a>
-      <div class="modal-hint">创建后生成 6 位房间号，可分享微信好友</div>
+      <div class="create-foot">
+        <a class="modal-submit" href="room.html">创建并分享</a>
+        <div class="modal-hint">创建后生成 6 位房间号，可分享微信好友</div>
+      </div>
     </div>
   </div>
 
   <!-- ====== 弹层：加入房间 ====== -->
   <div class="modal-mask" id="joinModal" onclick="if(event.target===this)this.classList.remove('show')">
-    <div class="modal-panel">
+    <div class="modal-panel join-panel">
       <button class="modal-close" onclick="document.getElementById('joinModal').classList.remove('show')">✕</button>
       <div class="modal-title">加入房间</div>
       <input class="room-code-input" maxlength="6" inputmode="numeric" placeholder="——————" value="828666">
@@ -352,26 +305,6 @@
       <div class="modal-hint">输入好友分享的 6 位房间号</div>
     </div>
   </div>
-
-  <!-- Tab 栏 -->
-  <nav class="tab-bar">
-    <a class="tab-item active" href="home.html">
-      <span class="tab-icon">🏠</span>
-      <span>首页</span>
-    </a>
-    <a class="tab-item" href="game.html">
-      <span class="tab-icon">🀄</span>
-      <span>游戏</span>
-    </a>
-    <a class="tab-item" href="rules.html">
-      <span class="tab-icon">📖</span>
-      <span>规则</span>
-    </a>
-    <a class="tab-item" href="profile.html">
-      <span class="tab-icon">👤</span>
-      <span>我的</span>
-    </a>
-  </nav>
 
   <script>
     /* 局数单选 */
@@ -381,6 +314,13 @@
       document.querySelectorAll('.rounds-option').forEach(o => o.classList.remove('selected'));
       opt.classList.add('selected');
     });
+    /* 844×390 舞台等比缩放居中 */
+    const fit = () => {
+      const s = Math.min(window.innerWidth / 844, window.innerHeight / 390);
+      document.getElementById('stage').style.transform = `translate(-50%,-50%) scale(${s})`;
+    };
+    window.addEventListener('resize', fit);
+    fit();
   </script>
 </body>
 </html>

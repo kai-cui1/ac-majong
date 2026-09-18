@@ -1,9 +1,10 @@
-import type { Hand, ScoreResult, TileId, Meld, ScoreDetail } from './types';
+import type { Hand, ScoreResult, TileId, Meld, ScoreDetail, MatchedPattern } from './types';
 import { winDecompositions, waitingTiles, isWin, type WinDecomp, type MeldUnit } from './winCheck';
 import { analyze } from './analyze';
 import { recognizePatterns } from './recognize';
 import { computeTai } from './scoring';
 import { settle, winBonusLines } from './settlement';
+import { dedup, patternTai } from './containment';
 
 export interface HandScore extends ScoreResult {
   /** 是否成立胡牌结构（false = 根本没胡） */
@@ -93,6 +94,34 @@ export interface TaiPreview {
   canWin?: boolean;
   /** 3n+2 时打哪张可听（取台数最高路线） */
   viaDiscard?: TileId;
+  /** BL-021 保底台数（锁定番种小计：花/杠/门清/已副露东风刻） */
+  secured: number;
+  /** BL-021 保底明细（番名/分值与结算同源） */
+  securedDetail: ScoreDetail[];
+}
+
+/**
+ * BL-021 保底（锁定）台数明细：不依赖未来摸牌与拆解的番种 = 见花 / 杠（含九万九筒特番）/ 门清（当前状态）/ 已副露东风刻。
+ * 番名与分值与 recognize 同源；杠族吸收复用 dedup（明杠九筒吸收明杠等），保证与结算口径一致。
+ * 门清为「当前状态」保底：之后吃碰会实时消失（徽章/浮层随视图重算）。
+ */
+export function securedLines(melds: Meld[], flowers: TileId[], isDealer: boolean): ScoreDetail[] {
+  const raw: MatchedPattern[] = [];
+  if (flowers.length) raw.push({ name: '见花', count: flowers.length, tiles: [...flowers] });
+  let exp = 0;
+  let con = 0;
+  for (const m of melds) {
+    const b = [...m.tiles].sort()[0]!;
+    const nine = b === 'B9' ? '九筒' : b === 'W9' ? '九万' : '';
+    if (m.type === 'kong_concealed') { if (nine) raw.push({ name: `暗杠${nine}` }); else con++; }
+    else if (m.type === 'kong_exposed' || m.type === 'kong_added') { if (nine) raw.push({ name: `明杠${nine}` }); else exp++; }
+    else if (m.type === 'pong' && b === 'Z1') raw.push({ name: isDealer ? '东风字_庄' : '东风字_非庄' });
+  }
+  if (exp) raw.push({ name: '明杠', count: exp });
+  if (con) raw.push({ name: '暗杠', count: con });
+  // 门清：无 吃/碰/明杠/加杠（暗杠不破，N2，与 analyze.isMenqing 同口径）
+  if (!melds.some((m) => m.type === 'chi' || m.type === 'pong' || m.type === 'kong_exposed' || m.type === 'kong_added')) raw.push({ name: '门清' });
+  return dedup(raw).map((p) => ({ name: p.name, tai: patternTai(p), count: p.count, tiles: p.tiles }));
 }
 
 /**
@@ -114,6 +143,9 @@ export function previewTai(
     const add = lines.reduce((s, l) => s + l.tai, 0);
     return add > 0 ? { tai: tai + add, detail: [...detail, ...lines.map((l) => ({ name: l.name, tai: l.tai, count: l.count }))] } : { tai, detail };
   };
+  /** BL-021：保底台数随预览一同返回（徽章/浮层常显） */
+  const securedDetail = securedLines(melds, flowers, opts.isDealer ?? false);
+  const sec = { secured: securedDetail.reduce((s, d) => s + d.tai, 0), securedDetail };
   const mkHand = (conc: Record<string, number>, winTile: TileId): Hand => ({
     concealed: conc,
     melds,
@@ -144,7 +176,7 @@ export function previewTai(
     const s = scoreHand(mkHand(concealed, winTile));
     if (s.win && !s.zhaHu) {
       const b = withBonus(s.total, s.detail);
-      return { tenpai: true, canWin: true, waits: [], tai: b.tai, detail: b.detail };
+      return { tenpai: true, canWin: true, waits: [], tai: b.tai, detail: b.detail, ...sec };
     }
   }
   const total = Object.values(concealed).reduce((a, b) => a + b, 0);
@@ -161,15 +193,15 @@ export function previewTai(
     }
     if (best) {
       const b = withBonus(best.tai, best.detail);
-      return { tenpai: true, viaDiscard: best.via, waits: best.waits, tai: b.tai, detail: b.detail };
+      return { tenpai: true, viaDiscard: best.via, waits: best.waits, tai: b.tai, detail: b.detail, ...sec };
     }
-    return { tenpai: false, waits: [], tai: 0, detail: [] };
+    return { tenpai: false, waits: [], tai: 0, detail: [], ...sec };
   }
   // C：3n+1 已听牌（无达门槛听张则不算听牌）
   const waits = waitingTiles(concealed, melds.length);
-  if (waits.length === 0) return { tenpai: false, waits: [], tai: 0, detail: [] };
+  if (waits.length === 0) return { tenpai: false, waits: [], tai: 0, detail: [], ...sec };
   const { best: b, good } = bestOverWaits(concealed, waits);
-  if (good.length === 0) return { tenpai: false, waits: [], tai: 0, detail: [] };
+  if (good.length === 0) return { tenpai: false, waits: [], tai: 0, detail: [], ...sec };
   const wb = withBonus(b.tai, b.detail);
-  return { tenpai: true, waits: good, tai: wb.tai, detail: wb.detail };
+  return { tenpai: true, waits: good, tai: wb.tai, detail: wb.detail, ...sec };
 }
