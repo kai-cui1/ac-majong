@@ -35,6 +35,24 @@ describe('番种识别 · 坎 / 杠', () => {
     expect(isWinning(h)).toBe(true);
     expect(recognizedNames(h)).toContain('五暗坎');
   });
+  // 2026-09-18 用户确认口径：点炮胡时由胡牌张凑成的第三张刻子不算暗坎
+  it('点炮：胡牌张凑成的刻子不算暗坎（三暗坎降为 2暗坎）', () => {
+    const h = H('W111W333W555T456B789B99', { winTile: 'W5', winBy: 'dianpao' });
+    expect(isWinning(h)).toBe(true);
+    const names = recognizedNames(h);
+    expect(names).toContain('2暗坎');
+    expect(names).not.toContain('三暗坎');
+  });
+  it('自摸：同一手牌胡牌张刻子仍计暗坎（三暗坎成立）', () => {
+    const h = H('W111W333W555T456B789B99', { winTile: 'W5', winBy: 'zimo' });
+    expect(isWinning(h)).toBe(true);
+    expect(recognizedNames(h)).toContain('三暗坎');
+  });
+  it('点炮：胡牌张作将时其余刻子仍全计暗坎', () => {
+    const h = H('W111W333W555T456B789B99', { winTile: 'B9', winBy: 'dianpao' });
+    expect(isWinning(h)).toBe(true);
+    expect(recognizedNames(h)).toContain('三暗坎');
+  });
 });
 
 describe('番种识别 · 补牌胡 / 末尾胡', () => {

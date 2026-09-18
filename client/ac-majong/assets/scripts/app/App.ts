@@ -53,7 +53,7 @@ export class App extends Component {
       g.fillColor = Theme.color.bgTable;
       g.rect(-2000, -2000, 4000, 4000);
       g.fill();
-      uiLabel('请横屏游玩（旋转手机）', { size: 22, bold: true, color: Theme.color.text }).parent = mask;
+      uiLabel('请横屏游玩（旋转手机）', { size: 22, bold: true, color: Theme.color.textPrimary }).parent = mask;
       this.rotateHint = mask;
       mask.setSiblingIndex(9999);
     } else if (!portrait && this.rotateHint) {

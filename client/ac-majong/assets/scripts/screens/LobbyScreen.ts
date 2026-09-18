@@ -1,4 +1,4 @@
-import { Node, Label, UITransform, Graphics } from 'cc';
+import { Node, Label, UITransform, Graphics, Color } from 'cc';
 import { Screen } from '../app/SceneRouter';
 import { Theme } from '../ui/Theme';
 import { uiBackground, uiLabel, uiButton, uiPanel, uiModal, uiMuteToggle, uiSwitch, type Modal } from '../ui/UiKit';
@@ -166,94 +166,105 @@ export class LobbyScreen extends Screen {
     return card;
   }
 
-  /** 建房弹层（还原 home.html 创建房间弹层）：局数单选 + BL-017 玩法设置双开关 + 创建并分享 */
+  /** 建房弹层（还原 home.html 创建房间弹层）：局数单行 4 项（主+副双行）+ BL-017 玩法设置双开关（默认均开）+ 创建并分享 + modal-hint */
   private openCreate(): void {
-    const m = uiModal('创建房间', { width: 380, height: 402 });
-    const tip = uiLabel('选择局数上限（「不限」= 无限续局，直到房主解散）', { size: 12, color: Theme.color.textMuted, width: 330 });
+    const m = uiModal('创建房间', { width: 400, height: 352 });
+    const tip = uiLabel('选择局数上限', { size: 12, color: Theme.color.textMuted });
     tip.setParent(m.panel);
-    tip.setPosition(0, 160, 0);
+    tip.setPosition(0, 124, 0);
 
-    // 局数单选（默认 8 局标准局）：选中=金底 primary 样式
+    // 局数单选（默认 8 局标准局）：单行 4 项 gap8；选中=透金底+金边+金字（原型 .rounds-option.selected）
     let rounds = 8;
-    const opts: [string, number][] = [['4 局 · 快餐局', 4], ['8 局 · 标准局', 8], ['16 局 · 酣战局', 16], ['不限 · 尽兴', 0]];
-    const btns: { node: Node; g: Graphics; lb: Label; v: number }[] = [];
-    const paint = (b: { g: Graphics; lb: Label }, sel: boolean): void => {
+    const opts: { v: number; main: string; sub: string }[] = [
+      { v: 4, main: '4 局', sub: '快餐局' },
+      { v: 8, main: '8 局', sub: '标准局' },
+      { v: 16, main: '16 局', sub: '酣战局' },
+      { v: 0, main: '不限', sub: '尽兴' },
+    ];
+    const btns: { node: Node; g: Graphics; main: Label; sub: Label; v: number }[] = [];
+    const paint = (b: { g: Graphics; main: Label; sub: Label }, sel: boolean): void => {
       b.g.clear();
       b.g.lineWidth = 1;
-      b.g.fillColor = sel ? Theme.color.gold : Theme.color.bgCard;
-      b.g.strokeColor = sel ? Theme.color.goldLight : Theme.color.goldDark;
-      b.g.roundRect(-78, -19, 156, 38, 19);
-      if (sel) b.g.fill();
+      b.g.fillColor = sel ? new Color(212, 165, 55, 51) : new Color(0, 0, 0, 77);
+      b.g.strokeColor = sel ? Theme.color.gold : new Color(212, 165, 55, 51);
+      b.g.roundRect(-46, -22, 92, 44, 8);
+      b.g.fill();
       b.g.stroke();
-      b.lb.color = sel ? Theme.color.bgWoodDark : Theme.color.textSecondary;
+      b.main.color = sel ? Theme.color.goldLight : Theme.color.textPrimary;
+      b.sub.color = sel ? Theme.color.gold : Theme.color.textMuted;
     };
-    opts.forEach(([text, v], i) => {
-      const col = i % 2;
-      const row = Math.floor(i / 2);
-      const node = new Node(`Rounds_${v}`);
-      node.addComponent(UITransform).setContentSize(156, 38);
+    opts.forEach((o, i) => {
+      const node = new Node(`Rounds_${o.v}`);
+      node.addComponent(UITransform).setContentSize(92, 44);
       const g = node.addComponent(Graphics);
-      const ln = new Node('Label');
-      ln.addComponent(UITransform);
-      const lb = ln.addComponent(Label);
-      lb.string = text;
-      lb.fontSize = 13;
-      lb.lineHeight = 17;
-      lb.isBold = true;
-      lb.horizontalAlign = Label.HorizontalAlign.CENTER;
-      lb.verticalAlign = Label.VerticalAlign.CENTER;
-      ln.setParent(node);
-      const b = { node, g, lb, v };
+      const mk = (nm: string, text: string, size: number, y: number, bold: boolean): Label => {
+        const ln = new Node(nm);
+        ln.addComponent(UITransform);
+        const lb = ln.addComponent(Label);
+        lb.string = text;
+        lb.fontSize = size;
+        lb.lineHeight = size + 4;
+        lb.isBold = bold;
+        ln.setParent(node);
+        ln.setPosition(0, y, 0);
+        return lb;
+      };
+      const b = { node, g, main: mk('Main', o.main, 13, 8, true), sub: mk('Sub', o.sub, 9, -10, false), v: o.v };
       btns.push(b);
-      paint(b, v === rounds);
+      paint(b, o.v === rounds);
       node.on(Node.EventType.TOUCH_END, () => {
-        rounds = v;
+        rounds = o.v;
         for (const x of btns) paint(x, x.v === rounds);
       });
       node.setParent(m.panel);
-      node.setPosition(-82 + col * 164, 108 - row * 48, 0);
+      node.setPosition(-150 + i * 100, 96, 0);
     });
 
-    // BL-017 玩法设置：两开关（默认均关）；选位仪式恒开不可关
+    // BL-017 玩法设置：两开关（默认均开）；选位仪式恒开不可关
     const psTitle = uiLabel('玩法设置', { size: 12, color: Theme.color.textMuted });
     psTitle.setParent(m.panel);
-    psTitle.setPosition(0, 26, 0);
-    let physical = false;
-    let breakDice = false;
+    psTitle.setPosition(0, 58, 0);
+    let physical = true;
+    let breakDice = true;
     const row1 = this.makePlayRow('物理牌墙展示', '预生成固化 4 排×18 组牌堆并四边展示；关闭=随机发牌', physical, (on) => { physical = on; });
     row1.setParent(m.panel);
-    row1.setPosition(0, -16, 0);
+    row1.setPosition(0, 28, 0);
     const row2 = this.makePlayRow('摸牌位骰', '每局庄家掷骰定开牌点（右端起跳 N 组）；关闭=庄家排右端开摸', breakDice, (on) => { breakDice = on; });
     row2.setParent(m.panel);
-    row2.setPosition(0, -76, 0);
-    const fixed = uiLabel('选位仪式（掷骰→选座→定首庄）为每房标准流程，恒开启', { size: 10, color: Theme.color.textMuted, width: 330 });
+    row2.setPosition(0, -28, 0);
+    const fixed = uiLabel('选位仪式（掷骰→选座→定首庄）为每房标准流程，恒开启', { size: 10, color: Theme.color.textMuted });
     fixed.setParent(m.panel);
-    fixed.setPosition(0, -122, 0);
+    fixed.setPosition(0, -62, 0);
 
-    const status = uiLabel('', { size: 12, color: Theme.color.textSecondary, width: 330 });
+    const status = uiLabel('', { size: 11, color: Theme.color.textSecondary });
     const statusLbl = status.getComponent(Label)!;
     status.setParent(m.panel);
-    status.setPosition(0, -148, 0);
-    const submit = uiButton('创建并分享', () => void this.doCreate(rounds, { wallMode: physical ? 'physical' : 'random', breakDice }, m, statusLbl), { variant: 'primary', width: 300, height: 44 });
+    status.setPosition(0, -80, 0);
+    const submit = uiButton('创建并分享', () => void this.doCreate(rounds, { wallMode: physical ? 'physical' : 'random', breakDice }, m, statusLbl), { variant: 'primary', width: 220, height: 40, fontSize: 15 });
     submit.setParent(m.panel);
-    submit.setPosition(0, -176, 0);
+    submit.setPosition(0, -108, 0);
+    const hint = uiLabel('创建后生成 6 位房间号，可分享微信好友', { size: 11, color: Theme.color.textMuted });
+    hint.setParent(m.panel);
+    hint.setPosition(0, -142, 0);
 
     m.root.setParent(this.node!);
   }
 
-  /** 玩法设置行（还原 .play-row）：暗底金细边 + 名称/副文案 + 右侧开关，整行可点切换 */
+  /** 玩法设置行（还原 .play-row）：暗底金细边 + 名称/副文案左对齐双行 + 右侧开关，整行可点切换 */
   private makePlayRow(name: string, sub: string, initial: boolean, onChange: (on: boolean) => void): Node {
-    const row = uiPanel(336, 54, { variant: 'panel', radius: Theme.radius.md });
+    const row = uiPanel(376, 52, { variant: 'panel', radius: Theme.radius.md });
     row.name = `PlayRow_${name}`;
     const nameL = uiLabel(name, { size: 13, color: Theme.color.textPrimary, bold: true, align: 'left' });
     nameL.setParent(row);
-    nameL.setPosition(-168 + 80, 14, 0);
-    const subL = uiLabel(sub, { size: 9, color: Theme.color.textMuted, align: 'left', width: 264 });
+    nameL.getComponent(UITransform)!.anchorX = 0;
+    nameL.setPosition(-176, 12, 0);
+    const subL = uiLabel(sub, { size: 9, color: Theme.color.textMuted, align: 'left', width: 300 });
     subL.setParent(row);
-    subL.setPosition(-168 + 8, -8, 0);
+    subL.getComponent(UITransform)!.anchorX = 0;
+    subL.setPosition(-176, -8, 0);
     const sw = uiSwitch(initial, onChange, { interactive: false });
     sw.node.setParent(row);
-    sw.node.setPosition(336 / 2 - 34, 0, 0);
+    sw.node.setPosition(376 / 2 - 32, 0, 0);
     // 整行可点（开关不自身响应，避免双触发）
     let on = initial;
     row.on(Node.EventType.TOUCH_END, () => {
@@ -328,12 +339,12 @@ export class LobbyScreen extends Screen {
     statusLbl.color = Theme.color.textSecondary;
     try {
       const t0 = Date.now();
-      const room = await NetService.instance.joinRoom(room);
+      const rv = await NetService.instance.joinRoom(room);
       m.close();
       // BL-016：对局中重进时服务端直接下发 gameView（加入期间到达，RoomScreen 可能尚未构建错过广播）→ 直接切牌桌
       // BL-017：仪式阶段（seating）重进同样切牌桌展示仪式遮罩
       const inGame = Date.now() - t0 < 5000 && Date.now() - NetService.instance.lastGameViewAt < 5000;
-      this.router.show(inGame || room.phase === 'playing' || room.phase === 'seating' ? 'table' : 'room');
+      this.router.show(inGame || rv.phase === 'playing' || rv.phase === 'seating' ? 'table' : 'room');
     } catch (e) {
       statusLbl.string = e instanceof Error ? e.message : '加入失败';
       statusLbl.color = Theme.color.danger;

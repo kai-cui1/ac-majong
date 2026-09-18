@@ -42,7 +42,7 @@ export class TableView extends Component {
     this.net.onEvent((m) => this.onEvents(m.events));
     this.net.onRoom((r) => this.onRoom(r));
     try {
-      await this.net.connect(this.serverUrl, this.token);
+      await this.net.connect(this.serverUrl, { token: this.token });
       console.log('[TableView] 已连接服务端');
       if (this.autoHost) {
         this.net.createRoom(this.maxRounds);

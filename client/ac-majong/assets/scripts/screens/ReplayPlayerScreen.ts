@@ -421,24 +421,32 @@ export class ReplayPlayerScreen extends Screen {
     tag.setPosition(x, y, 0);
   }
 
-  /** 副露（吃/碰/杠）：小牌面横排；吃副被吃牌横置+金描边（FR-对局-17） */
+  /** 副露（吃/碰/杠）：小牌面横排；吃副被吃牌居中竖放 + 右上小圆形角标（FR-对局-17，2026-09-18 v2） */
   private drawMelds(dyn: Node, melds: { type: string; tiles: string[]; called?: string }[], x: number, y: number): void {
     let cx = x;
     for (const m of melds) {
-      for (const t of m.tiles) {
+      const others = m.type === 'chi' && m.called ? m.tiles.filter((t) => t !== m.called) : [];
+      const order = m.type === 'chi' && m.called && others.length === 2
+        ? [others[0]!, m.called, others[1]!]
+        : m.tiles;
+      for (const t of order) {
         const isCalled = m.type === 'chi' && m.called === t;
-        const n = isCalled ? createTileNode(t, 22, 16) : createTileNode(t, 16, 22);
+        const n = createTileNode(t, 16, 22);
         if (isCalled) {
-          n.angle = 90;
-          const g = n.addComponent(Graphics);
-          g.strokeColor = Theme.color.gold;
-          g.lineWidth = 1;
-          g.roundRect(-11, -8, 22, 16, 2);
-          g.stroke();
+          const badge = new Node('CalledBadge');
+          badge.addComponent(UITransform).setContentSize(8, 8);
+          const g = badge.addComponent(Graphics);
+          g.fillColor = Theme.color.gold;
+          g.circle(0, 0, 4);
+          g.fill();
+          const lb = uiLabel('吃', { size: 6, color: new Color(46, 32, 8, 255) });
+          lb.setParent(badge);
+          badge.setParent(n);
+          badge.setPosition(7, 10, 0);
         }
         n.setParent(dyn);
-        n.setPosition(cx + (isCalled ? 11 : 8), y, 0);
-        cx += (isCalled ? 22 : 16) + 2;
+        n.setPosition(cx + 8, y, 0);
+        cx += 16 + 2;
       }
       cx += 6;
     }

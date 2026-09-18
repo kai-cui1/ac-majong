@@ -315,10 +315,10 @@ export class TableScreen extends Screen {
     this.drawRiverBlock(this.riverArea, buckets[nSeat] ?? [], 23, 0, RH / 2 - 14, 'center', latestSeat === nSeat);
     // 南（自己）弃牌：底部居中换行
     this.drawRiverBlock(this.riverArea, buckets[this.mySeat] ?? [], 23, 0, -RH / 2 + 14, 'center', latestSeat === this.mySeat, true);
-    // 西（上家）弃牌：中行靠左
-    this.drawRiverBlock(this.riverArea, buckets[wSeat] ?? [], 12, -RW / 2 + 120, 0, 'center', latestSeat === wSeat);
+    // 西（上家）弃牌：横屏原型 .river-side = 4 列靠边网格（避免横穿西墙排）
+    this.drawRiverBlock(this.riverArea, buckets[wSeat] ?? [], 4, -RW / 2 + 22, 0, 'center', latestSeat === wSeat);
     // 东（下家）弃牌：中行靠右
-    this.drawRiverBlock(this.riverArea, buckets[eSeat] ?? [], 12, RW / 2 - 120, 0, 'center', latestSeat === eSeat);
+    this.drawRiverBlock(this.riverArea, buckets[eSeat] ?? [], 4, RW / 2 - 22, 0, 'center', latestSeat === eSeat);
 
     this.drawWindDisc(v);
   }
@@ -470,12 +470,12 @@ export class TableScreen extends Screen {
       drawn: me.drawn ?? undefined,
       myZi: me.zi,
     });
-    const badge = uiButton(`💡 ${preview.tai}台 ▴`, () => this.toggleScorePop(preview), { variant: 'action', width: 92, height: 26, fontSize: 12 });
+    const badge = uiButton(`💡 ${preview.tai}台 ▴`, () => this.toggleScorePop(preview), { variant: 'action', width: 84, height: 26, fontSize: 12 });
     badge.setParent(this.southTop);
-    badge.setPosition(RIGHT - 58, 0, 0);
-    const listen = uiButton(this.listening ? '听牌✓' : '听牌', () => this.toggleListen(), { variant: 'secondary', width: 56, height: 26, fontSize: 12 });
+    badge.setPosition(206, -4, 0);
+    const listen = uiButton(this.listening ? '听牌✓' : '听牌', () => this.toggleListen(), { variant: 'secondary', width: 50, height: 26, fontSize: 12 });
     listen.setParent(this.southTop);
-    listen.setPosition(RIGHT - 58 - 46 - 8 - 28, 0, 0);
+    listen.setPosition(136, -4, 0);
   }
 
   // ============ 组件绘制 ============
@@ -665,20 +665,27 @@ export class TableScreen extends Screen {
   private drawMelds(parent: Node, melds: Meld[], size: { w: number; h: number }, orient: 'h' | 'v', seat = -1): number {
     if (!melds.length) return 0;
     const wrap = this.mk(parent, seat >= 0 ? `Melds${seat}` : 'Melds', 0, 0);
-    // 单牌占位宽/高：吃副被吃牌横置（FR-对局-17）占位互换
-    const spanOf = (m: Meld, t: string): { w: number; h: number } =>
-      m.type === 'chi' && m.called === t ? { w: size.h, h: size.w } : { w: size.w, h: size.h };
+    // 吃副展示序（2026-09-18 用户定案）：被吃牌居中竖放、其余两张按序两侧（如手 7/8 万吃 9 万 → 7-9-8）；替代旧横置方案
+    const orderOf = (m: Meld): string[] => {
+      if (m.type !== 'chi' || !m.called) return m.tiles;
+      const others = m.tiles.filter((t) => t !== m.called);
+      return [others[0] ?? m.called, m.called, others[1] ?? m.called];
+    };
+    const tileOf = (m: Meld, t: string): Node => {
+      const tn = createTileNode(t, size.w, size.h);
+      if (m.type === 'chi' && t === m.called) this.mkCalledBadge(tn, size);
+      return tn;
+    };
     if (orient === 'h') {
       let x = 0;
       for (const m of melds) {
         const g = this.mk(wrap, 'M', 0, 0);
         let pen = 0;
-        for (const t of m.tiles) {
-          const sp = spanOf(m, t);
-          const tn = m.type === 'chi' && m.called === t ? this.mkCalledTile(t, size) : createTileNode(t, size.w, size.h);
+        for (const t of orderOf(m)) {
+          const tn = tileOf(m, t);
           tn.setParent(g);
-          tn.setPosition(pen + sp.w / 2, 4, 0);
-          pen += sp.w + 1;
+          tn.setPosition(pen + size.w / 2, 4, 0);
+          pen += size.w + 1;
         }
         const lb = uiLabel(meldLabel(m.type), { size: 9, color: Theme.color.textSecondary });
         lb.setParent(g);
@@ -692,12 +699,11 @@ export class TableScreen extends Screen {
     for (const m of melds) {
       const g = this.mk(wrap, 'M', 0, 0);
       let pen = 0;
-      for (const t of m.tiles) {
-        const sp = spanOf(m, t);
-        const tn = m.type === 'chi' && m.called === t ? this.mkCalledTile(t, size) : createTileNode(t, size.w, size.h);
+      for (const t of orderOf(m)) {
+        const tn = tileOf(m, t);
         tn.setParent(g);
-        tn.setPosition(0, -(pen + sp.h / 2), 0);
-        pen += sp.h + 1;
+        tn.setPosition(0, -(pen + size.h / 2), 0);
+        pen += size.h + 1;
       }
       const lb = uiLabel(meldLabel(m.type), { size: 9, color: Theme.color.textSecondary });
       lb.setParent(g);
@@ -708,16 +714,23 @@ export class TableScreen extends Screen {
     return -y;
   }
 
-  /** FR-对局-17：吃副被吃牌节点——横置 90° + 金色描边（四家可见） */
-  private mkCalledTile(t: string, size: { w: number; h: number }): Node {
-    const tn = createTileNode(t, size.h, size.w);
-    tn.angle = 90;
-    const g = tn.addComponent(Graphics);
-    g.strokeColor = Theme.color.gold;
-    g.lineWidth = 1.5;
-    g.roundRect(-size.h / 2, -size.w / 2, size.h, size.w, 3);
+  /** FR-对局-17（2026-09-18 v2）：吃副被吃牌标记 = 右上角小圆形角标（金底+暗「吃」字），牌身保持竖放 */
+  private mkCalledBadge(tn: Node, size: { w: number; h: number }): void {
+    const r = Math.max(4, Math.round(size.w * 0.22));
+    const badge = new Node('CalledBadge');
+    badge.addComponent(UITransform).setContentSize(r * 2, r * 2);
+    const g = badge.addComponent(Graphics);
+    g.fillColor = Theme.color.gold;
+    g.circle(0, 0, r);
+    g.fill();
+    g.strokeColor = rgba(46, 32, 8, 0.6);
+    g.lineWidth = 1;
+    g.circle(0, 0, r);
     g.stroke();
-    return tn;
+    const lb = uiLabel('吃', { size: Math.max(6, Math.round(r * 1.3)), color: new Color(46, 32, 8, 255) });
+    lb.setParent(badge);
+    badge.setParent(tn);
+    badge.setPosition(size.w / 2 - 1, size.h / 2 - 1, 0);
   }
 
   /** 牌侧俯视图：ivory 受光条 + 蓝背（side=ivory 所在边） */
@@ -1118,32 +1131,58 @@ export class TableScreen extends Screen {
     const subLines = isWin ? (ev.winners[0]?.detail ?? []).filter((d) => d.tiles && d.tiles.length).length : 0;
     const hands = this.revealed;
     const bandH = hands ? 56 : 0; // 各家手牌区高度
-    // 付方侧加成（自身子/庄家点炮连庄）小字行数 → 面板加高
-    const T0 = ev.type === 'win' ? (ev.winners[0]?.tai ?? 0) : 0;
-    const noteN = ev.type === 'win' ? [0, 1, 2, 3].filter((s) => (ev.delta[s] ?? 0) < 0 && -(ev.delta[s] ?? 0) > T0).length : 0;
-    const ph = 300 + subLines * 12 + bandH + noteN * 10;
+    // 子/庄明细子注行数（胡方 1 + 付方各 1）+ 角色横幅 → 面板加高
+    const payerN = ev.type === 'win' ? [0, 1, 2, 3].filter((s) => (ev.delta[s] ?? 0) < 0).length : 0;
+    const ph = 300 + subLines * 12 + bandH + (ev.type === 'win' ? 16 + (1 + payerN) * 10 : 0);
     const panel = uiPanel(pw, ph, { variant: 'gold', radius: Theme.radius.xl });
     // M-J 结算演出（FR-表现-03）：面板 pop 入场
     panel.setScale(0.92, 0.92, 1);
     tween(panel).to(0.22, { scale: new Vec3(1, 1, 1) }, { easing: 'backOut' }).start();
     panel.setParent(mask);
     const v = this.net.view;
+    const meSeat = v?.you.seat ?? -1;
+    const myDelta = ev.type === 'win' ? (ev.delta[meSeat] ?? 0) : 0;
     let title = '🀄 荒庄流局';
-    if (ev.type === 'win') title = `🎉 ${ev.winners.map((w) => this.nameOf(v!, w.seat) + ` 胡 ${w.tai}台`).join(' / ')}`;
-    else if (ev.type === 'zhahu') title = `⚠ ${this.nameOf(v!, ev.seat)} 诈胡罚分`;
+    if (ev.type === 'win') {
+      const ws = ev.winners[0]!;
+      title = ev.winners.length === 1 && ws.seat === meSeat ? `🎉 你胡 ${ws.tai}台！` : `🎉 ${ev.winners.map((w) => `${this.nameOf(v!, w.seat)} 胡 ${w.tai}台`).join(' / ')}`;
+    } else if (ev.type === 'zhahu') title = `⚠ ${this.nameOf(v!, ev.seat)} 诈胡罚分`;
     const tt = uiLabel(title, { size: 20, color: Theme.color.gold, bold: true });
     tt.setParent(panel);
     tt.setPosition(0, ph / 2 - 28, 0);
     const sub = uiLabel(`第 ${v?.round ?? 1}/${v && v.maxRounds > 0 ? v.maxRounds : '∞'} 局 · 1 台 = 1 积分`, { size: 11, color: Theme.color.textMuted });
     sub.setParent(panel);
     sub.setPosition(0, ph / 2 - 50, 0);
+    // 角色个性化横幅（2026-09-18）：胡方 / 被胡付方（点炮·自摸）/ 无关方
+    let banner = '';
+    let bannerColor = Theme.color.textMuted;
+    if (ev.type === 'win') {
+      if (meSeat === ev.winners[0]!.seat) {
+        banner = `🎉 本局你为胡方 · 共收 ${myDelta >= 0 ? '+' : ''}${myDelta} 分`;
+        bannerColor = Theme.color.gold;
+      } else if (myDelta < 0) {
+        banner = payerN === 1 ? `💸 本局你点炮 · 付 ${-myDelta} 分（构成见子注）` : `💸 本局对方自摸 · 你付 ${-myDelta} 分`;
+        bannerColor = Theme.color.danger;
+      } else banner = '本局与你无关 · 积分不变';
+    }
+    if (banner) {
+      const bn = uiLabel(banner, { size: 12, color: bannerColor, bold: true });
+      bn.setParent(panel);
+      bn.setPosition(0, ph / 2 - 68, 0);
+    }
+    const colTop = ph / 2 - (banner ? 90 : 74);
     if (ev.type === 'win') {
       const w0 = ev.winners[0]!;
+      const T0 = w0.tai;
+      const ziOf = (s: number): number => (s === v!.you.seat ? v!.you.zi : (v!.others.find((o) => o.seat === s)?.zi ?? 0));
+      const dealerSeat = v!.dealerSeat;
+      const lz = v!.lianzhuangCount;
+      const payerSeats = [0, 1, 2, 3].filter((s) => (ev.delta[s] ?? 0) < 0);
       const lx = -pw / 4;
       const cl = uiLabel('台数明细', { size: 12, color: Theme.color.gold, bold: true });
       cl.setParent(panel);
-      cl.setPosition(lx, ph / 2 - 74, 0);
-      let ly = ph / 2 - 96;
+      cl.setPosition(lx, colTop, 0);
+      let ly = colTop - 22;
       for (const d of w0.detail) {
         const nm = uiLabel(`${d.name}${d.count != null && d.count > 1 ? ` ×${d.count}` : ''}`, { size: 11, color: Theme.color.textSecondary, align: 'left', width: 120 });
         nm.setParent(panel);
@@ -1159,33 +1198,48 @@ export class TableScreen extends Screen {
           ly -= 12;
         }
       }
-      const tl = uiLabel(`合计 ${w0.tai} 台`, { size: 13, color: Theme.color.gold, bold: true });
+      const totalY = Math.max(-ph / 2 + 72 + bandH, ly - 6);
+      const tl = uiLabel(`合计 ${T0} 台`, { size: 13, color: Theme.color.gold, bold: true });
       tl.setParent(panel);
-      tl.setPosition(lx, Math.max(-ph / 2 + 58 + bandH, ly - 6), 0);
+      tl.setPosition(lx, totalY, 0);
+      const ziNote = uiLabel('子/连庄加成按付方逐家计入（右列子注）', { size: 9, color: Theme.color.textMuted });
+      ziNote.setParent(panel);
+      ziNote.setPosition(lx, totalY - 14, 0);
       const rx = pw / 4;
       const cr = uiLabel('积分变动', { size: 12, color: Theme.color.gold, bold: true });
       cr.setParent(panel);
-      cr.setPosition(rx, ph / 2 - 74, 0);
-      let ry = ph / 2 - 96;
+      cr.setPosition(rx, colTop, 0);
+      let ry = colTop - 20;
       for (const seat of [0, 1, 2, 3]) {
         const dv = ev.delta[seat] ?? 0;
-        const nm = uiLabel(this.nameOf(v!, seat), { size: 11, color: Theme.color.textSecondary, align: 'left', width: 60 });
+        const nm = uiLabel(`${this.nameOf(v!, seat)}${seat === meSeat ? '（我）' : ''}`, { size: 10, color: seat === meSeat ? Theme.color.goldLight : Theme.color.textSecondary, align: 'left', width: 92 });
         nm.setParent(panel);
-        nm.setPosition(rx - 34, ry, 0);
-        const tv = uiLabel(`${dv >= 0 ? '+' : ''}${dv}`, { size: 13, color: dv >= 0 ? Theme.color.gold : Theme.color.danger, bold: true, align: 'right', width: 66 });
+        nm.setPosition(rx - 30, ry, 0);
+        const tv = uiLabel(`${dv >= 0 ? '+' : ''}${dv}`, { size: 13, color: dv >= 0 ? Theme.color.gold : Theme.color.danger, bold: true, align: 'right', width: 56 });
         tv.setParent(panel);
-        tv.setPosition(rx + 40, ry, 0);
-        // 付方侧加成小字（自身子 / 庄家点炮连庄）：超出胡方结算台数的部分
-        const extra = dv < 0 && -dv > T0 ? -dv - T0 : 0;
-        if (extra > 0) {
-          const nt = uiLabel(`含子/连庄 +${extra}`, { size: 9, color: Theme.color.textMuted, align: 'right', width: 90 });
-          nt.setParent(panel);
-          nt.setPosition(rx + 52, ry - 10, 0);
+        tv.setPosition(rx + 62, ry, 0);
+        // 子/庄明细子注：胡方=收付构成；付方=底台+胡方子+自身子+连庄（庄家几庄几子、各加多少一目瞭然）
+        let subTxt = '';
+        if (seat === w0.seat) {
+          subTxt = payerSeats.length === 1 ? `胡 ${T0} 台 · 收 ${this.nameOf(v!, payerSeats[0]!)}` : `胡 ${T0} 台 · 自摸收 ${payerSeats.length} 家`;
+        } else if (dv < 0) {
+          const zi = ziOf(seat);
+          const parts = [seat === dealerSeat ? `庄家·底 ${T0}` : `底 ${T0}`];
+          const wz = ziOf(w0.seat);
+          if (wz > 0) parts.push(`胡方子 ${wz}(+${3 * wz})`);
+          if (zi > 0) parts.push(`自身子 ${zi}(+${3 * zi})`);
+          if ((seat === dealerSeat || w0.seat === dealerSeat) && lz >= 1) parts.push(`连庄 ${lz}(+${2 * lz - 1})`);
+          subTxt = parts.join('·');
         }
-        ry -= extra > 0 ? 32 : 22;
+        if (subTxt) {
+          const nt = uiLabel(subTxt, { size: 9, color: Theme.color.textMuted, align: 'right', width: 246 });
+          nt.setParent(panel);
+          nt.setPosition(rx + 16, ry - 11, 0);
+          ry -= 32;
+        } else ry -= 20;
       }
-      const my = v?.you.score ?? 0;
-      const mt = uiLabel(`我累计 ${my >= 0 ? '+' : ''}${my}`, { size: 12, color: my >= 0 ? Theme.color.gold : Theme.color.danger, bold: true });
+      const cum = (v?.you.score ?? 0) + myDelta;
+      const mt = uiLabel(`我累计 ${cum >= 0 ? '+' : ''}${cum}`, { size: 12, color: cum >= 0 ? Theme.color.gold : Theme.color.danger, bold: true });
       mt.setParent(panel);
       mt.setPosition(rx, Math.max(-ph / 2 + 58 + bandH, ry - 4), 0);
     } else if (ev.type === 'exhaustive') {
@@ -1347,8 +1401,8 @@ export class TableScreen extends Screen {
       label.setParent(panel);
       label.setPosition(-150, y - 14, 0);
       const windNames = ['东', '南', '西', '北'];
+      const isMePicker = me === sv.picker;
       for (let seat = 0; seat < 4; seat++) {
-        const isMePicker = me === sv.picker;
         const btn = uiButton(windNames[seat]!, () => {
           if (isMePicker) this.net.pickSeat(seat);
         }, { variant: sv.picked === seat ? 'primary' : 'action', width: 52, height: 34, fontSize: 14, enabled: isMePicker });
@@ -1507,11 +1561,11 @@ export class TableScreen extends Screen {
           // 北：横排（从上方看右端=屏幕左，为与南排对称仍 g1 右）
           drawStack(this.wallRoot, (n - 1 - i) * (HS.w + HS.gap) - ((n - 1) * (HS.w + HS.gap)) / 2, 126, true, height, spent, skip, breakpt);
         } else if (rel === 1) {
-          // 东：竖列，g1 在最下
-          drawStack(this.wallRoot, 286, (n - 1 - i) * (VS.h + VS.gap) - ((n - 1) * (VS.h + VS.gap)) / 2, false, height, spent, skip, breakpt);
+          // 东：竖列，g1 在最下（原型 .wall-col.east right:150 → x=+264）
+          drawStack(this.wallRoot, 264, (n - 1 - i) * (VS.h + VS.gap) - ((n - 1) * (VS.h + VS.gap)) / 2, false, height, spent, skip, breakpt);
         } else {
-          // 西：竖列，g1 在最下
-          drawStack(this.wallRoot, -286, (n - 1 - i) * (VS.h + VS.gap) - ((n - 1) * (VS.h + VS.gap)) / 2, false, height, spent, skip, breakpt);
+          // 西：竖列，g1 在最下（原型 .wall-col.west left:150 → x=-264）
+          drawStack(this.wallRoot, -264, (n - 1 - i) * (VS.h + VS.gap) - ((n - 1) * (VS.h + VS.gap)) / 2, false, height, spent, skip, breakpt);
         }
       }
     }
@@ -1529,7 +1583,7 @@ export class TableScreen extends Screen {
     const ll = uiLabel(legendText, { size: 9, color: Theme.color.gold });
     ll.setParent(legend);
     legend.setParent(this.wallRoot);
-    legend.setPosition(0, -128, 0);
+    legend.setPosition(0, -48, 0);
   }
 
   /** 金色虚线框（短划线逐段绘制，近似 CSS dashed） */

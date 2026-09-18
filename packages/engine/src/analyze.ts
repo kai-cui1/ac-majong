@@ -63,15 +63,32 @@ function fromUnit(u: MeldUnit): AnalyzedMeld {
   return { kind: u.kind, base: tiles[0]!, tiles, concealed: true, revealed: false };
 }
 
+/** 点炮胡时，由胡牌张凑成的第三张刻子不算暗坎（2026-09-18 用户确认口径）：
+ *  暗牌中该牌仅 2 张+胡牌张=3 时，刻子必然含胡牌张 → 非暗；暗牌本身足 3 张（胡牌张另作他用）时仍为暗 */
+function isPungConcealed(hand: Hand, u: MeldUnit): boolean {
+  if (u.kind !== 'pung') return true;
+  if (hand.winBy !== 'dianpao') return true;
+  const t = u.tiles[0]!;
+  if (t !== hand.winTile) return true;
+  return (hand.concealed[t] ?? 0) >= 4;
+}
+
 /** 由 Hand + 一个胡牌分解，算出番种识别所需的派生量 */
 export function analyze(hand: Hand, decomp: WinDecomp): HandAnalysis {
-  const melds: AnalyzedMeld[] = [...hand.melds.map(fromFormed), ...decomp.concealedMelds.map(fromUnit)];
+  const melds: AnalyzedMeld[] = [
+    ...hand.melds.map(fromFormed),
+    ...decomp.concealedMelds.map((u) => {
+      const a = fromUnit(u);
+      if (a.kind === 'pung' && !isPungConcealed(hand, u)) a.concealed = false;
+      return a;
+    }),
+  ];
   const allTiles: TileId[] = [...expand(hand.concealed), ...hand.melds.flatMap((m) => m.tiles)];
 
   const pungLike = melds.filter((m) => m.kind === 'pung' || m.kind === 'kong');
   const seqCount = melds.filter((m) => m.kind === 'seq').length;
   const concealedPungCount =
-    decomp.concealedMelds.filter((u) => u.kind === 'pung').length +
+    decomp.concealedMelds.filter((u) => u.kind === 'pung' && isPungConcealed(hand, u)).length +
     hand.melds.filter((m) => m.type === 'kong_concealed').length; // N3：暗杠计入暗坎
   const kongExposedCount = hand.melds.filter((m) => m.type === 'kong_exposed' || m.type === 'kong_added').length;
   const kongConcealedCount = hand.melds.filter((m) => m.type === 'kong_concealed').length;

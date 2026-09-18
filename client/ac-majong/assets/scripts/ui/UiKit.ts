@@ -194,8 +194,8 @@ export function uiInput(opts: { placeholder?: string; password?: boolean; width?
   // 关键：默认 InputMode.ANY 会被引擎强制 textLabel 顶部对齐（_updateTextLabel），改 SINGLE_LINE 保留 CENTER 垂直居中
   box.inputMode = EditBox.InputMode.SINGLE_LINE;
   box.returnType = EditBox.KeyboardReturnType.DONE;
-  box.node.on(EditBox.EventType.EDITING_DID_BEGIN, () => draw(true));
-  box.node.on(EditBox.EventType.EDITING_DID_END, () => draw(false));
+  box.node.on(EditBox.EventType.EDITING_DID_BEGAN, () => draw(true));
+  box.node.on(EditBox.EventType.EDITING_DID_ENDED, () => draw(false));
   return { node, box };
 }
 

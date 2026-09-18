@@ -134,7 +134,7 @@ export class LoginScreen extends Screen {
           this.loggingIn = false;
           return;
         }
-        await NetService.instance.connect(SERVER_URL, { account: { username, password } }, nick ? { nickname: nick } : undefined);
+        await NetService.instance.connect(SERVER_URL, { account: { username, password } }, nick ? { nickname: nick, avatarUrl: '' } : undefined);
       } else {
         const id = mockIdentity();
         await NetService.instance.connect(SERVER_URL, { token: id.token }, { nickname: id.nickname, avatarUrl: id.avatarUrl });
