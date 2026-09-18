@@ -1,0 +1,28 @@
+{
+  "name": "@ac-majong/persistence",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "跨系统共享存储层：事件溯源落库与还原、MySQL/Redis/内存实现、createPersistence 可插拔工厂",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@ac-majong/engine": "workspace:*",
+    "@ac-majong/protocol": "workspace:*",
+    "ioredis": "^5.4.1",
+    "mysql2": "^3.11.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8"
+  }
+}

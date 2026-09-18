@@ -8,9 +8,9 @@ import {
   snapshotRound,
 } from '@ac-majong/engine';
 import type { Action, TableState } from '@ac-majong/engine';
-import { MemoryGameStore, MemoryRealtime } from '../src/persistence/memory';
-import { toRoundSnapshot } from '../src/persistence/entities';
-import type { ActionRow } from '../src/persistence/entities';
+import { MemoryGameStore, MemoryRealtime } from '../src/memory';
+import { toRoundSnapshot } from '../src/entities';
+import type { ActionRow } from '../src/entities';
 
 /** 自动驱动器：每步选一个合法动作（响应阶段一律 pass），把一局跑到底 */
 function driveOne(s: TableState): Action | null {

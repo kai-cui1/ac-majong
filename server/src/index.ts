@@ -1,6 +1,6 @@
 import { startGateway, type Gateway } from './wsGateway';
 import { MockIdentity, WeChatIdentity, TokenIdentity, type IdentityProvider } from './identity';
-import { createPersistence } from './persistence/index';
+import { createPersistence } from '@ac-majong/persistence';
 import { setLogLevel, getLogLevel, createLogger, type LogLevel } from './logger';
 
 const log = createLogger('main');

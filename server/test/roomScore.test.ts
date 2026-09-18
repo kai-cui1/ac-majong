@@ -6,8 +6,8 @@ import type { Connection } from '../src/connection';
 import type { ServerMsg } from '@ac-majong/protocol';
 import { legalActions, getPlayer } from '@ac-majong/engine';
 import type { Action, TableState } from '@ac-majong/engine';
-import { MemoryGameStore, MemoryRealtime } from '../src/persistence/memory';
-import type { GameStore, RealtimeStore } from '../src/persistence/entities';
+import { MemoryGameStore, MemoryRealtime } from '@ac-majong/persistence';
+import type { GameStore, RealtimeStore } from '@ac-majong/persistence';
 import { rebuildRoomFromStore } from '../src/wsGateway';
 
 /**

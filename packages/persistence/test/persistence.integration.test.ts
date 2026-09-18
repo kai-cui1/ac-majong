@@ -3,10 +3,10 @@ import {
   createTable, applyAction, legalActions, getPlayer, replayRound, snapshotRound,
 } from '@ac-majong/engine';
 import type { Action, TableState } from '@ac-majong/engine';
-import { MysqlGameStore } from '../src/persistence/mysql';
-import { RedisRealtime } from '../src/persistence/redis';
-import { toRoundSnapshot } from '../src/persistence/entities';
-import type { ActionRow, GameStore, RealtimeStore } from '../src/persistence/entities';
+import { MysqlGameStore } from '../src/mysql';
+import { RedisRealtime } from '../src/redis';
+import { toRoundSnapshot } from '../src/entities';
+import type { ActionRow, GameStore, RealtimeStore } from '../src/entities';
 
 // 仅当 DB_IT=1 且提供 DATABASE_URL / REDIS_URL 时运行（需 deploy/docker compose up -d）
 const DB_IT = process.env.DB_IT === '1';

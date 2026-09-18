@@ -3,7 +3,7 @@ import WebSocket from 'ws';
 import type { AddressInfo } from 'node:net';
 import { startGateway, type Gateway } from '../src/wsGateway';
 import { MockIdentity } from '../src/identity';
-import { MemoryGameStore, MemoryRealtime } from '../src/persistence/memory';
+import { MemoryGameStore, MemoryRealtime } from '@ac-majong/persistence';
 import { hashPassword, verifyPassword, validateUsername, validatePassword, loginOrRegister, resolveSession } from '../src/accountAuth';
 import type { ServerMsg } from '@ac-majong/protocol';
 

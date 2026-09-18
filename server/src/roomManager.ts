@@ -1,6 +1,6 @@
 import { RoomActor, type GameHooks, type RoomRestore } from './roomActor';
 import type { Connection } from './connection';
-import type { GameStore } from './persistence/entities';
+import type { GameStore } from '@ac-majong/persistence';
 import type { RoomSettings } from '@ac-majong/protocol';
 
 /** 房间管理：创建/查询/回收，分配 6 位房间号（全局唯一、永不复用，BL-016） */

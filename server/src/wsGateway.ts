@@ -7,9 +7,9 @@ import type { Connection } from './connection';
 import type { IdentityProvider } from './identity';
 import { RoomManager } from './roomManager';
 import type { GameHooks, RoomRestore } from './roomActor';
-import type { GameStore, RealtimeStore, MemberEventRow, ScoreMap } from './persistence/entities';
-import { toRoundSnapshot } from './persistence/entities';
-import { MemoryGameStore, MemoryRealtime } from './persistence/memory';
+import type { GameStore, RealtimeStore, MemberEventRow, ScoreMap } from '@ac-majong/persistence';
+import { toRoundSnapshot } from '@ac-majong/persistence';
+import { MemoryGameStore, MemoryRealtime } from '@ac-majong/persistence';
 import { loginOrRegister, resolveSession } from './accountAuth';
 import { createLogger } from './logger';
 

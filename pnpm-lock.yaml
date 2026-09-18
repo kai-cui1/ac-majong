@@ -37,6 +37,31 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.2)
 
+  packages/persistence:
+    dependencies:
+      '@ac-majong/engine':
+        specifier: workspace:*
+        version: link:../engine
+      '@ac-majong/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+      ioredis:
+        specifier: ^5.4.1
+        version: 5.11.1
+      mysql2:
+        specifier: ^3.11.3
+        version: 3.24.4(@types/node@22.20.2)
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.20.2
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.2)
+
   packages/protocol:
     dependencies:
       '@ac-majong/engine':
@@ -52,15 +77,12 @@ importers:
       '@ac-majong/engine':
         specifier: workspace:*
         version: link:../packages/engine
+      '@ac-majong/persistence':
+        specifier: workspace:*
+        version: link:../packages/persistence
       '@ac-majong/protocol':
         specifier: workspace:*
         version: link:../packages/protocol
-      ioredis:
-        specifier: ^5.4.1
-        version: 5.11.1
-      mysql2:
-        specifier: ^3.11.3
-        version: 3.24.4(@types/node@22.20.2)
       ws:
         specifier: ^8.18.0
         version: 8.21.3

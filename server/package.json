@@ -13,9 +13,8 @@
   },
   "dependencies": {
     "@ac-majong/engine": "workspace:*",
+    "@ac-majong/persistence": "workspace:*",
     "@ac-majong/protocol": "workspace:*",
-    "ioredis": "^5.4.1",
-    "mysql2": "^3.11.3",
     "ws": "^8.18.0"
   },
   "devDependencies": {

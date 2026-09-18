@@ -4,7 +4,7 @@
  * 会话：authOk 回传 sessionToken（30 天 TTL，滑动续期），客户端持久化后重连/复登免密码。
  */
 import { randomBytes, scrypt, timingSafeEqual } from 'node:crypto';
-import type { GameStore, RealtimeStore } from './persistence';
+import type { GameStore, RealtimeStore } from '@ac-majong/persistence';
 
 export const SESSION_TTL_SEC = 30 * 24 * 3600;
 const USERNAME_RE = /^[a-zA-Z0-9_]{3,20}$/;
