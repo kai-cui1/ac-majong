@@ -1,9 +1,9 @@
 import type { Action } from '../engine/index';
-import type { ClientMsg, ServerMsg, ViewState, RoomView, UserProfile } from '../protocol/index';
+import type { ClientMsg, ServerMsg, ViewState, RoomView, UserProfile, RoomSettings } from '../protocol/index';
 import type { Transport } from './transport';
 
 export interface GameClientHandlers {
-  onAuth?: (userId: string, profile: UserProfile) => void;
+  onAuth?: (userId: string, profile: UserProfile, session?: string) => void;
   onGameView?: (v: ViewState) => void;
   onRoomView?: (r: RoomView) => void;
   onEvent?: (events: ServerMsg & { t: 'event' }) => void;
@@ -38,7 +38,7 @@ export class GameClient {
       case 'authOk':
         this.userId = m.userId;
         this.profile = m.profile;
-        this.handlers.onAuth?.(m.userId, m.profile);
+        this.handlers.onAuth?.(m.userId, m.profile, m.session);
         break;
       case 'roomView':
         this.room = m.room;
@@ -104,11 +104,12 @@ export class GameClient {
     return ++this.seq;
   }
 
-  auth(token: string, profile?: UserProfile): void {
-    this.send({ t: 'auth', seq: this.nextSeq(), token, profile });
+  /** 登录：sessionToken 优先（H5 账号路线重连/复登）；否则账号密码；mock/微信路线传 token */
+  auth(token: string | undefined, profile?: UserProfile, account?: { username: string; password: string }): void {
+    this.send({ t: 'auth', seq: this.nextSeq(), token, account, profile });
   }
-  create(maxRounds = 8): void {
-    this.send({ t: 'create', seq: this.nextSeq(), maxRounds });
+  create(maxRounds = 8, settings?: RoomSettings): void {
+    this.send({ t: 'create', seq: this.nextSeq(), maxRounds, settings });
   }
   join(room: string): void {
     this.send({ t: 'join', seq: this.nextSeq(), room });
@@ -118,6 +119,14 @@ export class GameClient {
   }
   start(): void {
     this.send({ t: 'start', seq: this.nextSeq() });
+  }
+  /** BL-017：掷骰（选位/定庄/摸牌位，语境由服务端阶段决定） */
+  roll(): void {
+    this.send({ t: 'roll', seq: this.nextSeq() });
+  }
+  /** BL-017：选位最大者选座 */
+  pickSeat(seat: number): void {
+    this.send({ t: 'pickSeat', seq: this.nextSeq(), seat });
   }
   /** 房主为空位放入 Bot 陪玩（FR-房间-08） */
   addBot(count = 1): void {
@@ -136,7 +145,15 @@ export class GameClient {
   }
   action(action: Action): void {
     this.send({ t: 'action', seq: this.nextSeq(), action });
+  }  /** BL-012：请求战绩/回放列表（响应 t:'replayList'） */
+  replayList(): void {
+    this.send({ t: 'replayList', seq: this.nextSeq() });
   }
+  /** BL-012：加载单局回放（响应 t:'replayData'；失败为 ack.ok=false 含原因） */
+  replayLoad(gameId: string): void {
+    this.send({ t: 'replayLoad', seq: this.nextSeq(), gameId });
+  }
+
   ping(): void {
     this.send({ t: 'ping', seq: this.nextSeq() });
   }

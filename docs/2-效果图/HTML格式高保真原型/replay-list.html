@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AC 麻将俱乐部 — 战绩 / 回放列表（P9，BL-012）</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .replay-page {
+      min-height: 100vh; min-height: 100dvh;
+      background:
+        radial-gradient(ellipse at top, rgba(212, 165, 55, 0.08) 0%, transparent 55%),
+        linear-gradient(to bottom, var(--color-bg-wood) 0%, var(--color-bg-table) 60%);
+      padding: 16px 14px 28px;
+    }
+    .page-head {
+      display: flex; align-items: center; gap: 10px; margin-bottom: 14px;
+    }
+    .back-btn {
+      width: 30px; height: 30px; border-radius: 50%;
+      background: rgba(0,0,0,0.45); border: 1px solid rgba(212,165,55,0.25);
+      color: var(--color-text-secondary); font-size: 14px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; text-decoration: none;
+    }
+    .page-title { font-size: 17px; font-weight: 800; color: var(--color-gold); letter-spacing: 2px; }
+    .page-sub { font-size: 10px; color: var(--color-text-muted); margin-left: auto; }
+
+    /* 房间卡（房间→局两级） */
+    .room-card {
+      background: rgba(0,0,0,0.42); border: 1px solid rgba(212,165,55,0.22);
+      border-radius: var(--radius-lg); margin-bottom: 12px; overflow: hidden;
+    }
+    .room-card-head {
+      display: flex; align-items: center; gap: 8px;
+      padding: 10px 14px; background: rgba(212,165,55,0.08);
+      cursor: pointer;
+    }
+    .room-no { font-size: 14px; font-weight: 800; color: var(--color-gold); font-family: var(--font-mono); }
+    .room-meta { font-size: 10px; color: var(--color-text-muted); }
+    .room-toggle { margin-left: auto; color: var(--color-text-muted); font-size: 12px; }
+    .round-list { padding: 4px 10px 10px; display: none; }
+    .room-card.open .round-list { display: block; }
+    .room-card.open .room-toggle { transform: rotate(90deg); }
+    .round-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 6px; border-bottom: 1px solid rgba(212,165,55,0.1);
+      cursor: pointer; text-decoration: none;
+    }
+    .round-row:last-child { border-bottom: none; }
+    .round-row:hover { background: rgba(212,165,55,0.06); border-radius: 8px; }
+    .round-no { font-size: 12px; font-weight: 700; color: var(--color-text-primary); min-width: 44px; }
+    .round-end { font-size: 10px; padding: 2px 8px; border-radius: 10px; }
+    .round-end.win { color: var(--color-gold); background: rgba(212,165,55,0.14); }
+    .round-end.exhaustive { color: var(--color-text-muted); background: rgba(255,255,255,0.08); }
+    .round-winners { font-size: 11px; color: var(--color-text-secondary); flex: 1; min-width: 0; }
+    .round-tai { font-size: 11px; font-weight: 700; color: var(--color-gold); font-family: var(--font-mono); }
+    .round-play { font-size: 11px; color: var(--color-wx-green, #07c160); font-weight: 700; }
+    .empty-tip { text-align: center; color: var(--color-text-muted); font-size: 12px; padding: 60px 0; }
+  </style>
+</head>
+<body>
+  <div class="replay-page">
+    <div class="page-head">
+      <a class="back-btn" href="home.html">‹</a>
+      <span class="page-title">🎬 战绩 / 回放</span>
+      <span class="page-sub">仅本人参赛的对局 · 参赛四方可看（D-29）</span>
+    </div>
+
+    <!-- 房间卡 1 -->
+    <div class="room-card open">
+      <div class="room-card-head" onclick="this.parentElement.classList.toggle('open')">
+        <span class="room-no">房 828666</span>
+        <span class="room-meta">09-17 20:12 · 8 局 · 已散场</span>
+        <span class="room-toggle">›</span>
+      </div>
+      <div class="round-list">
+        <a class="round-row" href="replay-player.html">
+          <span class="round-no">第 1 局</span>
+          <span class="round-end win">自摸</span>
+          <span class="round-winners">我 · 门清一摸三+清一色</span>
+          <span class="round-tai">35 台</span>
+          <span class="round-play">回放 ▶</span>
+        </a>
+        <a class="round-row" href="replay-player.html">
+          <span class="round-no">第 2 局</span>
+          <span class="round-end win">点炮</span>
+          <span class="round-winners">令狐冲（杨过点炮）</span>
+          <span class="round-tai">12 台</span>
+          <span class="round-play">回放 ▶</span>
+        </a>
+        <a class="round-row" href="replay-player.html">
+          <span class="round-no">第 3 局</span>
+          <span class="round-end exhaustive">荒庄</span>
+          <span class="round-winners">无人胡牌 · 庄家连庄</span>
+          <span class="round-tai">—</span>
+          <span class="round-play">回放 ▶</span>
+        </a>
+      </div>
+    </div>
+
+    <!-- 房间卡 2 -->
+    <div class="room-card">
+      <div class="room-card-head" onclick="this.parentElement.classList.toggle('open')">
+        <span class="room-no">房 517702</span>
+        <span class="room-meta">09-16 21:40 · 3 局 · 已散场</span>
+        <span class="room-toggle">›</span>
+      </div>
+      <div class="round-list">
+        <a class="round-row" href="replay-player.html">
+          <span class="round-no">第 1 局</span>
+          <span class="round-end win">自摸</span>
+          <span class="round-winners">黄蓉</span>
+          <span class="round-tai">8 台</span>
+          <span class="round-play">回放 ▶</span>
+        </a>
+      </div>
+    </div>
+
+    <div class="empty-tip" style="display:none;">还没有对局记录</div>
+  </div>
+</body>
+</html>

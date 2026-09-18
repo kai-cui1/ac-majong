@@ -201,6 +201,22 @@ abstract class Screen {
 
 ---
 
+## 附录 A · 屏幕 → 高保真原型映射（批次自检用，2026-09-17 建立）
+
+| 屏幕/弹层 | 原型文件 | 最近同步 |
+|---|---|---|
+| 登录（H5 账号表单/微信一键/mock 三态） | `2-效果图/HTML格式高保真原型/login.html` | 2026-09-17 回补 |
+| 大厅（战绩/回放入口+规则条+⚙设置） | `…/home.html` | 2026-09-17 回补 |
+| 房间等待 | `…/room.html` | 既有 |
+| 牌桌（庄徽章/连N/离线托管/响应框/按钮簇/重连遮罩/结算浮层/摊牌2×2/听牌浮层） | `…/game.html` | 2026-09-17 回补 |
+| 散场战绩 | `…/result.html` | 既有（无变更） |
+| 规则（弹层形态注记+D-25 算账） | `…/rules.html` | 2026-09-17 回补 |
+| 设置弹层 | `…/settings.html` | 2026-09-17 新建 |
+| 牌面视觉 | `…/tile-faces.html` | 既有 |
+| 回放列表/播放器（P9/P10） | `…/replay-list.html` / `replay-player.html` | 2026-09-18 新建（BL-012） |
+
+> 流程门槛：凡 UI/交互变更，同批更新对应原型（改版或新建）；批次收尾按本表自检。**涉及交互界面细节的前端开发必须 100% 还原高保真原型**（颜色/字体/间距/圆角/描边/阴影/组件状态/文案逐点对齐；确需偏离先改原型再实现；验收对照原型逐目比对）。
+
 ## 维护记录
 
 | 日期 | 概要 |
@@ -221,5 +237,16 @@ abstract class Screen {
 | 2026-09-17 | §11 响应提示框加高 92→112：hint y38 / CdBar y24 / 按钮 y-16 三层分离，修复文案与倒计时条互相遮挡 |
 | 2026-09-17 | §11 M-H 新增 `ui/RulesModal.ts`（openRulesModal：uiModal+ScrollView 分节内容，番种速查取引擎 PATTERN_TAI，实底 Graphics 底衬）与 `ui/SettingsModal.ts`（openSettingsModal：静音切换/退出房间/返回登录/版本协议钩子）；大厅「规则说明/⚙设置」+ 牌桌右上簇（右→左：静音/✕/规则/⚙）接入 |
 | 2026-09-17 | 验证基建修正：Cocos 生成 `temp/tsconfig.cocos.json` 的 types 相对路径致 CLI tsc 仅报 TS2688 并跳过语义检查（假绿）；新增 `temp/tsconfig.check.json`（修正 types 路径 + strict:false + skipLibCheck）作为唯一 CLI 检查入口；SettingsModal 补 UITransform 导入修复运行时 ReferenceError |
+| 2026-09-18 | BL-012 回放双屏：ReplayListScreen（房间→局折叠列表）/ReplayPlayerScreen（rehydrate+applyAction 重演+播放控制+全亮）；大厅增🎬入口；坑：Cocos web 构建下 Set 展开失效→关键帧改纯数组 |
+| 2026-09-17 | 原型回补批：login/home/game/rules 改版 + settings.html 新建 + _index 卡片；附录 A 屏幕→原型映射表建立（流程门槛：UI 变更同批更新原型） |
+| 2026-09-17 | §11 H5 账号鉴权客户端：UiKit 增 uiInput（EditBox 暗底圆角框；**label 锚点须 (0,1)**——EditBox 引擎按左上锚点自管布局）；LoginScreen 三态（微信一键/H5 表单+会话免密复登/mock）；NetService 会话持久化 ac_session + 凭据选择序 + ack 失败抛错展示 |
+| 2026-09-17 | §11 H5 网页发布路线：Config 增 IS_WEB + detectServerUrl（WS 跟随页面主机 8080，一份构建部署任意服务器）；App 竖屏旋转提示遮罩；deploy/docker-compose.prod.yml（mysql+redis+server+nginx 静态站单机部署）；CLI 无头构建命令固化（**必须带 startScene=scenes/App.scene 参数**，否则构建到空壳 scene.scene 黑屏；编辑器预览走当前打开场景、构建走起始场景，二者可背离）|
+| 2026-09-17 | §11 M-K 平台分支：Config 增 IS_WX/WX_CLOUD_ENV/WX_CLOUD_SERVICE/wxIdentity；NetService.connect 增 transport 注入参（微信端 WeChatTransport(connectContainer)，重连复用同一 transport）；LoginScreen 按平台选身份与传输 |
+| 2026-09-17 | §11 结算简化配套（D-25）：结算浮层副标题「1 台 = 1 积分」；付方 delta 超胡方台数部分小字「含子/连庄 +N」+面板加高；previewTai 调用传 myZi；RulesModal 结算节文案同步 |
+| 2026-09-17 | §11 M-J 动画：TableScreen.runAnims 以 ViewState 差值驱动 tween（发牌 stagger / 摸牌·弃牌 RTileLast·副露 Melds<seat> pop / 结算面板 backOut pop）；render 末尾统一触发，重渲染自然校准 |
+| 2026-09-17 | §11 听牌提示门槛修复：previewTai（vendor engine）听张按 6 台起胡门槛过滤，不足门槛不提示听牌；客户端听牌条/徽章随引擎自动修正 |
 | 2026-09-17 | §11 M-I 客户端：NetService 增自动重连（凭据记忆+退避 1/2/4/8s+重入记忆房间+`onReconnect` 状态回调）；TableScreen 断线遮罩（重连中/失败文案）+ pinfo「离线」(灰)/「托管」(绿)徽章（seatFlags 取 roomView） |
 | 2026-09-17 | 新增 §12 音频子系统 `AudioManager`（BL-014 游戏音效）：单例封装 `AudioSource`、SFX `playOneShot` 并发、`resources` 懒加载缓存、静音 `localStorage` 持久化；触发接线（`onEvent` 事件映射 / `uiButton` 点击音）、杠三种区分·胡不区分的事件语义、mp3 资源命名约定、最简静音开关；只做音效不做 BGM |
+| 2026-09-18 | **BL-016**：`ResultScreen` 底部提示改为「房间已关闭、积分定格 · 请按积分差线下相互结算」（还原 result.html final-note 新文案）；`LobbyScreen.doJoin` 重进对局中房间直接切牌桌（`lastGameViewAt` 判定，RoomScreen 未构建不错过 gameView 广播） |
+| 2026-09-17 | §11 uiInput 可读性修复与视觉升级：修复 textLabel 误用不存在的 `Theme.color.text`（undefined → 近黑不可读）改用 `textPrimary` 暖白（同类 tsc 假绿教训）；输入框加高 34→42、圆角 10、左侧金色 accent 竖条、聚焦监听 EditBox `EDITING_DID_BEGIN/END` 重绘亮金边；LoginScreen placeholder 带 👤/🔒/✏️ 图标，三框/按钮/协议/提示 Y 坐标随框高重排 |
+| 2026-09-18 | **BL-017 开局仪式与物理牌墙 UI**：`UiKit` 新增 `uiSwitch`（40×22 金轨开关，`interactive:false` 供整行点击托管）；`LobbyScreen` 建房弹层重排（380×402）——局数 2×2 单选（金底选中态自绘）+「玩法设置」双开关行（物理牌墙展示/摸牌位骰，`.play-row` 还原）+ 恒开提示 + 「创建并分享」；`RoomScreen` 房卡增玩法参数行（FR-房间-10）+ phase='seating' 时切牌桌；`TableScreen` 新增 `SeatingLayer` 仪式遮罩（四骰槽/同点重掷徽章/选位顺序榜/东南西北选座行/定庄·摸牌位横幅/掷骰按钮/10s 超时提示，`roomView.seating` 与 `view.seating`(roundBreak) 双通道驱动）与 `WallBoard` 四边牌墙排（18 组/排：spent 淡出/skip 金虚线/breakpt 金框光晕 + 开牌点图例，`view.wallInfo` 驱动，random 模式不渲染）；`diceFaces` 骰点和固定拆分展示 |

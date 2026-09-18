@@ -25,6 +25,8 @@ export type MeldType = 'chi' | 'pong' | 'kong_exposed' | 'kong_concealed' | 'kon
 export interface Meld {
   type: MeldType;
   tiles: TileId[];
+  /** 吃副：取自他舍的「被吃牌」（FR-对局-17 横置标记用；碰/杠牌张相同不记） */
+  called?: TileId;
 }
 
 /** 一手胡牌的完整信息（供 winCheck / 番种识别 / 结算） */

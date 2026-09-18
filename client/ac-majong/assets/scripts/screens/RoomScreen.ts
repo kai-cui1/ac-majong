@@ -16,6 +16,7 @@ export class RoomScreen extends Screen {
   readonly name = 'room';
   private roomNoLbl: Label | null = null;
   private roundsLbl: Label | null = null;
+  private playLbl: Label | null = null;
   private countLbl: Label | null = null;
   private statusLbl: Label | null = null;
   private startBtn: Node | null = null;
@@ -38,7 +39,7 @@ export class RoomScreen extends Screen {
     back.setPosition(-W / 2 + 30, H / 2 - 28, 0);
 
     // 左栏：房间号卡片
-    const card = uiPanel(280, 168, { variant: 'gold', radius: Theme.radius.xl });
+    const card = uiPanel(280, 186, { variant: 'gold', radius: Theme.radius.xl });
     card.setParent(root);
     card.setPosition(-250, 34, 0);
     this.buildRoomCodeCard(card);
@@ -81,7 +82,14 @@ export class RoomScreen extends Screen {
     status.setParent(root);
     status.setPosition(145, -172, 0);
 
-    NetService.instance.onRoom((r) => this.render(r));
+    NetService.instance.onRoom((r) => {
+      // BL-017：房主开始后进入仪式阶段 → 切牌桌页展示仪式遮罩（掷骰/选座在牌桌上进行）
+      if (r.phase === 'seating') {
+        this.router.show('table');
+        return;
+      }
+      this.render(r);
+    });
     // 开局后服务端下发 gameView → 切牌桌（M-E）
     NetService.instance.onView(() => this.router.show('table'));
     return root;
@@ -127,11 +135,22 @@ export class RoomScreen extends Screen {
     const ante = uiLabel('底注 20 积分/台', { size: 12, color: Theme.color.textSecondary });
     ante.setParent(card);
     ante.setPosition(66, -42, 0);
+
+    // BL-017 玩法参数展示（FR-房间-10，还原 room.html 房卡底行）
+    const play = uiLabel('玩法 —', { size: 11, color: Theme.color.textMuted, width: 250 });
+    this.playLbl = play.getComponent(Label)!;
+    play.setParent(card);
+    play.setPosition(0, -70, 0);
   }
 
   private render(r: RoomView): void {
     if (this.roomNoLbl) this.roomNoLbl.string = r.room;
     if (this.roundsLbl) this.roundsLbl.string = r.maxRounds > 0 ? `局数上限 ${r.maxRounds} 局` : '局数不限';
+    if (this.playLbl) {
+      const wall = r.settings?.wallMode === 'physical' ? '物理牌墙' : '随机发牌';
+      const brk = r.settings?.breakDice ? '摸牌位骰开' : '摸牌位骰关';
+      this.playLbl.string = `玩法 ${wall} · ${brk} · 选位仪式恒开`;
+    }
     const filled = r.seats.filter((s) => s != null).length;
     if (this.countLbl) this.countLbl.string = `${filled} / 4`;
     const me = NetService.instance.userId;

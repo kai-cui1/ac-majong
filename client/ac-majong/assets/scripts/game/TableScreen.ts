@@ -1,4 +1,4 @@
-import { Node, UITransform, Graphics, Color, BlockInputEvents, Label } from 'cc';
+import { Node, UITransform, Graphics, Color, BlockInputEvents, Label, tween, Vec3 } from 'cc';
 import { Screen } from '../app/SceneRouter';
 import { Theme, rgba } from '../ui/Theme';
 import { uiLabel, uiButton, uiPanel, setButtonEnabled, uiMuteToggle } from '../ui/UiKit';
@@ -8,7 +8,7 @@ import { AudioManager, SfxName } from '../ui/AudioManager';
 import { NetService } from './NetService';
 import { createTileNode, expandSorted } from './TileNode';
 import { chiOptions, waitingTiles, previewTai, addedKongOptions, concealedKongOptions, HONOR_NAMES } from '../vendor/engine/index';
-import type { ViewState, GameEvent, Meld } from '../vendor/protocol/index';
+import type { ViewState, GameEvent, Meld, RoomView, SeatingView } from '../vendor/protocol/index';
 
 /**
  * 牌桌页（P6，还原 game.html v2「方案A 中央公共牌河」，横屏 844×390）。
@@ -52,6 +52,10 @@ export class TableScreen extends Screen {
   private discardBtn!: Node;
   private discardRing: Node | null = null;
   private statusCdLbl: Node | null = null;
+  // BL-017：四边物理牌墙排（physical 模式）与开局仪式/摸牌位骰遮罩
+  private wallRoot!: Node;
+  private seatingRoot!: Node;
+  private lastRoom: RoomView | null = null;
 
   // 响应倒计时（FR-对局-13）
   private cdTotal = 0;
@@ -79,6 +83,9 @@ export class TableScreen extends Screen {
     this.southTop = this.mk(root, 'SouthTop', 0, -100);
     this.southHand = this.mk(root, 'SouthHand', 0, -150);
     this.overlay = this.mk(root, 'Overlay', 0, 0);
+    // BL-017：牌墙排在牌桌层之上、遮罩之下；仪式遮罩在 overlay 之上
+    this.wallRoot = this.mk(root, 'WallBoard', 0, 0);
+    this.seatingRoot = this.mk(root, 'SeatingLayer', 0, 0);
 
     // 出牌圆钮（手牌行右端兄弟节点，不重叠）
     this.discardBtn = this.makeDiscardBtn();
@@ -93,11 +100,24 @@ export class TableScreen extends Screen {
     this.net.onEvent((m) => this.onEvents(m.events));
     this.net.onRoomEnd(() => this.router.show('result'));
     this.net.onReconnect((s) => this.showReconnect(s));
+    // BL-017：开局仪式（phase=seating）随 roomView 广播驱动遮罩
+    this.net.onRoom((r) => {
+      this.lastRoom = r;
+      if (r.phase === 'seating') this.renderSeating(r.seating ?? null, r);
+      else if (!this.net.view?.seating) this.hideSeating();
+    });
     return root;
   }
 
   onEnter(): void {
     if (this.net.view) this.render(this.net.view);
+    // BL-017：进页时若房间处于仪式阶段（start 后/重连），立即渲染遮罩
+    const r = this.net.room;
+    if (r) {
+      this.lastRoom = r;
+      if (r.phase === 'seating') this.renderSeating(r.seating ?? null, r);
+    }
+    if (this.net.view?.seating) this.renderSeating(this.net.view.seating, this.lastRoom);
   }
   onExit(): void {
     this.stopCountdown();
@@ -122,6 +142,9 @@ export class TableScreen extends Screen {
     this.renderRiver(v);
     this.renderSouth(v);
     this.renderActions(v);
+    this.renderWalls(v); // BL-017：physical 模式四边牌墙排
+    this.renderSeating(v.seating ?? null, this.lastRoom); // BL-017：局间摸牌位骰遮罩（roundBreak）
+    this.runAnims(v);
   }
 
   /** 顶部状态栏（左上角胶囊 + 分隔线 + 金色数值 + ⏱） */
@@ -198,7 +221,7 @@ export class TableScreen extends Screen {
     pinfo.setPosition(0, 26, 0);
     // body: 明牌(左) + 牌侧横条(右)
     const body = this.mk(this.northArea, 'Body', 0, 0);
-    const meldW = this.drawMelds(body, o.melds ?? [], MELD_N, 'h');
+    const meldW = this.drawMelds(body, o.melds ?? [], MELD_N, 'h', o.seat);
     const rev = this.revealed?.[o.seat];
     const revTiles = rev ? expandSorted(rev) : null;
     const RT = { w: 16, h: 22 }; // 摊牌牌面尺寸
@@ -231,7 +254,7 @@ export class TableScreen extends Screen {
     const isWest = rel === 3;
     const name = this.nameOf(v, o.seat);
     const body = this.mk(area, 'Body', 0, 0);
-    const meldH = this.drawMelds(body, o.melds ?? [], MELD_S, 'v');
+    const meldH = this.drawMelds(body, o.melds ?? [], MELD_S, 'v', o.seat);
     // 牌背多时压缩间距，避免竖条底端压到南家信息行
     const pitch = o.concealedCount > 12 ? EDGE_V.h - 2 : EDGE_V.h + 1;
     const edgeH = o.concealedCount * pitch;
@@ -319,6 +342,8 @@ export class TableScreen extends Screen {
       node.setPosition(cx + p.x, p.y, 0);
     });
     if (highlightLast) {
+      const lastTile = parent.children[parent.children.length - 1];
+      if (lastTile) lastTile.name = 'RTileLast'; // M-J：最新弃牌弹窗锚点
       const p = posOf(tiles.length - 1);
       const ring = new Node('Latest');
       ring.addComponent(UITransform);
@@ -436,13 +461,14 @@ export class TableScreen extends Screen {
       x += fw + 8;
     }
     const meldsNode = this.mk(this.southTop, 'Melds', 0, 0);
-    const meldW = this.drawMelds(meldsNode, me.melds ?? [], MELD_ME, 'h');
+    const meldW = this.drawMelds(meldsNode, me.melds ?? [], MELD_ME, 'h', me.seat);
     meldsNode.setPosition(x + meldW / 2, 0, 0);
     const preview = previewTai(me.concealed, me.melds ?? [], me.flowers, {
       isDealer: me.seat === v.dealerSeat,
       wallRemaining: v.wallRemaining,
       lianzhuangCount: v.lianzhuangCount,
       drawn: me.drawn ?? undefined,
+      myZi: me.zi,
     });
     const badge = uiButton(`💡 ${preview.tai}台 ▴`, () => this.toggleScorePop(preview), { variant: 'action', width: 92, height: 26, fontSize: 12 });
     badge.setParent(this.southTop);
@@ -548,8 +574,68 @@ export class TableScreen extends Screen {
     return { offline: s?.offline, trusteed: s?.trusteed };
   }
 
+  /** M-J 基础动画（FR-表现-01）：发牌逐张 / 摸牌·弃牌·副露弹窗，均以 ViewState 差值校准 */
+  private runAnims(v: ViewState): void {
+    // 发牌：局数变化时手牌逐张 stagger 入场（首帧不播）
+    if (v.round !== this.animRound) {
+      const first = this.animRound < 0;
+      this.animRound = v.round;
+      this.animDrawn = v.you.drawn;
+      this.animDiscards = v.discards.length;
+      this.animMelds = {};
+      if (!first) {
+        this.southHand.children.forEach((c, i) => {
+          c.setScale(0.2, 0.2, 1);
+          tween(c).delay(0.05 * i).to(0.14, { scale: new Vec3(1, 1, 1) }, { easing: 'backOut' }).start();
+        });
+      }
+      return;
+    }
+    // 摸牌：抬高那张原位弹窗
+    if (v.you.drawn && v.you.drawn !== this.animDrawn) {
+      const c = this.southHand.children.find((n) => Math.abs(n.position.y - 10) < 0.5);
+      if (c) this.pop(c);
+    }
+    this.animDrawn = v.you.drawn;
+    // 打牌：牌河最新张弹窗
+    if (v.discards.length !== this.animDiscards) {
+      this.animDiscards = v.discards.length;
+      const t = this.findByName(this.riverArea, 'RTileLast');
+      if (t) this.pop(t);
+    }
+    // 吃碰杠：新增副露组弹窗
+    for (const seat of [0, 1, 2, 3]) {
+      const n = seat === this.mySeat ? v.you.melds.length : (v.others.find((o) => o.seat === seat)?.melds.length ?? 0);
+      if (n > (this.animMelds[seat] ?? 0)) {
+        const wrap = this.findByName(this.node, `Melds${seat}`);
+        const kids = wrap?.children ?? [];
+        if (kids.length) this.pop(kids[kids.length - 1]!);
+      }
+      this.animMelds[seat] = n;
+    }
+  }
+
+  private pop(n: Node): void {
+    n.setScale(0.4, 0.4, 1);
+    tween(n).to(0.18, { scale: new Vec3(1, 1, 1) }, { easing: 'backOut' }).start();
+  }
+
+  private findByName(root: Node, name: string): Node | null {
+    for (const c of root.children) {
+      if (c.name === name) return c;
+      const r = this.findByName(c, name);
+      if (r) return r;
+    }
+    return null;
+  }
+
   /** M-I 断线重连遮罩（FR-断线-02 客户端表现） */
   private reconnectMask: Node | null = null;
+  /** M-J 动画差值基线（事件驱动演出、ViewState 校准） */
+  private animRound = -1;
+  private animDrawn: string | null = null;
+  private animDiscards = -1;
+  private animMelds: Record<number, number> = {};
   private showReconnect(s: 'reconnecting' | 'restored' | 'failed'): void {
     if (s === 'restored') {
       if (this.reconnectMask) { this.reconnectMask.destroy(); this.reconnectMask = null; }
@@ -576,45 +662,62 @@ export class TableScreen extends Screen {
   }
 
   /** 明牌组（横/竖）+ 组下微型标签；返回占用宽/高 */
-  private drawMelds(parent: Node, melds: Meld[], size: { w: number; h: number }, orient: 'h' | 'v'): number {
+  private drawMelds(parent: Node, melds: Meld[], size: { w: number; h: number }, orient: 'h' | 'v', seat = -1): number {
     if (!melds.length) return 0;
-    const wrap = this.mk(parent, 'Melds', 0, 0);
+    const wrap = this.mk(parent, seat >= 0 ? `Melds${seat}` : 'Melds', 0, 0);
+    // 单牌占位宽/高：吃副被吃牌横置（FR-对局-17）占位互换
+    const spanOf = (m: Meld, t: string): { w: number; h: number } =>
+      m.type === 'chi' && m.called === t ? { w: size.h, h: size.w } : { w: size.w, h: size.h };
     if (orient === 'h') {
       let x = 0;
       for (const m of melds) {
         const g = this.mk(wrap, 'M', 0, 0);
-        let dx = 0;
+        let pen = 0;
         for (const t of m.tiles) {
-          const tn = createTileNode(t, size.w, size.h);
+          const sp = spanOf(m, t);
+          const tn = m.type === 'chi' && m.called === t ? this.mkCalledTile(t, size) : createTileNode(t, size.w, size.h);
           tn.setParent(g);
-          tn.setPosition(dx, 4, 0);
-          dx += size.w + 1;
+          tn.setPosition(pen + sp.w / 2, 4, 0);
+          pen += sp.w + 1;
         }
         const lb = uiLabel(meldLabel(m.type), { size: 9, color: Theme.color.textSecondary });
         lb.setParent(g);
-        lb.setPosition(dx / 2 - 4, -size.h / 2 - 4, 0);
-        g.setPosition(x + dx / 2, 0, 0);
-        x += dx + 8;
+        lb.setPosition(pen / 2 - 4, -size.h / 2 - 4, 0);
+        g.setPosition(x + pen / 2, 0, 0);
+        x += pen + 8;
       }
       return x;
     }
     let y = 0;
     for (const m of melds) {
       const g = this.mk(wrap, 'M', 0, 0);
-      let dy = 0;
+      let pen = 0;
       for (const t of m.tiles) {
-        const tn = createTileNode(t, size.w, size.h);
+        const sp = spanOf(m, t);
+        const tn = m.type === 'chi' && m.called === t ? this.mkCalledTile(t, size) : createTileNode(t, size.w, size.h);
         tn.setParent(g);
-        tn.setPosition(0, -dy, 0);
-        dy += size.h + 1;
+        tn.setPosition(0, -(pen + sp.h / 2), 0);
+        pen += sp.h + 1;
       }
       const lb = uiLabel(meldLabel(m.type), { size: 9, color: Theme.color.textSecondary });
       lb.setParent(g);
-      lb.setPosition(0, -dy - 6, 0);
-      g.setPosition(0, y - dy / 2, 0);
-      y -= dy + 10;
+      lb.setPosition(0, -pen - 6, 0);
+      g.setPosition(0, y - pen / 2, 0);
+      y -= pen + 10;
     }
     return -y;
+  }
+
+  /** FR-对局-17：吃副被吃牌节点——横置 90° + 金色描边（四家可见） */
+  private mkCalledTile(t: string, size: { w: number; h: number }): Node {
+    const tn = createTileNode(t, size.h, size.w);
+    tn.angle = 90;
+    const g = tn.addComponent(Graphics);
+    g.strokeColor = Theme.color.gold;
+    g.lineWidth = 1.5;
+    g.roundRect(-size.h / 2, -size.w / 2, size.h, size.w, 3);
+    g.stroke();
+    return tn;
   }
 
   /** 牌侧俯视图：ivory 受光条 + 蓝背（side=ivory 所在边） */
@@ -1015,8 +1118,14 @@ export class TableScreen extends Screen {
     const subLines = isWin ? (ev.winners[0]?.detail ?? []).filter((d) => d.tiles && d.tiles.length).length : 0;
     const hands = this.revealed;
     const bandH = hands ? 56 : 0; // 各家手牌区高度
-    const ph = 300 + subLines * 12 + bandH;
+    // 付方侧加成（自身子/庄家点炮连庄）小字行数 → 面板加高
+    const T0 = ev.type === 'win' ? (ev.winners[0]?.tai ?? 0) : 0;
+    const noteN = ev.type === 'win' ? [0, 1, 2, 3].filter((s) => (ev.delta[s] ?? 0) < 0 && -(ev.delta[s] ?? 0) > T0).length : 0;
+    const ph = 300 + subLines * 12 + bandH + noteN * 10;
     const panel = uiPanel(pw, ph, { variant: 'gold', radius: Theme.radius.xl });
+    // M-J 结算演出（FR-表现-03）：面板 pop 入场
+    panel.setScale(0.92, 0.92, 1);
+    tween(panel).to(0.22, { scale: new Vec3(1, 1, 1) }, { easing: 'backOut' }).start();
     panel.setParent(mask);
     const v = this.net.view;
     let title = '🀄 荒庄流局';
@@ -1025,7 +1134,7 @@ export class TableScreen extends Screen {
     const tt = uiLabel(title, { size: 20, color: Theme.color.gold, bold: true });
     tt.setParent(panel);
     tt.setPosition(0, ph / 2 - 28, 0);
-    const sub = uiLabel(`第 ${v?.round ?? 1}/${v && v.maxRounds > 0 ? v.maxRounds : '∞'} 局 · 1 台 = 20 积分`, { size: 11, color: Theme.color.textMuted });
+    const sub = uiLabel(`第 ${v?.round ?? 1}/${v && v.maxRounds > 0 ? v.maxRounds : '∞'} 局 · 1 台 = 1 积分`, { size: 11, color: Theme.color.textMuted });
     sub.setParent(panel);
     sub.setPosition(0, ph / 2 - 50, 0);
     if (ev.type === 'win') {
@@ -1066,7 +1175,14 @@ export class TableScreen extends Screen {
         const tv = uiLabel(`${dv >= 0 ? '+' : ''}${dv}`, { size: 13, color: dv >= 0 ? Theme.color.gold : Theme.color.danger, bold: true, align: 'right', width: 66 });
         tv.setParent(panel);
         tv.setPosition(rx + 40, ry, 0);
-        ry -= 22;
+        // 付方侧加成小字（自身子 / 庄家点炮连庄）：超出胡方结算台数的部分
+        const extra = dv < 0 && -dv > T0 ? -dv - T0 : 0;
+        if (extra > 0) {
+          const nt = uiLabel(`含子/连庄 +${extra}`, { size: 9, color: Theme.color.textMuted, align: 'right', width: 90 });
+          nt.setParent(panel);
+          nt.setPosition(rx + 52, ry - 10, 0);
+        }
+        ry -= extra > 0 ? 32 : 22;
       }
       const my = v?.you.score ?? 0;
       const mt = uiLabel(`我累计 ${my >= 0 ? '+' : ''}${my}`, { size: 12, color: my >= 0 ? Theme.color.gold : Theme.color.danger, bold: true });
@@ -1139,6 +1255,302 @@ export class TableScreen extends Screen {
     const cancel = uiButton('取消', () => mask.destroy(), { variant: 'primary', width: 120, height: 38 });
     cancel.setParent(panel);
     cancel.setPosition(70, -h / 2 + 30, 0);
+  }
+
+  // ============ BL-017 开局仪式遮罩（还原 game.html seatingOverlay） ============
+
+  private hideSeating(): void {
+    this.seatingRoot.destroyAllChildren();
+  }
+
+  /** 仪式/摸牌位骰遮罩：四骰槽 + 点数榜 + 选座行 + 定庄/摸牌位横幅 + 掷骰按钮；每次 seating 视图变化全量重建 */
+  private renderSeating(sv: SeatingView | null, room: RoomView | null): void {
+    this.hideSeating();
+    if (!sv) return;
+    const v = this.net.view;
+    const me = v ? v.you.seat : (room?.seats.findIndex((s) => s?.userId === this.net.userId) ?? -1);
+    const nameOf = (seat: number): string => {
+      if (v?.names?.[seat]) return seat === me ? '我' : v.names[seat]!;
+      const u = room?.seats[seat]?.userId;
+      if (!u) return `座${seat}`;
+      return seat === me ? '我' : u.startsWith('bot-') ? '机器人' : u;
+    };
+    const isRoundBreak = sv.stage === 'roundBreak';
+    const title = isRoundBreak ? `🎲 第 ${v?.round ?? 1} 局已结 · 庄家掷摸牌位骰` : '🎲 开局仪式 · 掷骰选位';
+
+    const mask = new Node('SeatingOverlay');
+    mask.addComponent(UITransform).setContentSize(W, H);
+    const mg = mask.addComponent(Graphics);
+    mg.fillColor = rgba(0, 0, 0, 0.6);
+    mg.rect(LEFT, -TOP, W, H);
+    mg.fill();
+    mask.addComponent(BlockInputEvents); // 阻隔下层牌桌交互
+    mask.setParent(this.seatingRoot);
+
+    const PW = 560;
+    const PH = 330;
+    const panel = uiPanel(PW, PH, { variant: 'gold', radius: Theme.radius.xl });
+    panel.setScale(0.94, 0.94, 1);
+    tween(panel).to(0.2, { scale: new Vec3(1, 1, 1) }, { easing: 'backOut' }).start();
+    panel.setParent(mask);
+    const tt = uiLabel(title, { size: 17, color: Theme.color.gold, bold: true });
+    tt.setParent(panel);
+    tt.setPosition(0, PH / 2 - 26, 0);
+
+    let y = PH / 2 - 52;
+    // 四骰槽（roll 结果/重掷徽章/最大者金框）
+    const hasDice = !isRoundBreak;
+    if (hasDice) {
+      const maxRoll = Math.max(...sv.rolls.map((x) => x ?? -1));
+      for (let seat = 0; seat < 4; seat++) {
+        const slotW = 124;
+        const slot = uiPanel(slotW, 72, { variant: 'panel', radius: Theme.radius.md });
+        slot.setParent(panel);
+        slot.setPosition(-PW / 2 + 24 + slotW / 2 + seat * (slotW + 8), y - 36, 0);
+        if (sv.rolls[seat] === maxRoll && maxRoll > 0 && (sv.stage === 'roll' || sv.stage === 'pick')) {
+          const hl = slot.addComponent(Graphics);
+          hl.strokeColor = Theme.color.gold;
+          hl.lineWidth = 1.6;
+          hl.roundRect(-slotW / 2, -36, slotW, 72, Theme.radius.md);
+          hl.stroke();
+        }
+        const nm = uiLabel(nameOf(seat), { size: 11, color: Theme.color.textSecondary });
+        nm.setParent(slot);
+        nm.setPosition(0, 24, 0);
+        const roll = sv.rolls[seat];
+        const faces = uiLabel(roll == null ? '—' : diceFaces(roll), { size: 20, color: Theme.color.textPrimary });
+        faces.setParent(slot);
+        faces.setPosition(0, 2, 0);
+        const sum = uiLabel(roll == null ? '待掷' : `${roll}`, { size: roll == null ? 11 : 14, color: roll == null ? Theme.color.textMuted : Theme.color.goldLight, bold: roll != null });
+        sum.setParent(slot);
+        sum.setPosition(0, -22, 0);
+        if (sv.reroll[seat]) {
+          const badge = uiLabel('同点重掷', { size: 8, color: Theme.color.danger });
+          badge.setParent(slot);
+          badge.setPosition(slotW / 2 - 26, 34, 0);
+        }
+      }
+      y -= 84;
+    }
+
+    // 选位顺序榜（roll 完成后）
+    if (sv.order.length === 4) {
+      const rank = uiLabel(`选位顺序：${sv.order.map((s) => nameOf(s)).join(' → ')}（依次坐下手位）`, { size: 10, color: Theme.color.textMuted, width: PW - 40 });
+      rank.setParent(panel);
+      rank.setPosition(0, y - 8, 0);
+      y -= 26;
+    }
+
+    // 选座行（仅 pick 阶段；A 可点，其余置灰）
+    if (sv.stage === 'pick') {
+      const label = uiLabel(`最大者（${nameOf(sv.picker!)}）选座`, { size: 12, color: Theme.color.textSecondary });
+      label.setParent(panel);
+      label.setPosition(-150, y - 14, 0);
+      const windNames = ['东', '南', '西', '北'];
+      for (let seat = 0; seat < 4; seat++) {
+        const isMePicker = me === sv.picker;
+        const btn = uiButton(windNames[seat]!, () => {
+          if (isMePicker) this.net.pickSeat(seat);
+        }, { variant: sv.picked === seat ? 'primary' : 'action', width: 52, height: 34, fontSize: 14, enabled: isMePicker });
+        btn.setParent(panel);
+        btn.setPosition(6 + seat * 60, y - 14, 0);
+      }
+      if (!isMePicker) {
+        const wait = uiLabel(`等待 ${nameOf(sv.picker!)} 选座（10s 超时自动保留原位）`, { size: 10, color: Theme.color.textMuted });
+        wait.setParent(panel);
+        wait.setPosition(0, y - 42, 0);
+      }
+      y -= 62;
+    }
+
+    // 阶段提示/掷骰按钮
+    const myTurn =
+      (sv.stage === 'roll' && me >= 0 && (sv.rolls[me] == null || sv.reroll[me])) ||
+      (sv.stage === 'dealerDice' && me === sv.picker) ||
+      (sv.stage === 'breakDice' && me === sv.dealerSeat) ||
+      (sv.stage === 'roundBreak' && me === sv.roller);
+    const stageHint = (): string => {
+      switch (sv.stage) {
+        case 'roll': return '各家掷骰比大小：最大者先选座，其余按点数序依次坐下手；同点重掷';
+        case 'pick': return '选位最大者任选一座，其余按点数序依次坐下手位';
+        case 'dealerDice': return `最大者（${nameOf(sv.picker!)}）掷定庄骰：点数相对本人定位（7=对面、9=自己）`;
+        case 'breakDice': return `庄家（${nameOf(sv.dealerSeat!)}）掷摸牌位骰：定开牌点（右端起跳 N 组）`;
+        case 'roundBreak': return `庄家（${nameOf(sv.roller!)}）掷摸牌位骰：定下一局开牌点（相对庄家）`;
+      }
+    };
+    const hint = uiLabel(myTurn ? '轮到你了！' : stageHint(), { size: 12, color: myTurn ? Theme.color.goldLight : Theme.color.textSecondary, bold: myTurn });
+    hint.setParent(panel);
+    hint.setPosition(0, y - 10, 0);
+    y -= 32;
+    if (myTurn) {
+      const rollBtn = uiButton(isRoundBreak || sv.stage === 'breakDice' ? '🎲 掷摸牌位骰' : sv.stage === 'dealerDice' ? '🎲 掷定庄骰' : '🎲 掷骰', () => this.net.roll(), { variant: 'primary', width: 200, height: 42 });
+      rollBtn.setParent(panel);
+      rollBtn.setPosition(0, y - 18, 0);
+      y -= 52;
+    }
+
+    // 定庄横幅
+    if (sv.dealerDice != null && sv.dealerSeat != null) {
+      const selfNote = sv.dealerSeat === sv.picker ? '（= 选位最大者本人）' : '';
+      const b = this.makeBanner(`定庄骰 ${sv.dealerDice} → (${sv.dealerDice}-1) mod 4 = ${(sv.dealerDice - 1) % 4} → 首庄 = ${nameOf(sv.dealerSeat)}${selfNote} · 最大者上 1 子 + 庄子 1`, false);
+      b.setParent(panel);
+      b.setPosition(0, y - 14, 0);
+      y -= 36;
+    }
+    // 摸牌位横幅（本局已定/局间待掷）
+    if (sv.breakN != null) {
+      const b = this.makeBanner(`摸牌位骰 ${sv.breakN} → 庄家排右端起跳 ${sv.breakN} 组 · 自第 ${sv.breakN + 1} 组开摸`, true);
+      b.setParent(panel);
+      b.setPosition(0, y - 14, 0);
+      y -= 36;
+    }
+
+    // 底部状态按钮（仪式完成后服务端自动发牌，按钮为状态展示）
+    const done = !isRoundBreak && sv.stage !== 'roll' && sv.stage !== 'pick' && sv.dealerDice != null && (sv.breakN != null || !this.needsBreak(sv));
+    const foot = uiButton(isRoundBreak ? '掷骰后自动开下一局' : done ? `开始第 ${v?.round ?? 1} 局发牌 ▶` : '仪式进行中…', () => { /* 服务端自动推进 */ }, { variant: 'primary', width: 260, height: 40, fontSize: 14, enabled: false });
+    foot.setParent(panel);
+    foot.setPosition(0, -PH / 2 + 30, 0);
+  }
+
+  /** 本房间是否启用摸牌位骰（建房参数，随 roomView.settings 下发） */
+  private needsBreak(sv: SeatingView): boolean {
+    return this.lastRoom?.settings?.breakDice === true || sv.stage === 'breakDice' || sv.stage === 'roundBreak';
+  }
+
+  /** 仪式横幅（还原 .seating-banner / .seating-banner.gold） */
+  private makeBanner(text: string, gold: boolean): Node {
+    const bw = 500;
+    const b = uiPanel(bw, 26, { variant: 'panel', radius: Theme.radius.md });
+    const g = b.getComponent(Graphics)!;
+    g.strokeColor = gold ? rgba(212, 165, 55, 0.5) : Theme.color.goldFaint;
+    g.lineWidth = 1;
+    g.roundRect(-bw / 2, -13, bw, 26, Theme.radius.md);
+    g.stroke();
+    const l = uiLabel(text, { size: 11, color: gold ? Theme.color.goldLight : Theme.color.textPrimary, width: bw - 16 });
+    l.setParent(b);
+    return b;
+  }
+
+  // ============ BL-017 四边物理牌墙排（还原 game.html wall-board，physical 模式） ============
+
+  private renderWalls(v: ViewState): void {
+    this.wallRoot.destroyAllChildren();
+    const info = v.wallInfo;
+    if (!info) return;
+    const me = v.you.seat;
+    const HS = { w: 10, h: 16, gap: 2 }; // 横排组（南/北）
+    const VS = { w: 16, h: 10, gap: 2 }; // 竖列组（西/东）
+    const drawStack = (parent: Node, x: number, y: number, horiz: boolean, height: number, spent: boolean, skip: boolean, breakpt: boolean): void => {
+      const n = new Node('WStack');
+      n.addComponent(UITransform).setContentSize(horiz ? HS.w : VS.w, horiz ? HS.h : VS.h);
+      n.setParent(parent);
+      n.setPosition(x, y, 0);
+      const g = n.addComponent(Graphics);
+      const w = horiz ? HS.w : VS.w;
+      const h = horiz ? HS.h : VS.h;
+      g.lineWidth = 1;
+      if (spent) {
+        // 已摸：淡出残影
+        g.fillColor = rgba(247, 243, 232, 0.14);
+        g.rect(-w / 2, -h / 2, w, h);
+        g.fill();
+        g.strokeColor = rgba(0, 0, 0, 0.2);
+        g.rect(-w / 2, -h / 2, w, h);
+        g.stroke();
+        return;
+      }
+      if (skip) {
+        // 跳区：金虚线空框（短划线近似 dashed）
+        g.strokeColor = rgba(212, 165, 55, 0.65);
+        this.dashRect(g, w, h);
+        return;
+      }
+      // 牌背：米白顶面 + 深蓝牌身（近似原型 linear-gradient）
+      g.fillColor = height >= 2 ? rgba(29, 58, 107, 1) : rgba(29, 58, 107, 0.55);
+      g.rect(-w / 2, -h / 2, w, h);
+      g.fill();
+      g.fillColor = height >= 2 ? rgba(247, 243, 232, 1) : rgba(247, 243, 232, 0.6);
+      if (horiz) g.rect(-w / 2, h / 2 - 3, w, 3);
+      else g.rect(-w / 2, -h / 2, 3, h);
+      g.fill();
+      g.strokeColor = rgba(0, 0, 0, 0.4);
+      g.rect(-w / 2, -h / 2, w, h);
+      g.stroke();
+      if (breakpt) {
+        // 开牌点：金框 + 光晕（双描边近似 box-shadow）
+        g.strokeColor = rgba(212, 165, 55, 0.35);
+        g.lineWidth = 4;
+        g.rect(-w / 2 - 1, -h / 2 - 1, w + 2, h + 2);
+        g.stroke();
+        g.strokeColor = Theme.color.gold;
+        g.lineWidth = 1.4;
+        g.rect(-w / 2, -h / 2, w, h);
+        g.stroke();
+      }
+    };
+    // 四边：自己=南（下）、下家=东（右）、对家=北（上）、上手=西（左）；g1 在排右端（屏幕下方/右侧）
+    for (const row of info.rows) {
+      const rel = relOf(row.seat, me);
+      const stacks = row.stacks;
+      const isBreakRow = row.seat === info.breakSeat;
+      const n = stacks.length;
+      for (let i = 0; i < n; i++) {
+        const gIdx = i + 1; // 组号：i=0 → g1（排右端）
+        const height = stacks[i] ?? 0;
+        const spent = height === 0;
+        const skip = isBreakRow && info.breakGroups > 0 && gIdx <= info.breakGroups;
+        const breakpt = isBreakRow && gIdx === info.breakGroups + 1;
+        if (rel === 0) {
+          // 南：横排，g1 在最右
+          drawStack(this.wallRoot, (n - 1 - i) * (HS.w + HS.gap) - ((n - 1) * (HS.w + HS.gap)) / 2, -104, true, height, spent, skip, breakpt);
+        } else if (rel === 2) {
+          // 北：横排（从上方看右端=屏幕左，为与南排对称仍 g1 右）
+          drawStack(this.wallRoot, (n - 1 - i) * (HS.w + HS.gap) - ((n - 1) * (HS.w + HS.gap)) / 2, 126, true, height, spent, skip, breakpt);
+        } else if (rel === 1) {
+          // 东：竖列，g1 在最下
+          drawStack(this.wallRoot, 286, (n - 1 - i) * (VS.h + VS.gap) - ((n - 1) * (VS.h + VS.gap)) / 2, false, height, spent, skip, breakpt);
+        } else {
+          // 西：竖列，g1 在最下
+          drawStack(this.wallRoot, -286, (n - 1 - i) * (VS.h + VS.gap) - ((n - 1) * (VS.h + VS.gap)) / 2, false, height, spent, skip, breakpt);
+        }
+      }
+    }
+    // 开牌点图例（还原 .wall-legend）
+    const legendText = info.breakGroups > 0
+      ? `开牌点：庄家排右端起跳 ${info.breakGroups} 组 · 自第 ${info.breakGroups + 1} 组开摸 · 排尽续上手家排`
+      : '开牌点：庄家排右端第 1 组开摸 · 排尽续上手家排';
+    const lw = legendText.length * 9 + 24;
+    const legend = uiPanel(lw, 20, { variant: 'panel', radius: Theme.radius.full });
+    const lg = legend.getComponent(Graphics)!;
+    lg.strokeColor = rgba(212, 165, 55, 0.35);
+    lg.lineWidth = 1;
+    lg.roundRect(-lw / 2, -10, lw, 20, 10);
+    lg.stroke();
+    const ll = uiLabel(legendText, { size: 9, color: Theme.color.gold });
+    ll.setParent(legend);
+    legend.setParent(this.wallRoot);
+    legend.setPosition(0, -128, 0);
+  }
+
+  /** 金色虚线框（短划线逐段绘制，近似 CSS dashed） */
+  private dashRect(g: Graphics, w: number, h: number): void {
+    const dash = 3;
+    const gap = 2;
+    for (let x = -w / 2; x < w / 2; x += dash + gap) {
+      const x2 = Math.min(x + dash, w / 2);
+      g.moveTo(x, h / 2);
+      g.lineTo(x2, h / 2);
+      g.moveTo(x, -h / 2);
+      g.lineTo(x2, -h / 2);
+    }
+    for (let y = -h / 2; y < h / 2; y += dash + gap) {
+      const y2 = Math.min(y + dash, h / 2);
+      g.moveTo(-w / 2, y);
+      g.lineTo(-w / 2, y2);
+      g.moveTo(w / 2, y);
+      g.lineTo(w / 2, y2);
+    }
+    g.stroke();
   }
 
   // ============ 小工具 ============
@@ -1225,6 +1637,12 @@ export class TableScreen extends Screen {
 function relOf(seat: number, mySeat: number): number {
   return (seat - mySeat + 4) % 4;
 }
+const DICE_GLYPHS = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
+/** BL-017：骰点和(2..12) → 两骰面展示（客户端仅收到点数和，固定拆分 d1=max(1,min(6,v-6))） */
+function diceFaces(v: number): string {
+  const d1 = Math.max(1, Math.min(6, v - 6));
+  return `${DICE_GLYPHS[d1 - 1]} ${DICE_GLYPHS[v - d1 - 1]}`;
+}
 /** 取相对方位 rel 对应的绝对座位 */
 function relSeat(v: ViewState, mySeat: number, rel: number): number {
   return (mySeat + rel) % 4;
@@ -1245,7 +1663,8 @@ function windName(round: number): string {
 }
 const TILE_NAMES: Record<string, string> = { W: '萬', T: '条', B: '筒' };
 const FLOWER_NAMES = ['春', '夏', '秋', '冬', '梅', '兰', '竹', '菊'];
-function tileName(id: string): string {
+/** 牌 ID → 中文牌名（萬/条/筒/字/花）；回放屏复用 */
+export function tileName(id: string): string {
   const head = id.charAt(0);
   const num = Number(id.slice(1));
   if (head === 'W' || head === 'T' || head === 'B') return `${id.slice(1)}${TILE_NAMES[head]}`;

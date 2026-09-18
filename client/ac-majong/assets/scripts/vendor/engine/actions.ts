@@ -43,9 +43,9 @@ export function addedKongOptions(p: PlayerState): TileId[] {
     .filter((t) => countTile(p.concealed, t) >= 1);
 }
 
-/** 自摸胡（结构判定；台数≥6 的门槛在 reducer 声明时校验） */
+/** 自摸胡（结构判定，或八只花 D-26；台数≥6 的门槛在 reducer 声明时校验） */
 export function canWinDraw(p: PlayerState): boolean {
-  return isWin(p.concealed, p.melds.length);
+  return isWin(p.concealed, p.melds.length) || p.flowers.length === 8;
 }
 /** 点炮胡（结构判定） */
 export function canWinDiscard(p: PlayerState, tile: TileId): boolean {

@@ -66,6 +66,27 @@
       display: flex; align-items: center; justify-content: center; font-size: 14px;
     }
 
+    /* H5 账号表单（2026-09-17 回补：账号密码路线） */
+    .acct-form {
+      width: 100%; max-width: min(320px, 100%);
+      display: flex; flex-direction: column; gap: 10px;
+      margin-bottom: var(--spacing-md);
+    }
+    .acct-input {
+      width: 100%; padding: 10px 14px;
+      background: var(--color-bg-wood-dark); color: var(--color-text);
+      border: 1px solid rgba(212,165,55,0.35); border-radius: var(--radius-md);
+      font-size: 14px; font-family: var(--font-cn); outline: none;
+    }
+    .acct-input::placeholder { color: var(--color-text-muted); }
+    .acct-input:focus { border-color: var(--color-gold); }
+    .login-status { min-height: 14px; margin-top: 6px; font-size: 10px; color: var(--color-danger, #e05b4a); }
+    .mode-note {
+      margin-top: var(--spacing-md); max-width: min(320px, 100%);
+      padding: 8px 12px; border: 1px dashed rgba(212,165,55,0.3); border-radius: var(--radius-md);
+      font-size: 10px; color: var(--color-text-muted); line-height: 1.7; text-align: center;
+    }
+
     /* 协议勾选 */
     .agree-row {
       display: flex; align-items: flex-start; gap: 6px;
@@ -106,9 +127,14 @@
     </div>
 
     <div class="login-actions">
-      <button class="btn-wx-login" id="loginBtn" disabled>
-        <span class="wx-icon">💬</span> 微信一键登录
-      </button>
+      <!-- H5/Web 端：账号密码表单（注册即登录；有会话时免密复登，状态行提示） -->
+      <div class="acct-form">
+        <input class="acct-input" placeholder="账号（3-20 位字母/数字/下划线）" maxlength="20">
+        <input class="acct-input" type="password" placeholder="密码（至少 6 位）" maxlength="64">
+        <input class="acct-input" placeholder="昵称（可选，首次注册用）" maxlength="12">
+      </div>
+      <button class="btn-wx-login" id="loginBtn" disabled>登录 / 注册</button>
+      <div class="login-status" id="loginStatus">会话有效时自动免密复登；失败回表单并明示原因</div>
 
       <div class="agree-row">
         <div class="agree-checkbox" id="agreeCheck"></div>
@@ -122,6 +148,11 @@
       </div>
 
       <div class="login-version">v0.1.0 · 内测版</div>
+
+      <div class="mode-note">
+        平台三态：Web/H5 = 上方账号表单；微信小游戏端 = 「微信一键登录」绿钮（云托管握手头鉴权）；原生壳 = 一键登录（mock）。<br>
+        未勾选协议时按钮置灰；勾选后变亮。
+      </div>
     </div>
 
   </div>

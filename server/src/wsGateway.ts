@@ -1,12 +1,16 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import type { IncomingMessage, IncomingHttpHeaders } from 'node:http';
-import type { ClientMsg, ServerMsg, UserProfile } from '@ac-majong/protocol';
+import type { ClientMsg, ServerMsg, UserProfile, ReplayRoomSummary, ReplayRoundSummary, ReplaySnapshot, RoundReview } from '@ac-majong/protocol';
+import type { TableState, Action } from '@ac-majong/engine';
+import { replayRound } from '@ac-majong/engine';
 import type { Connection } from './connection';
 import type { IdentityProvider } from './identity';
 import { RoomManager } from './roomManager';
-import type { GameHooks } from './roomActor';
-import type { GameStore, RealtimeStore, MemberEventRow } from './persistence/entities';
+import type { GameHooks, RoomRestore } from './roomActor';
+import type { GameStore, RealtimeStore, MemberEventRow, ScoreMap } from './persistence/entities';
+import { toRoundSnapshot } from './persistence/entities';
 import { MemoryGameStore, MemoryRealtime } from './persistence/memory';
+import { loginOrRegister, resolveSession } from './accountAuth';
 import { createLogger } from './logger';
 
 const log = createLogger('gateway');
@@ -19,6 +23,8 @@ interface Session {
   headers: IncomingHttpHeaders;
   /** 登录时上报/兜底的展示资料，供建房/入座时写入 ViewState.names */
   profile: UserProfile | null;
+  /** 鉴权失败计数（累计 5 次断开，防穷举） */
+  authFails?: number;
 }
 
 export interface GatewayOptions {
@@ -29,6 +35,8 @@ export interface GatewayOptions {
   autoBots?: number;
   /** 持久化（缺省内存实现）；登录会 upsertUser + 写会话（BL-013 接线） */
   persistence?: { store: GameStore; realtime: RealtimeStore };
+  /** H5 账号路线（IDENTITY=account）：auth 走账号密码/会话令牌，而非 IdentityProvider */
+  accountMode?: boolean;
 }
 
 export interface Gateway {
@@ -59,7 +67,9 @@ export function startGateway(opts: GatewayOptions): Gateway {
       void (async () => {
         try {
           await persistence.store.createGame({ gameId, roomId, roundNo, dealerSeat, seed, endType: null, result: null });
-          await persistence.store.saveInitialState({ gameId, wall: snap.wall, hands: snap.players, lianzhuangCount: snap.lianzhuangCount });
+          await persistence.store.saveInitialState({ gameId, wall: snap.wall, hands: snap.players, lianzhuangCount: snap.lianzhuangCount, layout: snap.layout ?? null, breakGroup: snap.breakGroups ?? null });
+          // BL-016：开局置 status='playing'（重进/重建判定依据；覆盖 AUTO_BOTS 自动开局与 start 两条路径，幂等）
+          await persistence.store.markRoomPlaying(roomId);
         } catch (err) {
           log.error(`对局开局落库失败: game=${gameId}`, err);
         }
@@ -75,13 +85,15 @@ export function startGateway(opts: GatewayOptions): Gateway {
         }
       })();
     },
-    onGameEnd(gameId, endType, result) {
-      log.info(`对局结束: game=${gameId} endType=${endType}`);
+    onGameEnd(roomId, gameId, endType, result, scores) {
+      log.info(`对局结束: game=${gameId} endType=${endType} scores=${JSON.stringify(scores)}`);
       void (async () => {
         try {
           const rows = await persistence.realtime.drainActions(gameId);
           if (rows.length) await persistence.store.appendActions(rows);
           await persistence.store.finishGame(gameId, endType, result, new Date());
+          // BL-016：每局末写积分账本（重进/重启恢复依据，FR-房间-09）
+          await persistence.store.updateRoomScores(roomId, scores);
         } catch (err) {
           log.error(`对局结算落库失败: game=${gameId}`, err);
         }
@@ -100,8 +112,18 @@ export function startGateway(opts: GatewayOptions): Gateway {
         }
       })();
     },
+    // BL-017：开局仪式日志落 rooms.seating（弱依赖 fire-and-forget）
+    onSeating(roomId, seating) {
+      void (async () => {
+        try {
+          await persistence.store.updateRoomSeating(roomId, seating);
+        } catch (err) {
+          log.error(`仪式日志落库失败: room=${roomId}`, err);
+        }
+      })();
+    },
   };
-  const rooms = new RoomManager(undefined, gameHooks);
+  const rooms = new RoomManager(undefined, gameHooks, persistence.store);
 
   const send = (s: Session, msg: ServerMsg) => {
     if (s.ws.readyState === WebSocket.OPEN) s.ws.send(JSON.stringify(msg));
@@ -135,7 +157,7 @@ export function startGateway(opts: GatewayOptions): Gateway {
         return send(session, { t: 'error', reason: 'bad json' });
       }
       log.trace(`收到消息: user=${session.userId ?? '(未鉴权)'} type=${msg.t}`);
-      void handleMsg(session, conn, msg, rooms, opts.identity, opts.autoBots ?? 0, send, persistence);
+      void handleMsg(session, conn, msg, rooms, opts.identity, opts.autoBots ?? 0, send, persistence, opts.accountMode ?? false);
     });
     ws.on('close', () => {
       sessions.delete(session);
@@ -178,13 +200,56 @@ async function handleMsg(
   autoBots: number,
   send: (s: Session, m: ServerMsg) => void,
   persistence: { store: GameStore; realtime: RealtimeStore },
+  accountMode = false,
 ): Promise<void> {
   switch (msg.t) {
     case 'auth': {
+      // H5 账号路线：账号密码注册即登录 / 会话令牌复登（签发新 session 回传）
+      if (accountMode) {
+        const fail = (reason: string) => {
+          session.authFails = (session.authFails ?? 0) + 1;
+          log.warn(`鉴权失败(${session.authFails}/5): ${reason}`);
+          if (session.authFails >= 5) session.ws.close(4001, 'too many auth failures');
+          return send(session, { t: 'ack', seq: msg.seq, ok: false, reason });
+        };
+        let userId: string;
+        let nickname: string;
+        let sessionToken: string | undefined;
+        if (msg.account) {
+          const r = await loginOrRegister(persistence.store, persistence.realtime, {
+            username: msg.account.username,
+            password: msg.account.password,
+            nickname: msg.profile?.nickname,
+          });
+          if ('error' in r) return fail(r.error);
+          userId = r.userId;
+          nickname = r.nickname;
+          sessionToken = r.session;
+          try {
+            await persistence.store.upsertUser({ openid: userId, nickname, avatarUrl: '', lastLoginAt: new Date() });
+          } catch (err) {
+            log.error(`登录落库失败: user=${userId}`, err);
+          }
+        } else {
+          const openid = msg.token ? await resolveSession(persistence.realtime, msg.token) : null;
+          if (!openid) return fail('会话过期，请重新登录');
+          const u = await persistence.store.getUser(openid);
+          userId = openid;
+          nickname = u?.nickname || '牌友';
+        }
+        session.userId = userId;
+        const profile: UserProfile = { nickname, avatarUrl: '' };
+        session.profile = profile;
+        log.info(`账号鉴权成功: user=${userId} via=${msg.account ? 'password' : 'session'}`);
+        send(session, { t: 'authOk', userId, profile, session: sessionToken });
+        return send(session, { t: 'ack', seq: msg.seq, ok: true });
+      }
       const idn = await identity.authenticate({ token: msg.token, headers: session.headers });
       if (!idn) {
+        session.authFails = (session.authFails ?? 0) + 1;
+        if (session.authFails >= 5) session.ws.close(4001, 'too many auth failures');
         log.warn(`鉴权失败: token=${msg.token?.slice(0, 8)}...`);
-        return send(session, { t: 'ack', seq: msg.seq, ok: false, reason: '鉴权失败' });
+        return send(session, { t: 'ack', seq: msg.seq, ok: false, reason: '鉴权 失败' });
       }
       session.userId = idn.userId;
       log.info(`鉴权成功: user=${idn.userId}`);
@@ -201,11 +266,13 @@ async function handleMsg(
           avatarUrl: profile.avatarUrl,
           lastLoginAt: new Date(),
         });
-        await persistence.realtime.saveSession(
-          msg.token,
-          { openid: idn.userId, createdAt: Date.now() },
-          SESSION_TTL_SEC,
-        );
+        if (msg.token) {
+          await persistence.realtime.saveSession(
+            msg.token,
+            { openid: idn.userId, createdAt: Date.now() },
+            SESSION_TTL_SEC,
+          );
+        }
       } catch (err) {
         log.error(`登录落库失败: user=${idn.userId}`, err);
       }
@@ -215,7 +282,10 @@ async function handleMsg(
     case 'create': {
       if (!session.userId) return send(session, { t: 'error', reason: '未鉴权' });
       const maxRounds = msg.maxRounds ?? 8; // 0 = 不限（无限续局至房主解散，见 PRD 03 FR-房间-01）
-      const room = rooms.create(session.userId, conn, maxRounds, session.profile?.nickname);
+      const settings = msg.settings ?? { wallMode: 'random' as const, breakDice: false }; // BL-017 玩法参数
+      // BL-016：房号全局唯一、永不复用（内存活跃房 + rooms 历史表双重查重，FR-房间-07）
+      const roomId = await rooms.genUniqueId();
+      const room = rooms.create(session.userId, conn, maxRounds, session.profile?.nickname, undefined, roomId, settings);
       session.roomId = room.id;
       log.info(`创建房间: room=${room.id} host=${session.userId} maxRounds=${maxRounds}`);
       // BL-013 M-C 接线：房间创建 → rooms 落库（弱依赖，失败不阻断建房，同登录落库策略）
@@ -227,6 +297,7 @@ async function handleMsg(
           initialScore: { 0: 0, 1: 0, 2: 0, 3: 0 },
           finalScore: null,
           status: 'idle',
+          settings,
         });
       } catch (err) {
         log.error(`房间创建落库失败: room=${room.id}`, err);
@@ -236,14 +307,25 @@ async function handleMsg(
       const botCount = Math.max(0, Math.min(3, autoBots));
       if (botCount > 0) {
         room.addBot(session.userId, botCount); // 开发期自动补齐（房主身份）
+        // BL-016：Bot 入座补记成员流水（服务重启重建时恢复 Bot 座位；弱依赖）
+        for (const s of room.roomView().seats) {
+          if (s?.isBot) await logMember(persistence.store, { roomId: room.id, openid: s.userId, seat: s.seat, event: 'join' });
+        }
         if (room.playerCount() === 4) room.start(session.userId);
       }
       return send(session, { t: 'ack', seq: msg.seq, ok: true, reason: room.id });
     }
     case 'join': {
       if (!session.userId) return send(session, { t: 'error', reason: '未鉴权' });
-      const room = rooms.get(msg.room);
-      if (!room) return send(session, { t: 'ack', seq: msg.seq, ok: false, reason: '房间不存在' });
+      // BL-016：内存未命中时走 DB——已关闭拒绝；未关闭且本人曾入座→事件溯源重建（积分/座位保留，FR-房间-09）
+      let room = rooms.get(msg.room);
+      let noRoomReason = '房间不存在';
+      if (!room) {
+        const rebuilt = await rebuildRoomFromStore(rooms, persistence.store, persistence.realtime, msg.room);
+        room = rebuilt?.room ?? undefined;
+        if (rebuilt?.reason) noRoomReason = rebuilt.reason;
+      }
+      if (!room) return send(session, { t: 'ack', seq: msg.seq, ok: false, reason: noRoomReason });
       const r = room.addPlayer(session.userId, conn, session.profile?.nickname);
       if (r.ok) {
         session.roomId = room.id;
@@ -272,9 +354,30 @@ async function handleMsg(
       const r = rooms.get(session.roomId)?.start(session.userId) ?? { ok: false, reason: '无房间' };
       return send(session, { t: 'ack', seq: msg.seq, ok: r.ok, reason: r.reason });
     }
+    case 'roll': {
+      if (!session.roomId || !session.userId) return send(session, { t: 'error', reason: '无房间' });
+      const r = rooms.get(session.roomId)?.handleRoll(session.userId) ?? { ok: false, reason: '无房间' };
+      return send(session, { t: 'ack', seq: msg.seq, ok: r.ok, reason: r.reason });
+    }
+    case 'pickSeat': {
+      if (!session.roomId || !session.userId) return send(session, { t: 'error', reason: '无房间' });
+      const r = rooms.get(session.roomId)?.handlePickSeat(session.userId, msg.seat) ?? { ok: false, reason: '无房间' };
+      return send(session, { t: 'ack', seq: msg.seq, ok: r.ok, reason: r.reason });
+    }
     case 'addBot': {
       if (!session.roomId || !session.userId) return send(session, { t: 'error', reason: '无房间' });
-      const r = rooms.get(session.roomId)?.addBot(session.userId, msg.count ?? 1) ?? { ok: false, reason: '无房间' };
+      const room = rooms.get(session.roomId);
+      const before = room ? room.roomView().seats.map((s) => s?.userId ?? null) : [];
+      const r = room?.addBot(session.userId, msg.count ?? 1) ?? { ok: false, reason: '无房间' };
+      // BL-016：Bot 入座补记成员流水（服务重启重建时恢复 Bot 座位；弱依赖）
+      if (r.ok && room) {
+        const after = room.roomView().seats;
+        for (const s of after) {
+          if (s && s.isBot && before[s.seat] !== s.userId) {
+            await logMember(persistence.store, { roomId: room.id, openid: s.userId, seat: s.seat, event: 'join' });
+          }
+        }
+      }
       return send(session, { t: 'ack', seq: msg.seq, ok: r.ok, reason: r.reason });
     }
     case 'removeBot': {
@@ -301,7 +404,200 @@ async function handleMsg(
       const r = rooms.get(session.roomId)?.handleAction(session.userId, msg.action) ?? { ok: false, reason: '无房间' };
       return send(session, { t: 'ack', seq: msg.seq, ok: r.ok, reason: r.reason });
     }
+    // BL-012：战绩/回放列表（房间→局两级，仅本人参赛房间）
+    case 'replayList': {
+      if (!session.userId) return send(session, { t: 'error', reason: '未鉴权' });
+      try {
+        const roomRows = await persistence.store.listRoomsByPlayer(session.userId);
+        const out: ReplayRoomSummary[] = [];
+        for (const r of roomRows) {
+          const memEv = await persistence.store.listMemberEvents(r.roomId);
+          const seatNames: Record<number, string> = {};
+          for (const m of memEv) {
+            if (m.seat == null || seatNames[m.seat] !== undefined) continue;
+            const u = await persistence.store.getUser(m.openid);
+            if (u) seatNames[m.seat] = u.nickname;
+          }
+          const games = await persistence.store.listGames(r.roomId);
+          const rounds: ReplayRoundSummary[] = games.map((g) => {
+            const ev = (g.result ?? null) as { winners?: { seat: number; tai: number }[] } | null;
+            const winners = ev?.winners ?? [];
+            return {
+              gameId: g.gameId,
+              roundNo: g.roundNo,
+              endType: g.endType ?? 'exhaustive',
+              winnerSeats: winners.map((w) => w.seat),
+              taiBySeat: Object.fromEntries(winners.map((w) => [w.seat, w.tai])),
+              at: g.endedAt ? g.endedAt.toISOString() : null,
+            };
+          });
+          out.push({ roomId: r.roomId, createdAt: r.createdAt ? r.createdAt.toISOString() : '', status: r.status, seatNames, rounds });
+        }
+        return send(session, { t: 'replayList', rooms: out });
+      } catch (err) {
+        log.error('回放列表查询失败', err);
+        return send(session, { t: 'ack', seq: msg.seq, ok: false, reason: '战绩加载失败' });
+      }
+    }
+    // BL-012：加载单局回放（D-29：仅参赛四方可看；快照+动作序列交客户端确定性重演）
+    case 'replayLoad': {
+      if (!session.userId) return send(session, { t: 'error', reason: '未鉴权' });
+      try {
+        const game = await persistence.store.getGame(msg.gameId);
+        if (!game) return send(session, { t: 'ack', seq: msg.seq, ok: false, reason: '对局不存在' });
+        const room = await persistence.store.getRoom(game.roomId);
+        const memEv = await persistence.store.listMemberEvents(game.roomId);
+        const participants = new Set<string>(memEv.map((m) => m.openid));
+        if (room?.hostOpenid) participants.add(room.hostOpenid);
+        if (!participants.has(session.userId)) return send(session, { t: 'ack', seq: msg.seq, ok: false, reason: '无权查看该对局' });
+        const snapRow = await persistence.store.getInitialState(msg.gameId);
+        if (!snapRow) return send(session, { t: 'ack', seq: msg.seq, ok: false, reason: '回放数据缺失' });
+        const actionRows = await persistence.store.listActions(msg.gameId);
+        const names: Record<number, string> = {};
+        const seenSeat = new Set<number>();
+        for (const m of memEv) {
+          if (m.seat == null || seenSeat.has(m.seat)) continue;
+          seenSeat.add(m.seat);
+          const u = await persistence.store.getUser(m.openid);
+          names[m.seat] = u?.nickname ?? m.openid.slice(0, 8);
+        }
+        const snapshot: ReplaySnapshot = {
+          wall: snapRow.wall as string[],
+          players: snapRow.hands.map((pl) => ({ seat: pl.seat, concealed: pl.concealed as Record<string, number>, melds: pl.melds, flowers: pl.flowers as string[], zi: pl.zi, score: pl.score })),
+          dealerSeat: game.dealerSeat,
+          currentSeat: game.dealerSeat,
+          lianzhuangCount: snapRow.lianzhuangCount,
+          round: game.roundNo,
+        };
+        const viewSeat = memEv.find((m) => m.openid === session.userId && m.seat != null)?.seat ?? 0;
+        return send(session, {
+          t: 'replayData',
+          gameId: msg.gameId,
+          snapshot,
+          actions: actionRows.map((ar) => ({ seq: ar.seq, seat: ar.seat, action: ar.payload })),
+          names,
+          viewSeat,
+        });
+      } catch (err) {
+        log.error('回放加载失败', err);
+        return send(session, { t: 'ack', seq: msg.seq, ok: false, reason: '回放加载失败' });
+      }
+    }
     case 'ping':
       return send(session, { t: 'pong' });
   }
+}
+
+/** games.result 里 win 事件的重演取值形状（仅重建回顾用） */
+type StoredWinResult = { winners?: { seat: number; tai: number; detail?: { name: string; tai: number }[] }[] } | null;
+
+/**
+ * BL-016：成员重进时房间不在内存（服务重启/进程回收）——由 MySQL 事件溯源重建 RoomActor：
+ * 座位/昵称 ← room_member_events + users；积分现场 ← 最新一局快照 + 动作日志（含 Redis
+ * 未落盘缓冲 peekActions）replayRound 重演；回顾/胡数 ← games.result。已关闭房间返回 null
+ * 并记日志（网关据此提示）；本人无座位记录交由 addPlayer 按新用户处理（waiting 可入座）。
+ */
+export async function rebuildRoomFromStore(
+  rooms: RoomManager,
+  store: GameStore,
+  realtime: RealtimeStore,
+  roomId: string,
+): Promise<{ room: ReturnType<RoomManager['get']>; reason?: string } | null> {
+  let roomRow;
+  try {
+    roomRow = await store.getRoom(roomId);
+  } catch (err) {
+    log.error(`房间重建查询失败: room=${roomId}`, err);
+    return null;
+  }
+  if (!roomRow) return null;
+  if (roomRow.status === 'closed') {
+    log.info(`加入已关闭房间被拒: room=${roomId}`);
+    return { room: undefined, reason: '房间已关闭' }; // 房号永不复用（FR-房间-07）；积分已定格、线下结算（FR-积分-06）
+  }
+  const memEv = await store.listMemberEvents(roomId);
+  const seats: (string | null)[] = [null, null, null, null];
+  const names: (string | null)[] = [null, null, null, null];
+  for (const m of memEv) {
+    if (m.seat == null || m.seat < 0 || m.seat > 3 || seats[m.seat]) continue;
+    seats[m.seat] = m.openid;
+    const u = await store.getUser(m.openid);
+    names[m.seat] = u?.nickname ?? (m.openid.startsWith('bot-') ? '机器人' : m.openid);
+  }
+  const games = await store.listGames(roomId);
+  const gameSeq = games.length;
+  // 回顾/胡数：由已落库 games.result 重建（散场战绩页用）
+  const roundLog: RoundReview[] = [];
+  const winCount: Record<number, number> = {};
+  for (const g of games) {
+    if (g.endType === 'win') {
+      const res = g.result as StoredWinResult;
+      const w0 = res?.winners?.[0];
+      if (w0) {
+        winCount[w0.seat] = (winCount[w0.seat] ?? 0) + 1;
+        const top = [...(w0.detail ?? [])].sort((a, b) => b.tai - a.tai)[0];
+        roundLog.push({ round: g.roundNo, endType: 'win', winnerSeat: w0.seat, tai: w0.tai, topFan: top?.name ?? null, zimo: false });
+      }
+    } else if (g.endType === 'exhaustive') {
+      roundLog.push({ round: g.roundNo, endType: 'exhaustive', winnerSeat: null, tai: 0, topFan: null, zimo: false });
+    }
+  }
+  // 对局现场：重演最新一局（DB 动作 + Redis 未落盘缓冲）；重演失败/快照缺失则降级 waiting（积分保留在账本，下局以账本为初始分）
+  let phase: 'waiting' | 'playing' = games.length === 0 ? 'waiting' : 'playing';
+  let state: TableState | null = null;
+  let gameId: string | null = null;
+  let actionSeq = 0;
+  const memberScores: ScoreMap = roomRow.memberScores ?? {};
+  const last = games[games.length - 1];
+  if (last) {
+    const snapRow = await store.getInitialState(last.gameId);
+    if (snapRow) {
+      const dbActions = await store.listActions(last.gameId);
+      let acts: Action[] = dbActions.map((r) => r.payload);
+      if (last.endType == null) {
+        try {
+          const buffered = await realtime.peekActions(last.gameId);
+          const dbSeqs = dbActions.map((r) => r.seq);
+          acts = acts.concat(buffered.filter((r) => !dbSeqs.includes(r.seq)).map((r) => r.payload));
+        } catch (err) {
+          log.error(`重建读取动作缓冲失败: game=${last.gameId}`, err);
+        }
+      }
+      try {
+        // 积分以账本为准注入快照（账本=上一局末权威累计分，与局开局快照同源；确保降级/重演两路径积分都不丢）
+        const snap = toRoundSnapshot(last, snapRow);
+        snap.players = snap.players.map((p) => ({ ...p, score: typeof memberScores[p.seat] === 'number' ? memberScores[p.seat]! : p.score }));
+        const rep = replayRound(snap, acts);
+        state = rep.state;
+        gameId = last.gameId;
+        actionSeq = acts.length;
+      } catch (err) {
+        log.error(`重演重建失败，降级 waiting（积分保留在账本）: game=${last.gameId}`, err);
+        state = null;
+        gameId = null;
+        actionSeq = 0;
+      }
+    }
+    if (state == null) phase = 'waiting';
+  }
+  const restore: RoomRestore = {
+    phase,
+    state,
+    gameId,
+    gameSeq,
+    actionSeq,
+    seed: last ? Number(last.seed) + 1 : undefined,
+    seats,
+    names,
+    roundLog,
+    winCount,
+    ledgerScores: memberScores,
+    absentUsers: phase === 'playing' ? seats.filter((u): u is string => !!u && !u.startsWith('bot-')) : [],
+  };
+  const room = rooms.createRestored(roomId, roomRow.hostOpenid, roomRow.maxRounds, restore, undefined, roomRow.settings ?? undefined);
+  seats.forEach((u, i) => {
+    if (u && u.startsWith('bot-')) room.attachBot(u, 300 + i * 80);
+  });
+  log.info(`房间重建完成: room=${roomId} phase=${phase} game=${gameId ?? '-'} scores=${JSON.stringify(memberScores)}`);
+  return { room };
 }

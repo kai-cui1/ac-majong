@@ -11,7 +11,7 @@ type RoomEnd = Extract<ServerMsg, { t: 'roomEnd' }>;
  * 散场战绩页（P8，还原 result.html，横向重排到 844×390）。M-G。
  * 左栏：冠军卡片（👑 + 头像 + 名 + 大字积分 + 房间/局数副标题）+ 返回大厅 / 再来一局；
  * 右栏：最终排名（4 家：奖牌 + 头像 + 名 + 胡 N 局 + 累计积分）+ 局数回顾（逐局：赢家/台数/荒庄，双列）。
- * 数据源：服务端 roomEnd（NetService.finalResult）。散场后房间已解散、积分清零（D-03），战绩仅本房间有效。
+ * 数据源：服务端 roomEnd（NetService.finalResult）。房间关闭后积分定格、线下相互结算（D-03/BL-016），战绩仅本房间有效。
  */
 export class ResultScreen extends Screen {
   readonly name = 'result';
@@ -59,7 +59,7 @@ export class ResultScreen extends Screen {
     roundsHeader.setPosition(-78, -34, 0);
     this.roundsArea = this.mk(root, 'Rounds', 0, 0);
 
-    const note = uiLabel('散场后房间解散、积分清零（D-03）· 战绩仅本房间有效，不做跨房间累计', { size: 10, color: Theme.color.textMuted, width: 460 });
+    const note = uiLabel('房间已关闭、积分定格（D-03/BL-016）· 请按积分差线下相互结算 · 战绩仅本房间有效，不做跨房间累计', { size: 10, color: Theme.color.textMuted, width: 460 });
     note.setParent(root);
     note.setPosition(120, -178, 0);
 

@@ -68,13 +68,13 @@ interface Transport {
 
 **`waitFor(pred, timeout=5000)`**：先在 `received` 里找（支持「先收到后等待」的竞态），否则挂起等待，超时 reject。用于登录等待 `authOk`、测试等待特定消息。
 
-**发送方法**（均 `send` + `nextSeq`）：`auth(token, profile?)` / `create(maxRounds=8)` / `join(room)` / `leave()` / `start()` / `nextRound()` / `action(action)` / `ping()` / `close()`。
+**发送方法**（均 `send` + `nextSeq`）：`auth(token, profile?)` / `create(maxRounds=8, settings?)`（BL-017 携玩法设置） / `join(room)` / `leave()` / `start()` / `roll()` / `pickSeat(seat)`（BL-017 仪式掷骰/选座） / `nextRound()` / `action(action)` / `ping()` / `close()`。
 
 **`handlers`**：`onAuth` / `onGameView` / `onRoomView` / `onEvent` / `onAck` / `onClose`，均可选。
 
 ## 5. 协议（`packages/protocol`）
 
-- **客户端 → 服务端 `ClientMsg`**：`auth` / `create` / `join` / `leave` / `start` / `nextRound` / `action` / `ping`（均带 `seq`）。
+- **客户端 → 服务端 `ClientMsg`**：`auth` / `create`（BL-017 可选 `settings`） / `join` / `leave` / `start` / `roll` / `pickSeat`（BL-017 仪式） / `nextRound` / `action` / `ping`（均带 `seq`）。
 - **服务端 → 客户端 `ServerMsg`**：`authOk` / `roomView` / `gameView` / `event` / `legal` / `ack` / `pong` / `error`。
 - **视图**：`ViewState`（牌桌）/ `RoomView`（房间）/ `UserProfile`（资料）。
 - **防透视关键**：`ViewState.you.concealed` 给完整暗牌；`others[]` 只给 `concealedCount`，**绝不含具体牌**。裁剪在服务端 `redact` 完成（见[服务端网关与房间](./AC麻将-服务端网关与房间.md)）。
@@ -87,6 +87,13 @@ interface Transport {
 - `ViewState.you.drawn`：刚摸的牌（服务端 redact 从 `state.lastDrawn` 取，仅自己回合 discard 相位下发；`concealed` 已含该牌），供客户端抽出抬高显示。
 - 台数预览 `previewTai`：**非协议字段**，由客户端接引擎 `previewTai`（听牌时按自摸最佳听张复用 `scoreHand`）本地计算，渲染「💡 N台」徽章与明细浮层。
 
+### 5.2 BL-017 开局仪式与物理牌墙字段
+
+- `RoomSettings { wallMode: 'physical'|'random', breakDice: boolean }`：建房参数，`RoomView.settings` 随房间视图下发（等待页展示/建房沿用）。
+- `SeatingView { stage, rolls, reroll, order, picker, picked, dealerDice, dealerSeat, breakN, roller }`：仪式状态；开局仪式随 `RoomView.seating`（phase='seating'）下发，局间摸牌位骰随 `ViewState.seating`（stage='roundBreak'）下发；仪式结束后字段消失 = 客户端关闭遮罩。
+- `ViewState.wallInfo { rows: {seat, stacks[18]}[], breakSeat, breakGroups }`：physical 模式四边牌墙栈高（0=已摸淡出/1=半高/2=满栈）+ 开牌点；random 模式无此字段（不渲染牌墙排）。
+- 客户端仅收到骰点**和**（2..12），骰面展示按固定拆分 `d1=max(1,min(6,v-6))` 还原两骰。
+
 ## 6. `NetService`（Cocos 单例，`game/NetService.ts`）
 
 封装 `GameClient`，向 UI 提供**订阅式回调**与**意图方法**，屏蔽传输细节。
@@ -96,7 +103,7 @@ interface Transport {
 - **只读态**：`view` / `profile` / `userId` / `connected` getters。
 - **订阅**：`onView(cb)` / `onRoom(cb)` / `onEvent(cb)`，屏幕注册后由对应 `ServerMsg` 广播驱动刷新。
 - **断连** `disconnect()`：`client.close()` + 清 `client`/`_profile`（返回登录时调用）。
-- **房间指令**：`createRoom(maxRounds=8)` / `joinRoom(room)` / `start()` / `nextRound()` / `restart(maxRounds=8)`（离开旧房 + 重新建房，服务端补 Bot 并开局）。
+- **房间指令**：`createRoom(maxRounds=8, settings?)`（BL-017：玩法设置随建房下发，`lastSettings` 记忆供 `restart` 沿用） / `joinRoom(room)` / `start()` / `roll()` / `pickSeat(seat)`（BL-017 仪式） / `nextRound()` / `restart(maxRounds=8)`（离开旧房 + 重新建房，服务端补 Bot 并开局）。
 - **动作透传**（`seat` 由调用方按 `view.you.seat` 提供，客户端不判定合法性）：`draw` / `discard` / `declareWin` / `kongConcealed` / `kongAdded` / `respond(move, chiTiles?)`。
 
 > 登录页如何用 `NetService.connect` + `Config.mockIdentity` 完成登录，见[登录鉴权 §5.2–5.4](./AC麻将-登录鉴权.md)。
@@ -151,3 +158,5 @@ TableView 交互 → NetService.action(seat, …) → GameClient.action(Action)
 | 2026-09-17 | M-I：RoomView seats 增 `offline`/`trusteed` 字段（协议同步 vendor）；NetService 自动重连与 `onReconnect` 订阅见前端基座 §11 |
 | 2026-09-17 | 补记视图增补字段（§5.1）：`ViewState.names` 昵称下发；台数预览 `previewTai` 为客户端接引擎本地计算（非协议字段） |
 | 2026-09-17 | §5.1 补 `you.drawn`：刚摸的牌下发（仅自己回合 discard 相位），供摸牌抽出抬高显示 |
+| 2026-09-18 | **BL-016**：`joinRoom` 兼容重进「对局中」房间（服务端直接下发 gameView 无 roomView：等待器先注册再发送，ack ok:true 后补等视图；gameView 视为加入成功）；`lastGameViewAt` 时间戳供大厅判定切牌桌；`leave` 清陈旧 view/room 缓存防误判 |
+| 2026-09-18 | **BL-017 开局仪式与摸牌位骰**：新增 §5.2——`ClientMsg` 增 `roll`/`pickSeat`/`create.settings`；`RoomView.settings/seating`、`ViewState.wallInfo/seating` 视图字段；`GameClient.roll()/pickSeat()/create(maxRounds, settings?)`；`NetService.createRoom` 带设置 + `lastSettings` 供 `restart` 沿用；骰面和固定拆分展示约定 |

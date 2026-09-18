@@ -44,6 +44,10 @@ export class RedisRealtime implements RealtimeStore {
     const items = (res?.[0]?.[1] as string[] | null) ?? [];
     return items.map((s) => JSON.parse(s) as ActionRow);
   }
+  async peekActions(gameId: string): Promise<ActionRow[]> {
+    const items = await this.r.lrange(`buf:${gameId}`, 0, -1);
+    return items.map((s) => JSON.parse(s) as ActionRow);
+  }
   async close(): Promise<void> {
     await this.r.quit();
   }

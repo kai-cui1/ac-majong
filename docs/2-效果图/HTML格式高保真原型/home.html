@@ -235,6 +235,17 @@
     .modal-submit:hover { transform: translateY(-1px); box-shadow: 0 5px 18px rgba(212,165,55,0.45); }
 
     .modal-hint { text-align: center; font-size: 11px; color: var(--color-text-muted); margin-top: var(--spacing-md); }
+
+    /* 玩法设置开关（BL-017：牌墙模式/摸牌位骰；选位仪式恒开） */
+    .play-settings { margin-bottom: var(--spacing-xl); display: flex; flex-direction: column; gap: 10px; }
+    .play-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; background: rgba(0,0,0,0.3); border: 1px solid rgba(212,165,55,0.2); border-radius: var(--radius-md); cursor: pointer; }
+    .play-name { font-size: 13px; color: var(--color-text-primary); font-weight: 600; }
+    .play-sub { display: block; font-size: 9px; color: var(--color-text-muted); margin-top: 2px; font-weight: 400; }
+    .switch { position: relative; width: 40px; height: 22px; flex: none; border-radius: 11px; background: rgba(255,255,255,0.12); border: 1px solid rgba(212,165,55,0.25); transition: all var(--transition-fast); }
+    .switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--color-text-secondary); transition: all var(--transition-fast); }
+    .switch.on { background: linear-gradient(135deg, rgba(212,165,55,0.5), rgba(212,165,55,0.3)); border-color: var(--color-gold); }
+    .switch.on::after { left: 20px; background: var(--color-gold-light); }
+    .play-fixed { font-size: 9px; color: var(--color-text-muted); text-align: center; }
   </style>
 </head>
 <body class="bg-table">
@@ -271,12 +282,23 @@
       </div>
     </div>
 
-    <!-- 次要入口 -->
+    <!-- 次要入口（2026-09-17 回补：战绩/回放入口 D-30 + ⚙设置钮） -->
     <div class="sub-entry">
-      <a class="sub-entry-item" href="rules.html">
+      <a class="sub-entry-item" href="replay-list.html">
+        <span class="icon">🎬</span>
+        <span>战绩 / 回放 · 历史对局重看</span>
+        <span class="arrow">›</span>
+      </a>
+    </div>
+    <div class="sub-entry" style="display:flex; gap:10px; align-items:stretch;">
+      <a class="sub-entry-item" href="rules.html" style="flex:1;">
         <span class="icon">📋</span>
         <span>规则说明 · 台数速查 / 算账公式</span>
         <span class="arrow">›</span>
+      </a>
+      <a class="sub-entry-item" href="settings.html" style="flex:0 0 96px; justify-content:center;">
+        <span class="icon">⚙</span>
+        <span>设置</span>
       </a>
     </div>
 
@@ -301,6 +323,19 @@
         <div class="rounds-option selected" data-v="8">8 局<span class="sub">标准局</span></div>
         <div class="rounds-option" data-v="16">16 局<span class="sub">酣战局</span></div>
         <div class="rounds-option" data-v="0">不限<span class="sub">尽兴</span></div>
+      </div>
+      <!-- BL-017 玩法设置：两开关（默认均关）；选位仪式为每房标准流程不可关 -->
+      <div style="font-size:12px;color:var(--color-text-muted);margin-bottom:8px;text-align:center;">玩法设置</div>
+      <div class="play-settings">
+        <div class="play-row" onclick="this.querySelector('.switch').classList.toggle('on')">
+          <span class="play-name">物理牌墙展示<span class="play-sub">预生成固化 4 排×18 组牌堆并四边展示；关闭=随机发牌</span></span>
+          <span class="switch"></span>
+        </div>
+        <div class="play-row" onclick="this.querySelector('.switch').classList.toggle('on')">
+          <span class="play-name">摸牌位骰<span class="play-sub">每局庄家掷骰定开牌点（右端起跳 N 组）；关闭=庄家排右端开摸</span></span>
+          <span class="switch"></span>
+        </div>
+        <div class="play-fixed">选位仪式（掷骰→选座→定首庄）为每房标准流程，恒开启</div>
       </div>
       <a class="modal-submit" href="room.html">创建并分享</a>
       <div class="modal-hint">创建后生成 6 位房间号，可分享微信好友</div>

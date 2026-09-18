@@ -26,9 +26,10 @@ export class MysqlGameStore implements GameStore {
 
   async upsertUser(u: UserRow): Promise<void> {
     await this.pool.execute(
-      `INSERT INTO users (openid, nickname, avatar_url, last_login_at) VALUES (?, ?, ?, ?)
-       ON DUPLICATE KEY UPDATE nickname = VALUES(nickname), avatar_url = VALUES(avatar_url), last_login_at = VALUES(last_login_at)`,
-      [u.openid, u.nickname, u.avatarUrl, u.lastLoginAt ?? null],
+      `INSERT INTO users (openid, nickname, avatar_url, pass_hash, last_login_at) VALUES (?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE nickname = VALUES(nickname), avatar_url = VALUES(avatar_url),
+         pass_hash = COALESCE(VALUES(pass_hash), pass_hash), last_login_at = VALUES(last_login_at)`,
+      [u.openid, u.nickname, u.avatarUrl, u.passHash ?? null, u.lastLoginAt ?? null],
     );
   }
   async getUser(openid: string): Promise<UserRow | null> {
@@ -38,15 +39,16 @@ export class MysqlGameStore implements GameStore {
     if (!r) return null;
     return {
       openid: r.openid, nickname: r.nickname, avatarUrl: r.avatar_url,
+      passHash: r.pass_hash ?? null,
       createdAt: r.created_at, lastLoginAt: r.last_login_at,
     };
   }
 
   async createRoom(rm: RoomRow): Promise<void> {
     await this.pool.execute(
-      `INSERT INTO rooms (room_id, host_openid, max_rounds, initial_score, final_score, status, closed_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [rm.roomId, rm.hostOpenid, rm.maxRounds, json(rm.initialScore), json(rm.finalScore), rm.status, rm.closedAt ?? null],
+      `INSERT INTO rooms (room_id, host_openid, max_rounds, initial_score, final_score, status, closed_at, settings)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [rm.roomId, rm.hostOpenid, rm.maxRounds, json(rm.initialScore), json(rm.finalScore), rm.status, rm.closedAt ?? null, json(rm.settings ?? null)],
     );
   }
   async getRoom(roomId: string): Promise<RoomRow | null> {
@@ -57,9 +59,26 @@ export class MysqlGameStore implements GameStore {
     return {
       roomId: r.room_id, hostOpenid: r.host_openid, maxRounds: r.max_rounds,
       initialScore: parseJson<ScoreMap>(r.initial_score),
+      memberScores: r.member_scores == null ? null : parseJson<ScoreMap>(r.member_scores),
+      settings: r.settings == null ? null : parseJson<RoomRow['settings']>(r.settings),
+      seating: r.seating == null ? null : parseJson<unknown>(r.seating),
       finalScore: r.final_score == null ? null : parseJson<ScoreMap>(r.final_score),
       status: r.status, createdAt: r.created_at, closedAt: r.closed_at,
     };
+  }
+  async roomIdExists(roomId: string): Promise<boolean> {
+    const [rows] = await this.pool.execute<RowDataPacket[]>(
+      'SELECT 1 FROM rooms WHERE room_id = ? LIMIT 1', [roomId]);
+    return rows.length > 0;
+  }
+  async markRoomPlaying(roomId: string): Promise<void> {
+    await this.pool.execute(`UPDATE rooms SET status = 'playing' WHERE room_id = ?`, [roomId]);
+  }
+  async updateRoomScores(roomId: string, memberScores: ScoreMap): Promise<void> {
+    await this.pool.execute(`UPDATE rooms SET member_scores = ? WHERE room_id = ?`, [json(memberScores), roomId]);
+  }
+  async updateRoomSeating(roomId: string, seating: unknown): Promise<void> {
+    await this.pool.execute(`UPDATE rooms SET seating = ? WHERE room_id = ?`, [json(seating), roomId]);
   }
   async closeRoom(roomId: string, finalScore: ScoreMap, closedAt: Date): Promise<void> {
     await this.pool.execute(
@@ -88,9 +107,9 @@ export class MysqlGameStore implements GameStore {
   }
   async saveInitialState(s: InitialStateRow): Promise<void> {
     await this.pool.execute(
-      `INSERT INTO game_initial_states (game_id, wall, hands, lianzhuang_count) VALUES (?, ?, ?, ?)
-       ON DUPLICATE KEY UPDATE wall = VALUES(wall), hands = VALUES(hands), lianzhuang_count = VALUES(lianzhuang_count)`,
-      [s.gameId, json(s.wall), json(s.hands), s.lianzhuangCount],
+      `INSERT INTO game_initial_states (game_id, wall, hands, lianzhuang_count, layout, break_group) VALUES (?, ?, ?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE wall = VALUES(wall), hands = VALUES(hands), lianzhuang_count = VALUES(lianzhuang_count), layout = VALUES(layout), break_group = VALUES(break_group)`,
+      [s.gameId, json(s.wall), json(s.hands), s.lianzhuangCount, json(s.layout ?? null), s.breakGroup ?? null],
     );
   }
   async appendActions(rows: ActionRow[]): Promise<void> {
@@ -126,7 +145,10 @@ export class MysqlGameStore implements GameStore {
       'SELECT * FROM game_initial_states WHERE game_id = ?', [gameId]);
     const r = rows[0];
     if (!r) return null;
-    return { gameId: r.game_id, wall: parseJson(r.wall), hands: parseJson(r.hands), lianzhuangCount: r.lianzhuang_count };
+    return {
+      gameId: r.game_id, wall: parseJson(r.wall), hands: parseJson(r.hands), lianzhuangCount: r.lianzhuang_count,
+      layout: r.layout == null ? null : parseJson(r.layout), breakGroup: r.break_group == null ? null : Number(r.break_group),
+    };
   }
   async listActions(gameId: string): Promise<ActionRow[]> {
     const [rows] = await this.pool.execute<RowDataPacket[]>(
@@ -136,6 +158,25 @@ export class MysqlGameStore implements GameStore {
       payload: parseJson(r.payload), at: r.at,
     }));
   }
+  async listRoomsByPlayer(openid: string): Promise<RoomRow[]> {
+    const [rows] = await this.pool.query<RowDataPacket[]>(
+      `SELECT r.* FROM rooms r WHERE r.host_openid = ?
+       UNION
+       SELECT r.* FROM rooms r JOIN room_member_events m ON m.room_id = r.room_id WHERE m.openid = ?
+       ORDER BY created_at DESC LIMIT 200`,
+      [openid, openid]
+    );
+    return rows.map((r) => ({
+      roomId: r.room_id, hostOpenid: r.host_openid, maxRounds: r.max_rounds,
+      initialScore: parseJson<ScoreMap>(r.initial_score),
+      memberScores: r.member_scores == null ? null : parseJson<ScoreMap>(r.member_scores),
+      settings: r.settings == null ? null : parseJson<RoomRow['settings']>(r.settings),
+      seating: r.seating == null ? null : parseJson<unknown>(r.seating),
+      finalScore: r.final_score == null ? null : parseJson<ScoreMap>(r.final_score),
+      status: r.status, createdAt: r.created_at, closedAt: r.closed_at,
+    }));
+  }
+
   async listGames(roomId: string): Promise<GameRow[]> {
     const [rows] = await this.pool.execute<RowDataPacket[]>(
       'SELECT * FROM games WHERE room_id = ? ORDER BY round_no ASC', [roomId]);

@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { driveCeremony } from './ceremonyHelper';
 import { RoomManager } from '../src/roomManager';
 import type { RoomActor, GameHooks } from '../src/roomActor';
 import type { Connection } from '../src/connection';
@@ -82,10 +83,16 @@ describe('RoomActor · 房间生命周期', () => {
     const { conns, room } = setupRoom(999);
     expect(room.playerCount()).toBe(4);
     expect(room.start('u0').ok).toBe(true);
+    driveCeremony(room);
     expect(room.phase).toBe('playing');
     for (const c of conns) expect(c.lastGameView()).toBeTruthy();
-    expect(concealedCount(conns[0]!.lastGameView()!.view.you.concealed)).toBe(17); // u0=seat0=庄
-    expect(concealedCount(conns[1]!.lastGameView()!.view.you.concealed)).toBe(16);
+    // BL-017：庄家由仪式骰决定，从各家 gameView 读取实际庄家校验庄 17 闲 16
+    const views = conns.map((c) => c.lastGameView()!.view);
+    const dealerSeat = views[0]!.dealerSeat;
+    for (const v of views) {
+      const expectCount = v.you.seat === dealerSeat ? 17 : 16;
+      expect(concealedCount(v.you.concealed)).toBe(expectCount);
+    }
   });
 
   it('未满 4 人 / 非房主 不能开始', () => {
@@ -97,6 +104,7 @@ describe('RoomActor · 房间生命周期', () => {
     room.addPlayer('u3', new MockConn('u3'));
     expect(room.start('u1').ok).toBe(false); // 非房主
     expect(room.start('u0').ok).toBe(true);
+    driveCeremony(room);
   });
 });
 
@@ -104,6 +112,7 @@ describe('RoomActor · 防透视与权限', () => {
   it('他家 gameView 只含暗牌张数，无具体牌', () => {
     const { conns, room } = setupRoom(7);
     room.start('u0');
+    driveCeremony(room);
     const v1 = conns[1]!.lastGameView()!.view;
     expect(v1.others.every((o) => (o as Record<string, unknown>).concealed === undefined)).toBe(true);
     expect(v1.others.every((o) => o.concealedCount === 17 || o.concealedCount === 16)).toBe(true);
@@ -112,11 +121,16 @@ describe('RoomActor · 防透视与权限', () => {
   it('庄家可出牌；越权（冒用他人座位）被拒', () => {
     const { room } = setupRoom(5);
     room.start('u0');
+    driveCeremony(room);
     const st = room.getState()!;
-    const tile = Object.keys(st.players[0]!.concealed)[0]!;
-    expect(room.handleAction('u0', { type: 'discard', seat: 0, tile }).ok).toBe(true);
-    // u1(seat1) 冒用 seat0 出牌 → 座位不符
-    expect(room.handleAction('u1', { type: 'discard', seat: 0, tile }).ok).toBe(false);
+    // BL-017：仪式选座后 u0 未必坐 seat0，庄家座位从 state 读取
+    const dealerSeat = st.dealerSeat;
+    const dealerUser = ['u0', 'u1', 'u2', 'u3'].find((u) => room.roomView().seats[dealerSeat]?.userId === u)!;
+    const otherUser = ['u0', 'u1', 'u2', 'u3'].find((u) => u !== dealerUser)!;
+    const tile = Object.keys(st.players[dealerSeat]!.concealed)[0]!;
+    expect(room.handleAction(dealerUser, { type: 'discard', seat: dealerSeat, tile }).ok).toBe(true);
+    // 他人冒用庄家座位出牌 → 座位不符
+    expect(room.handleAction(otherUser, { type: 'discard', seat: dealerSeat, tile }).ok).toBe(false);
   });
 
   it('未鉴权/未开始时的动作被拒', () => {
@@ -133,6 +147,7 @@ describe('RoomActor · 防透视与权限', () => {
     const { room } = setupRoom(11);
     expect(room.nextRound('u0').ok).toBe(false); // 未 start：不在对局中
     room.start('u0');
+    driveCeremony(room);
     expect(room.nextRound('u0').ok).toBe(false); // 本局刚开始(discard)，未结束
     expect(room.nextRound('ghost').ok).toBe(false); // 不在房间
   });
@@ -142,6 +157,7 @@ describe('RoomActor · 局数上限与「不限」', () => {
   it('maxRounds=1：首局结束后 nextRound → finished', () => {
     const { room } = setupRoomRounds(1, 20240916);
     room.start('u0');
+    driveCeremony(room);
     driveRoomToEnd(room);
     const ph = room.getState()!.phase;
     expect(ph === 'settled' || ph === 'exhaustive').toBe(true);
@@ -152,6 +168,7 @@ describe('RoomActor · 局数上限与「不限」', () => {
   it('maxRounds=0（不限）：首局结束后 nextRound 续局、不 finished', () => {
     const { room } = setupRoomRounds(0, 20240916);
     room.start('u0');
+    driveCeremony(room);
     driveRoomToEnd(room);
     expect(room.nextRound('u0').ok).toBe(true);
     expect(room.phase).toBe('playing'); // 不限 → 续局
@@ -201,6 +218,7 @@ describe('RoomActor · 对局落库钩子（GameHooks，M-E）', () => {
     room.addPlayer('u2', conns[2]!);
     room.addPlayer('u3', conns[3]!);
     room.start('u0');
+    driveCeremony(room);
     expect(calls.start).toBe(1);
     driveRoomToEnd(room);
     expect(calls.action).toBeGreaterThan(10); // 一局多个动作
@@ -225,6 +243,7 @@ describe('RoomActor · 散场战绩（M-G）', () => {
     room.addPlayer('u2', conns[2]!);
     room.addPlayer('u3', conns[3]!);
     room.start('u0');
+    driveCeremony(room);
     driveRoomToEnd(room);
     expect(room.nextRound('u0').ok).toBe(true); // round(1) >= maxRounds(1) → 散场
     expect(room.phase).toBe('finished');
@@ -250,6 +269,7 @@ describe('RoomActor · 散场战绩（M-G）', () => {
     room.addPlayer('u2', conns[2]!);
     room.addPlayer('u3', conns[3]!);
     room.start('u0');
+    driveCeremony(room);
     expect(room.dissolve('u0').ok).toBe(false); // 局中（discard）不可解散
     driveRoomToEnd(room);
     expect(room.dissolve('u1').ok).toBe(false); // 非房主
@@ -268,6 +288,7 @@ describe('RoomActor · 散场战绩（M-G）', () => {
     room.addPlayer('u2', conns[2]!);
     room.addPlayer('u3', conns[3]!);
     room.start('u0');
+    driveCeremony(room);
     driveRoomToEnd(room);
     expect(room.nextRound('u0').ok).toBe(true); // 不限 → 续局
     expect(room.phase).toBe('playing');

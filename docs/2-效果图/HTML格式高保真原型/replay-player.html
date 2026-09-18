@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AC 麻将俱乐部 — 回放播放器（P10，BL-012）</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    /* 横屏只读牌桌 + 底部播放控制条；布局对齐 game.html 视觉语言 */
+    .replay-stage {
+      position: relative; width: 100%; height: 100vh; height: 100dvh; overflow: hidden;
+      background:
+        radial-gradient(ellipse at center, rgba(212,165,55,0.06) 0%, transparent 60%),
+        linear-gradient(to bottom, var(--color-bg-table) 0%, #0a3d22 100%);
+      display: flex; flex-direction: column;
+    }
+    /* 顶栏：返回 / 局信息 / 全亮开关 */
+    .rp-topbar {
+      display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+      background: rgba(0,0,0,0.45); border-bottom: 1px solid rgba(212,165,55,0.15);
+    }
+    .rp-back {
+      width: 28px; height: 28px; border-radius: 50%;
+      background: rgba(0,0,0,0.5); border: 1px solid rgba(212,165,55,0.25);
+      color: var(--color-text-secondary); font-size: 13px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; text-decoration: none;
+    }
+    .rp-info { font-size: 12px; color: var(--color-gold); font-weight: 700; letter-spacing: 1px; }
+    .rp-info small { color: var(--color-text-muted); font-weight: 400; margin-left: 8px; }
+    .rp-reveal-toggle {
+      margin-left: auto; padding: 4px 12px; border-radius: var(--radius-full);
+      border: 1px solid rgba(212,165,55,0.4); background: rgba(0,0,0,0.35);
+      color: var(--color-gold); font-size: 11px; cursor: pointer; font-family: var(--font-cn);
+    }
+    .rp-reveal-toggle.on { background: rgba(212,165,55,0.85); color: var(--color-bg-wood-dark); font-weight: 700; }
+
+    /* 牌桌主体（简化四区） */
+    .rp-table { flex: 1; position: relative; min-height: 0; }
+    .rp-north { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); display: flex; gap: 2px; }
+    .rp-west, .rp-east { position: absolute; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 2px; }
+    .rp-west { left: 12px; } .rp-east { right: 12px; }
+    .tile-back-s { width: 20px; height: 28px; border-radius: 4px; background: linear-gradient(160deg, #2e6b4f, #1d4a35); border: 1px solid rgba(255,255,255,0.18); }
+    .tile-back-s.h { width: 28px; height: 20px; }
+    .rp-south { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); display: flex; gap: 3px; }
+    .tile-f {
+      width: 30px; height: 42px; border-radius: 5px; background: linear-gradient(160deg, #fdfaf2, #e8e0cd);
+      border: 1px solid #b7ab8d; box-shadow: 0 2px 0 #c9bd9f;
+      display: flex; align-items: center; justify-content: center; font-size: 15px; color: #234;
+    }
+    .tile-f.red { color: #b03a2e; }
+    /* 牌河（中央四块） */
+    .rp-river { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 300px; height: 150px;
+      border: 1px dashed rgba(212,165,55,0.2); border-radius: 10px;
+      display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 4px; padding: 6px; }
+    .rp-river-cell { font-size: 9px; color: var(--color-text-muted); overflow: hidden; }
+    .rp-river-cell b { color: var(--color-gold); display: block; margin-bottom: 2px; }
+    /* 事件横幅 */
+    .rp-event-banner {
+      position: absolute; top: 44px; left: 50%; transform: translateX(-50%);
+      padding: 5px 16px; border-radius: var(--radius-full);
+      background: rgba(9,30,18,0.9); border: 1px solid rgba(212,165,55,0.4);
+      color: var(--color-gold); font-size: 12px; font-weight: 700; letter-spacing: 1px;
+    }
+
+    /* 底部播放控制条 */
+    .rp-controls {
+      display: flex; align-items: center; gap: 10px; padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px));
+      background: rgba(0,0,0,0.55); border-top: 1px solid rgba(212,165,55,0.2);
+    }
+    .rp-btn {
+      min-width: 34px; height: 30px; padding: 0 10px; border-radius: var(--radius-full);
+      border: 1px solid rgba(212,165,55,0.4); background: rgba(0,0,0,0.35);
+      color: var(--color-gold); font-size: 13px; cursor: pointer; font-family: var(--font-cn);
+    }
+    .rp-btn.primary { background: rgba(212,165,55,0.85); color: var(--color-bg-wood-dark); font-weight: 800; }
+    .rp-progress { flex: 1; display: flex; align-items: center; gap: 8px; }
+    .rp-track { flex: 1; height: 4px; border-radius: 2px; background: rgba(255,255,255,0.12); position: relative; cursor: pointer; }
+    .rp-track-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 42%; border-radius: 2px;
+      background: linear-gradient(to right, var(--color-gold), var(--color-gold-light)); }
+    .rp-track-kf { position: absolute; top: -2px; width: 2px; height: 8px; background: var(--color-wx-green, #07c160); border-radius: 1px; }
+    .rp-pos { font-size: 10px; color: var(--color-text-muted); font-family: var(--font-mono); min-width: 64px; text-align: right; }
+  </style>
+</head>
+<body>
+  <div class="replay-stage">
+    <!-- 顶栏 -->
+    <div class="rp-topbar">
+      <a class="rp-back" href="replay-list.html">‹</a>
+      <span class="rp-info">房 828666 · 第 2/8 局<small>庄家：我 · 连庄 1 · 点炮胡结束</small></span>
+      <button class="rp-reveal-toggle" id="revealToggle">全亮：关</button>
+    </div>
+
+    <!-- 牌桌 -->
+    <div class="rp-table">
+      <div class="rp-event-banner" id="eventBanner">令狐冲 碰 「九筒」</div>
+      <div class="rp-north" id="northHand"></div>
+      <div class="rp-west" id="westHand"></div>
+      <div class="rp-east" id="eastHand"></div>
+      <div class="rp-river">
+        <div class="rp-river-cell"><b>北 · 令狐冲</b>东 南 1万 2条 3筒 …</div>
+        <div class="rp-river-cell"><b>东 · 黄蓉</b>北 西 9万 8条 7筒 …</div>
+        <div class="rp-river-cell"><b>南 · 我</b>1筒 2筒 3条 4条 9万 …</div>
+        <div class="rp-river-cell"><b>西 · 杨过</b>中 发 白 1条 2万 …</div>
+      </div>
+      <div class="rp-south">
+        <div class="tile-f">一</div><div class="tile-f">二</div><div class="tile-f">三</div>
+        <div class="tile-f">四</div><div class="tile-f">五</div><div class="tile-f">六</div>
+        <div class="tile-f red">中</div><div class="tile-f red">中</div><div class="tile-f red">中</div>
+        <div class="tile-f">9</div><div class="tile-f">9</div>
+      </div>
+    </div>
+
+    <!-- 播放控制条 -->
+    <div class="rp-controls">
+      <button class="rp-btn" title="上一关键帧">⏮</button>
+      <button class="rp-btn" title="单步退">−1</button>
+      <button class="rp-btn primary" id="playBtn">⏸</button>
+      <button class="rp-btn" title="单步进">+1</button>
+      <button class="rp-btn" title="下一关键帧">⏭</button>
+      <button class="rp-btn" id="speedBtn">1x</button>
+      <div class="rp-progress">
+        <div class="rp-track" id="track">
+          <div class="rp-track-fill" id="trackFill"></div>
+          <span class="rp-track-kf" style="left: 0%;"></span>
+          <span class="rp-track-kf" style="left: 63%;"></span>
+          <span class="rp-track-kf" style="left: 100%;"></span>
+        </div>
+        <span class="rp-pos" id="posLabel">42 / 100 步</span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // 演示：对手牌背填充 / 播放键 / 倍速 / 全亮切换
+    const fill = (id, n, horiz) => {
+      const box = document.getElementById(id);
+      for (let i = 0; i < n; i++) { const d = document.createElement('div'); d.className = 'tile-back-s' + (horiz ? ' h' : ''); box.appendChild(d); }
+    };
+    fill('northHand', 11, true); fill('westHand', 13, false); fill('eastHand', 13, false);
+    const play = document.getElementById('playBtn');
+    play.addEventListener('click', () => { play.textContent = play.textContent === '⏸' ? '▶' : '⏸'; });
+    const sp = document.getElementById('speedBtn');
+    sp.addEventListener('click', () => { sp.textContent = sp.textContent === '1x' ? '2x' : sp.textContent === '2x' ? '4x' : '1x'; });
+    const rv = document.getElementById('revealToggle');
+    rv.addEventListener('click', () => {
+      rv.classList.toggle('on');
+      rv.textContent = rv.classList.contains('on') ? '全亮：开' : '全亮：关';
+    });
+  </script>
+</body>
+</html>

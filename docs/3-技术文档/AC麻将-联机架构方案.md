@@ -162,20 +162,20 @@ flowchart LR
 
 ### 6.1 RoomManager
 
-- 管理房间表：`roomId → RoomActor`；分配/回收 6 位房间号。
+- 管理房间表：`roomId → RoomActor`；分配 6 位房间号（**全局唯一、永不复用**：发号对照内存活跃房 + `rooms` 历史表双重查重，BL-016）。
 - 创建：房主选局数上限（4/8/16/不限，D-23）→ 生成房间号 + 分享卡片。
-- 加入：仅当未满 4 人且未开始（FR-房间-02）。
+- 加入：未满 4 人且未开始可新加入；**已入座成员房间周期内随时重进**（积分保留，BL-016）；已关闭房间拒绝。
 
 ### 6.2 RoomActor（单房间串行）
 
 - 持有：权威 `TableState` + `seat → connection` 映射 + 一个**串行任务队列**（同一房间的 Action 逐个处理，天然免锁、免竞态）。
 - 生命周期：`waiting`（等人）→ `playing`（对局，可多局）→ `settled`（局末）→ 下一局 / `dissolved`（散场）。
-- 散场：达局数上限自动 / 房主手动 → 积分清零（D-03）→ 释放房间号。
+- 散场：达局数上限自动 / 房主手动 → 积分定格（`final_score` 落库，线下结算依据，D-03/BL-016）→ 内存房间回收，房号永不复用。
 
 ### 6.3 快照与恢复
 
 - 每次 `applyAction` 后异步写 Redis 快照（`TableState` + 座位/会话）。
-- 容器重启/宕机：RoomActor 从 Redis 快照重建，玩家重连恢复。
+- 容器重启/宕机：RoomActor 从 Redis 快照重建，玩家重连恢复。**BL-016 落地实现**：每局末写 `rooms.member_scores` 积分账本；重进时房间不在内存则由 MySQL 事件溯源重建（最新一局 `game_initial_states` 快照 + `game_actions` + Redis 未落盘动作缓冲 `peekActions` → `replayRound`），恢复座位/积分/对局现场。
 
 ---
 

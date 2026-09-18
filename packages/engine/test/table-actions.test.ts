@@ -7,6 +7,7 @@ import {
   type PlayerState,
   type TableState,
 } from '../src/table';
+import { applyAction } from '../src/reducer';
 import {
   canChi,
   canPong,
@@ -142,5 +143,14 @@ describe('legalActions + 末尾限制（D-09）', () => {
     t.players[2]!.concealed = { B4: 1, B6: 1 }; // 非下家(2) 不可吃
     expect(legalActions(t, 1)).toContain('chi');
     expect(legalActions(t, 2)).not.toContain('chi');
+  });
+  it('吃副记录被吃牌（FR-对局-17 横置标记数据源）', () => {
+    const t = mkTable({ phase: 'response', lastDiscard: { seat: 0, tile: 'B5' } });
+    t.players[1]!.concealed = { B4: 1, B6: 1 };
+    const r = applyAction(t, { type: 'respond', seat: 1, move: 'chi', chiTiles: ['B4', 'B6'] });
+    const meld = r.state.players[1]!.melds[0]!;
+    expect(meld.type).toBe('chi');
+    expect(meld.tiles).toEqual(['B4', 'B5', 'B6']);
+    expect(meld.called).toBe('B5');
   });
 });

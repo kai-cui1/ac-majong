@@ -109,6 +109,21 @@ describe('previewTai · 三态实时台数预览', () => {
     expect(p.tai).toBeGreaterThan(0);
   });
 
+  it('C：结构听牌但听张均不足 6 台门槛 → 不提示听牌（D-15 起胡门槛）', () => {
+    // 3 顺 + 1 刻 + 单钓字牌：胡牌仅见字 1 台(+见花 1)，不足 6 台为诈胡
+    const conc = { W1: 3, W2: 3, W3: 3, B5: 1, B6: 1, B7: 1, Z5: 1 };
+    const p = previewTai(conc, [], ['H1']);
+    expect(p.tenpai).toBe(false);
+    expect(p.waits).toEqual([]);
+    expect(p.tai).toBe(0);
+  });
+
+  it('B：3n+2 所有打法路线听张均不足门槛 → 不提示听牌', () => {
+    const p = previewTai({ W1: 3, W2: 3, W3: 3, B5: 1, B6: 1, B7: 1, Z5: 1, Z6: 1 }, [], ['H1']);
+    expect(p.tenpai).toBe(false);
+    expect(p.viaDiscard).toBeUndefined();
+  });
+
   it('ScoreDetail 带 count/tiles（见花展开具体牌）', () => {
     const s = scoreHand(mkHand({ concealed: { B5: 2 }, melds: pengpeng.melds, flowers: ['H1', 'H2'], winTile: 'B5', winBy: 'zimo' }));
     const fh = s.detail.find((d) => d.name === '见花');
@@ -119,7 +134,7 @@ describe('previewTai · 三态实时台数预览', () => {
 });
 
 describe('pipeline · 完整结算', () => {
-  it('碰碰胡 26台 点炮 → 最终 29台 = 580 分', () => {
+  it('碰碰胡 26台 点炮（无子/非庄涉及）→ 26 台 = 26 积分（1:1）', () => {
     const { score, delta } = scoreAndSettle(pengpeng, {
       winnerSeat: 1,
       dealerSeat: 0,
@@ -128,7 +143,18 @@ describe('pipeline · 完整结算', () => {
     });
     expect(score.total).toBe(26);
     expect(delta).not.toBeNull();
-    expect(delta![1]).toBe(580); // 26 + 3×(0+1) = 29 台 ×20
-    expect(delta![2]).toBe(-580);
+    expect(delta![1]).toBe(26);
+    expect(delta![2]).toBe(-26);
+  });
+
+  it('结算加成显性化：胡方 2 子+庄家胡连庄 2 → 明细追加子/连庄行且 total 含加成', () => {
+    const hand = { ...pengpeng, winBy: 'zimo' as const, lianzhuangCount: 2, seatsZi: { 0: 2, 1: 0, 2: 0, 3: 0 } };
+    const { score, delta } = scoreAndSettle(hand, { winnerSeat: 0, dealerSeat: 0, allSeats: [0, 1, 2, 3] });
+    // 自摸 base 27（碰碰胡 26+自摸 1） + 子2×3 + 连庄2(3) = 36
+    expect(score.total).toBe(36);
+    expect(score.detail.some((d) => d.name === '子' && d.count === 2 && d.tai === 6)).toBe(true);
+    expect(score.detail.some((d) => d.name === '连庄' && d.count === 2 && d.tai === 3)).toBe(true);
+    expect(delta![0]).toBe(36 * 3); // 自摸三家各付 36
+    expect(delta![1]).toBe(-36);
   });
 });

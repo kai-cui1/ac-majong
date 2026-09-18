@@ -1,6 +1,6 @@
 import type { TableState, Action, GameEvent, ActionKind, RoundSnapshot } from '@ac-majong/engine';
-import { createTable, applyAction, startNextRound, legalActions, snapshotRound } from '@ac-majong/engine';
-import type { RoomView, RoomPhase, FinalStanding, RoundReview, RoomEndReason } from '@ac-majong/protocol';
+import { createTable, applyAction, startNextRound, legalActions, snapshotRound, buildPhysicalLayout, wallInfo } from '@ac-majong/engine';
+import type { RoomView, RoomPhase, FinalStanding, RoundReview, RoomEndReason, RoomSettings, SeatingView } from '@ac-majong/protocol';
 import type { Connection } from './connection';
 import { redact } from './redact';
 import { makeBotConnection, makeTrusteeConnection } from './devBots';
@@ -18,9 +18,32 @@ export interface OpResult {
 export interface GameHooks {
   onGameStart(roomId: string, gameId: string, snap: RoundSnapshot, dealerSeat: number, seed: number, roundNo: number): void;
   onGameAction(gameId: string, seq: number, seat: number | null, action: Action): void;
-  onGameEnd(gameId: string, endType: 'win' | 'exhaustive', result: unknown): void;
+  /** scores=局末各家累计积分（网关据此写 rooms.member_scores 积分账本，BL-016 重进/重启恢复依据） */
+  onGameEnd(roomId: string, gameId: string, endType: 'win' | 'exhaustive', result: unknown, scores: Record<number, number>): void;
   /** 散场（打满上限/房主解散）：网关据此 closeRoom + rooms.final_score 落库（弱依赖）。见持久化技术方案 §7 M-G。 */
   onRoomEnd(roomId: string, standings: FinalStanding[], rounds: RoundReview[]): void;
+  /** BL-017：开局仪式结束落 seating 日志（弱依赖） */
+  onSeating?(roomId: string, seating: unknown): void;
+}
+
+/** BL-016：服务重启后由 DB 事件溯源重建房间的恢复快照（网关组装，RoomActor.restore 同步注入） */
+export interface RoomRestore {
+  phase: 'waiting' | 'playing';
+  state: TableState | null;
+  gameId: string | null;
+  gameSeq: number;
+  actionSeq: number;
+  /** 下一个可用对局种子（取最新一局 seed+1，避免重建后续局种子重叠） */
+  seed?: number;
+  /** seat → userId（含未重连的真人座位，座位保留以恢复积分） */
+  seats: (string | null)[];
+  names: (string | null)[];
+  roundLog: RoundReview[];
+  winCount: Record<number, number>;
+  /** 积分账本（rooms.member_scores）：降级 waiting 后开局作为各家初始累计分，保证积分不丢（FR-房间-09） */
+  ledgerScores?: Record<number, number>;
+  /** 重连时立即恢复托管代打的离线真人座位（对局中重建，FR-断线-03 语义） */
+  absentUsers?: string[];
 }
 
 /** action → legalActions 的 ActionKind 映射（服务端权威合法性校验） */
@@ -80,18 +103,59 @@ export class RoomActor {
   /** 单局回顾 + 各家胡牌局数（散场战绩页用，独立于落库钩子累积） */
   private roundLog: RoundReview[] = [];
   private winCount: Record<number, number> = {};
+  /** BL-016：重建降级 waiting 时的积分账本，开局写入各家初始累计分 */
+  private ledgerScores: Record<number, number> | null = null;
+  /** BL-017 房间玩法参数（建房设定，开局后不可改） */
+  readonly settings: RoomSettings;
+  /** BL-017 开局仪式/摸牌位骰视图（null=不在仪式阶段） */
+  private seating: SeatingView | null = null;
+  private seatingTimers: ReturnType<typeof setTimeout>[] = [];
+  private seatingLog: unknown[] = [];
 
-  constructor(id: string, hostUserId: string, maxRounds: number, seed: number, hooks?: GameHooks, timings?: { trusteeAfterMs?: number }) {
+  constructor(id: string, hostUserId: string, maxRounds: number, seed: number, hooks?: GameHooks, timings?: { trusteeAfterMs?: number }, settings?: RoomSettings) {
     this.id = id;
     this.hostUserId = hostUserId;
     this.maxRounds = maxRounds;
     this.seed = seed;
     this.hooks = hooks;
     this.trusteeAfterMs = timings?.trusteeAfterMs ?? 60_000; // D-24：掉线保留 60 秒后托管
+    this.settings = settings ?? { wallMode: 'random', breakDice: false };
   }
 
   getState(): TableState | null {
     return this.state;
+  }
+
+  /**
+   * BL-016：从持久化重建（服务重启后成员重进触发）——注入座位/对局现场/积分/回顾，
+   * 使房间周期跨重启延续（积分保留、局可续打）。Bot 座位由网关挂 bot 连接；
+   * 未重连的真人座位对局中立即转托管代打，避免牌局卡死。
+   */
+  restore(r: RoomRestore): void {
+    this.phase = r.phase;
+    this.state = r.state;
+    this.gameId = r.gameId;
+    this.gameSeq = r.gameSeq;
+    this.actionSeq = r.actionSeq;
+    if (r.seed != null) this.seed = r.seed;
+    this.roundLog = [...r.roundLog];
+    this.winCount = { ...r.winCount };
+    this.ledgerScores = r.ledgerScores ? { ...r.ledgerScores } : null;
+    r.seats.forEach((u, seat) => {
+      if (!u) return;
+      this.userAtSeat[seat] = u;
+      this.seatOf.set(u, seat);
+      this.names[seat] = r.names[seat] ?? null;
+    });
+    log.info(`房间重建: room=${this.id} phase=${this.phase} seats=[${r.seats.map((u) => u ?? '-').join(',')}] game=${r.gameId ?? '-'} actionSeq=${r.actionSeq}`);
+    for (const u of r.absentUsers ?? []) {
+      if (this.phase === 'playing' && this.seatOf.has(u) && !u.startsWith('bot-') && !this.connOf.has(u)) this.enterTrustee(u);
+    }
+  }
+
+  /** BL-016：重建后为 Bot 座位挂回保守代打连接（网关在 restore 后调用） */
+  attachBot(userId: string, delayMs = 300): void {
+    this.connOf.set(userId, makeBotConnection(this, userId, delayMs));
   }
   seatOfUser(userId: string): number | undefined {
     return this.seatOf.get(userId);
@@ -106,6 +170,8 @@ export class RoomActor {
       phase: this.phase,
       hostUserId: this.hostUserId,
       maxRounds: this.maxRounds,
+      settings: this.settings,
+      seating: this.seating ?? undefined,
       seats: this.userAtSeat.map((u, seat) => (u ? {
         userId: u,
         seat,
@@ -180,13 +246,212 @@ export class RoomActor {
     if (this.phase !== 'waiting') return { ok: false, reason: '已开始' };
     if (byUserId !== this.hostUserId) return { ok: false, reason: '仅房主可开始' };
     if (this.seatOf.size < 4) return { ok: false, reason: '需满 4 人' };
-    const seed = this.seed++;
-    this.state = createTable(0, seed);
-    this.phase = 'playing';
-    log.info(`开局: room=${this.id} seed=${seed} 玩家=[${[...this.seatOf.keys()].join(', ')}]`);
-    this.beginGame(seed);
-    this.broadcastGame();
+    // BL-017：开局仪式（选位骰→选座→定庄骰→摸牌位骰）为每房标准流程，完成后才发牌
+    this.phase = 'seating';
+    this.seating = {
+      stage: 'roll', rolls: [null, null, null, null], reroll: [false, false, false, false],
+      order: [], picker: null, picked: null, dealerDice: null, dealerSeat: null, breakN: null, roller: null,
+    };
+    log.info(`开局仪式开始: room=${this.id} settings=${JSON.stringify(this.settings)}`);
+    this.scheduleSeatingAuto();
+    this.broadcastAll();
     return { ok: true };
+  }
+
+  // ============ BL-017 开局仪式 / 摸牌位骰 ============
+
+  private static roll2d6(): number {
+    return 2 + Math.floor(Math.random() * 6) + Math.floor(Math.random() * 6);
+  }
+
+  private clearSeatingTimers(): void {
+    for (const t of this.seatingTimers) clearTimeout(t);
+    this.seatingTimers = [];
+  }
+
+  /** 手动掷+超时自动（10s）；Bot/托管 0.4~0.8s 内自动代掷（FR-对局-18） */
+  private scheduleSeatingAuto(): void {
+    this.clearSeatingTimers();
+    const s = this.seating;
+    if (!s) return;
+    const pending: number[] = [];
+    if (s.stage === 'roll') {
+      for (let i = 0; i < 4; i++) if (s.rolls[i] == null) pending.push(i);
+    } else if (s.stage === 'pick' && s.picker != null) {
+      pending.push(s.picker);
+    } else if (s.stage === 'dealerDice' && s.picker != null) {
+      pending.push(s.picker);
+    } else if (s.stage === 'breakDice' && s.dealerSeat != null) {
+      pending.push(s.dealerSeat);
+    } else if (s.stage === 'roundBreak' && s.roller != null) {
+      pending.push(s.roller);
+    }
+    for (const seat of pending) {
+      const u = this.userAtSeat[seat];
+      if (!u) continue;
+      const delay = u.startsWith('bot-') ? 400 + Math.floor(Math.random() * 400) : 10_000;
+      this.seatingTimers.push(setTimeout(() => {
+        const cur = this.seating;
+        if (!cur) return;
+        if (cur.stage === 'pick') this.handlePickSeat(u, seat); // 超时自动 = 保留自己当前座位
+        else this.handleRoll(u);
+      }, delay));
+    }
+  }
+
+  /** 掷骰（语境由阶段决定：选位骰/定庄骰/摸牌位骰） */
+  handleRoll(userId: string): OpResult {
+    const s = this.seating;
+    if (!s) return { ok: false, reason: '不在仪式阶段' };
+    const seat = this.seatOf.get(userId);
+    if (seat == null) return { ok: false, reason: '不在房间' };
+    if (s.stage === 'roll') {
+      if (s.rolls[seat] != null && !s.reroll[seat]) return { ok: false, reason: '已掷过' };
+      const v = RoomActor.roll2d6();
+      s.rolls[seat] = v;
+      s.reroll[seat] = false;
+      this.seatingLog.push({ stage: 'roll', seat, v });
+      if (s.rolls.every((x) => x != null)) this.resolveSeatingRolls();
+      this.broadcastAll();
+      return { ok: true };
+    }
+    if (s.stage === 'dealerDice') {
+      if (seat !== s.picker) return { ok: false, reason: '仅选位最大者掷定庄骰' };
+      const v = RoomActor.roll2d6();
+      s.dealerDice = v;
+      s.dealerSeat = (seat + ((v - 1) % 4)) % 4; // 1=自己 2=下手 3=对面 4=上手
+      this.seatingLog.push({ stage: 'dealerDice', seat, v, dealerSeat: s.dealerSeat });
+      if (this.settings.breakDice) {
+        s.stage = 'breakDice';
+        s.breakN = null;
+        this.scheduleSeatingAuto();
+        this.broadcastAll();
+      } else {
+        this.finalizeCeremony(0);
+      }
+      return { ok: true };
+    }
+    if (s.stage === 'breakDice') {
+      if (seat !== s.dealerSeat) return { ok: false, reason: '仅庄家掷摸牌位骰' };
+      const v = RoomActor.roll2d6();
+      s.breakN = v;
+      this.seatingLog.push({ stage: 'breakDice', seat, v });
+      this.finalizeCeremony(v);
+      return { ok: true };
+    }
+    if (s.stage === 'roundBreak') {
+      if (seat !== s.roller) return { ok: false, reason: '仅庄家掷摸牌位骰' };
+      const v = RoomActor.roll2d6();
+      s.breakN = v;
+      this.seatingLog.push({ stage: 'roundBreak', seat, v, round: (this.state?.round ?? 0) + 1 });
+      this.beginNextRoundWithBreak(v);
+      return { ok: true };
+    }
+    return { ok: false, reason: '当前阶段不可掷骰' };
+  }
+
+  /** 选位骰齐后：同点者重掷（仅同点者）；否则按点数降序进入选座 */
+  private resolveSeatingRolls(): void {
+    const s = this.seating!;
+    const counts = new Map<number, number>();
+    for (const v of s.rolls) counts.set(v!, (counts.get(v!) ?? 0) + 1);
+    let tied = false;
+    for (let i = 0; i < 4; i++) {
+      if ((counts.get(s.rolls[i]!) ?? 0) > 1) {
+        s.reroll[i] = true;
+        s.rolls[i] = null;
+        tied = true;
+      }
+    }
+    if (tied) {
+      log.info(`选位骰同点重掷: room=${this.id}`);
+      this.scheduleSeatingAuto();
+      return;
+    }
+    s.order = [0, 1, 2, 3].sort((a, b) => (s.rolls[b] ?? 0) - (s.rolls[a] ?? 0));
+    s.stage = 'pick';
+    s.picker = s.order[0]!;
+    this.scheduleSeatingAuto();
+  }
+
+  /** 选位最大者选座：其余按点数序依次坐其下手；选座后重排座位并重索引仪式视图 */
+  handlePickSeat(userId: string, seat: number): OpResult {
+    const s = this.seating;
+    if (!s || s.stage !== 'pick') return { ok: false, reason: '不在选座阶段' };
+    const cur = this.seatOf.get(userId);
+    if (cur == null || cur !== s.picker) return { ok: false, reason: '仅选位最大者选座' };
+    if (seat < 0 || seat > 3) return { ok: false, reason: '座位无效' };
+    s.picked = seat;
+    const newSeatOfOld = new Map<number, number>();
+    s.order.forEach((os, i) => newSeatOfOld.set(os, (seat + i) % 4));
+    const newUserAt: (string | null)[] = [null, null, null, null];
+    const newNames: (string | null)[] = [null, null, null, null];
+    const newRolls: (number | null)[] = [null, null, null, null];
+    const newReroll = [false, false, false, false];
+    const nextSeatOf = new Map<string, number>();
+    for (let os = 0; os < 4; os++) {
+      const u = this.userAtSeat[os];
+      if (!u) continue;
+      const ns = newSeatOfOld.get(os)!;
+      newUserAt[ns] = u;
+      newNames[ns] = this.names[os] ?? null;
+      newRolls[ns] = s.rolls[os] ?? null;
+      newReroll[ns] = s.reroll[os] ?? false;
+      nextSeatOf.set(u, ns);
+    }
+    this.userAtSeat = newUserAt;
+    this.names = newNames;
+    this.seatOf = nextSeatOf;
+    s.rolls = newRolls;
+    s.reroll = newReroll;
+    s.order = s.order.map((os) => newSeatOfOld.get(os)!);
+    // 重排后 order[0] 即 A 的新座
+    s.picker = s.order[0]!;
+    this.seatingLog.push({ stage: 'pick', seat: s.picker, picked: seat });
+    s.stage = 'dealerDice';
+    log.info(`选座完成: room=${this.id} A=seat${s.picker} → 座位重排 ${newUserAt.map((u) => u ?? '-').join(',')}`);
+    this.scheduleSeatingAuto();
+    this.broadcastAll();
+    return { ok: true };
+  }
+
+  /** 仪式收尾：A 上 1 子 + 首庄庄子，按玩法参数建墙发牌进入第 1 局 */
+  private finalizeCeremony(breakN: number): void {
+    const s = this.seating!;
+    const seatA = s.picker!;
+    const dealer = s.dealerSeat!;
+    const seed = this.seed++;
+    const layout = this.settings.wallMode === 'physical' ? buildPhysicalLayout(seed) : undefined;
+    const initialZi: Record<number, number> = { [seatA]: 1 };
+    initialZi[dealer] = (initialZi[dealer] ?? 0) + 1;
+    this.state = createTable(dealer, seed, [0, 1, 2, 3], { layout, breakGroups: breakN, initialZi });
+    // BL-016：重建降级 waiting 后开局——以积分账本为各家初始累计分（房间周期内积分不丢）
+    if (this.ledgerScores) {
+      for (const p of this.state.players) p.score = this.ledgerScores[p.seat] ?? 0;
+      this.ledgerScores = null;
+    }
+    this.phase = 'playing';
+    this.clearSeatingTimers();
+    this.seating = null;
+    this.hooks?.onSeating?.(this.id, { log: this.seatingLog, settings: this.settings });
+    log.info(`开局仪式完成: room=${this.id} dealer=seat${dealer} break=${breakN} wallMode=${this.settings.wallMode}`);
+    this.beginGame(seed);
+    this.broadcastRoom(); // 仪式结束：roomView(phase=playing、seating 已清) 先于 gameView，客户端关闭仪式 UI 并清 room.seating
+    this.broadcastGame();
+  }
+
+  /** 局间摸牌位骰完成后开下一局（physical 模式新局新墙） */
+  private beginNextRoundWithBreak(breakN: number): void {
+    if (!this.state) return;
+    const seed = this.seed++;
+    const layout = this.settings.wallMode === 'physical' ? buildPhysicalLayout(seed) : undefined;
+    this.state = startNextRound(this.state, seed, { layout, breakGroups: breakN }).state;
+    this.clearSeatingTimers();
+    this.seating = null;
+    log.info(`开始下一局: room=${this.id} round=${this.state.round} break=${breakN}`);
+    this.beginGame(seed);
+    this.broadcastRoom(); // 摸牌位骰结束：roomView(seating 已清)，客户端关闭骰子横幅并清 room.seating
+    this.broadcastGame();
   }
 
   /** 开新局：生成 gameId + 快照落库（hooks 弱依赖，RoomActor 保持同步） */
@@ -230,6 +495,7 @@ export class RoomActor {
   }
 
   handleAction(userId: string, action: Action): OpResult {
+    if (this.seating) return { ok: false, reason: '仪式/摸牌位骰进行中' };
     if (this.phase !== 'playing' || !this.state) return { ok: false, reason: '未在对局中' };
     const seat = this.seatOf.get(userId);
     if (seat == null) return { ok: false, reason: '不在房间' };
@@ -247,14 +513,19 @@ export class RoomActor {
     return { ok: true };
   }
 
-  /** 局内动作落库 + 局末检测（hooks 弱依赖）：动作先缓冲 Redis，局末由网关 drain→MySQL+finishGame */
+  /** 局内动作落库 + 局末检测（hooks 弱依赖）：动作先缓冲 Redis，局末由网关 drain→MySQL+finishGame+积分账本 */
   private recordAction(seat: number, action: Action, events: GameEvent[]): void {
     const end = events.find((e) => e.type === 'win' || e.type === 'exhaustive');
     if (end) this.logRound(end, action); // 散场回顾累积，不依赖 hooks
     if (!this.hooks || !this.gameId) return;
     this.actionSeq++;
     this.hooks.onGameAction(this.gameId, this.actionSeq, seat, action);
-    if (end) this.hooks.onGameEnd(this.gameId, end.type === 'win' ? 'win' : 'exhaustive', end);
+    if (end && this.state) {
+      // BL-016：局末累计积分随钩子透出，网关写 rooms.member_scores 账本（重进/重启恢复依据）
+      const scores: Record<number, number> = {};
+      for (const p of this.state.players) scores[p.seat] = p.score;
+      this.hooks.onGameEnd(this.id, this.gameId, end.type === 'win' ? 'win' : 'exhaustive', end, scores);
+    }
   }
 
   /** 累积单局回顾（赢家/台数/最高番种/自摸）与胡牌局数，供散场战绩页局数回顾 */
@@ -289,14 +560,27 @@ export class RoomActor {
     if (this.seatOf.get(byUserId) == null) return { ok: false, reason: '不在房间' };
     const ph = this.state.phase;
     if (ph !== 'settled' && ph !== 'exhaustive') return { ok: false, reason: '本局尚未结束' };
+    if (this.seating?.stage === 'roundBreak') return { ok: false, reason: '等待摸牌位骰' };
     // maxRounds=0 表示「不限」：永不因上限结束，仅房主手动解散才 finished（PRD 03 FR-房间-01/05）
     if (this.maxRounds > 0 && this.state.round >= this.maxRounds) {
       log.info(`达到局数上限，散场: room=${this.id} rounds=${this.state.round}/${this.maxRounds}`);
       this.finishRoom('maxRounds');
       return { ok: true };
     }
+    // BL-017：启用摸牌位骰时，庄家轮换后先掷骰定开牌点再开下一局
+    if (this.settings.breakDice) {
+      this.seating = {
+        stage: 'roundBreak', rolls: [null, null, null, null], reroll: [false, false, false, false],
+        order: [], picker: null, picked: null, dealerDice: null, dealerSeat: this.state.dealerSeat, breakN: null, roller: this.state.dealerSeat,
+      };
+      log.info(`摸牌位骰: room=${this.id} 下一局=${this.state.round + 1} 掷骰者=seat${this.state.dealerSeat}`);
+      this.scheduleSeatingAuto();
+      this.broadcastGame();
+      return { ok: true };
+    }
     const seed = this.seed++;
-    this.state = startNextRound(this.state, seed).state;
+    const layout = this.settings.wallMode === 'physical' ? buildPhysicalLayout(seed) : undefined;
+    this.state = startNextRound(this.state, seed, { layout, breakGroups: 0 }).state;
     log.info(`开始下一局: room=${this.id} round=${this.state.round} seed=${seed}`);
     this.beginGame(seed);
     this.broadcastGame();
@@ -324,6 +608,7 @@ export class RoomActor {
   private finishRoom(reason: RoomEndReason): void {
     if (this.phase === 'finished') return;
     this.phase = 'finished';
+    this.clearSeatingTimers(); // 散场清仪式计时
     for (const t of this.trusteeTimers.values()) clearTimeout(t); // 散场清离线计时
     this.trusteeTimers.clear();
     const standings: FinalStanding[] = [];
@@ -347,10 +632,14 @@ export class RoomActor {
     if (!this.state) return;
     if (events && events.length) for (const c of this.connOf.values()) c.send({ t: 'event', events });
     const names = this.names.map((x) => x ?? '');
+    const wi = wallInfo(this.state); // BL-017 physical 模式四边牌墙栈高
     for (const [userId, conn] of this.connOf) {
       const seat = this.seatOf.get(userId);
       if (seat == null) continue;
-      conn.send({ t: 'gameView', view: redact(this.state, seat, this.id, this.maxRounds, names) });
+      const view = redact(this.state, seat, this.id, this.maxRounds, names);
+      if (this.seating) view.seating = this.seating; // 局间摸牌位骰阶段随 gameView 下发
+      if (wi) view.wallInfo = wi;
+      conn.send({ t: 'gameView', view });
     }
   }
 
@@ -359,6 +648,12 @@ export class RoomActor {
       this.broadcastGame();
       return;
     }
+    const rv = this.roomView();
+    for (const c of this.connOf.values()) c.send({ t: 'roomView', room: rv });
+  }
+
+  /** 强制广播 roomView（不受 broadcastAll 在 playing 时只发 gameView 的影响）：仪式/局间摸牌位骰结束时清除客户端残留的 room.seating */
+  private broadcastRoom(): void {
     const rv = this.roomView();
     for (const c of this.connOf.values()) c.send({ t: 'roomView', room: rv });
   }

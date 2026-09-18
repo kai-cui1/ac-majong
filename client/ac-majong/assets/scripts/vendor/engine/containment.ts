@@ -17,12 +17,8 @@ import { PATTERN_TAI } from './patterns';
  */
 export const ABSORBS: Record<string, string[]> = {
   '八只花': ['见花'],
-  '大三元': ['见字'],
-  '小三元': ['见字'],
-  '大四喜': ['大三风', '东风字_非庄', '东风字_庄', '见字'],
-  '小四喜': ['大三风', '小三风', '见字'],
-  '大三风': ['见字'],
-  '小三风': ['见字'],
+  '大四喜': ['大三风', '东风字_非庄', '东风字_庄'],
+  '小四喜': ['大三风', '小三风'],
   '无花无字': ['无花', '无字'],
   '大平': ['无花无字'],
   '将一色': ['无花无字'],
@@ -47,7 +43,20 @@ export function patternTai(p: MatchedPattern): number {
   return base * (p.count ?? 1);
 }
 
-/** 名称级去重：被更大番种必然包含的番种剔除 */
+/**
+ * 实例级吸收（BL-008/规格 4.3 注）：高阶番只吸收其自身用到的刻实例的见字，
+ * 其余字刻的见字仍计（如大三元 + 额外风刻 → 见字 ×1 保留）。
+ */
+const INST_ABSORB: Record<string, { target: string; cap: number }> = {
+  '大三元': { target: '见字', cap: 3 },
+  '小三元': { target: '见字', cap: 2 },
+  '大三风': { target: '见字', cap: 3 },
+  '小三风': { target: '见字', cap: 2 },
+  '大四喜': { target: '见字', cap: 4 },
+  '小四喜': { target: '见字', cap: 3 },
+};
+
+/** 名称级去重 + 见字实例级削减：被更大番种必然包含的番种剔除/减计 */
 export function dedup(patterns: MatchedPattern[]): MatchedPattern[] {
   const present = new Set(patterns.map((p) => p.name));
   const absorbed = new Set<string>();
@@ -56,5 +65,22 @@ export function dedup(patterns: MatchedPattern[]): MatchedPattern[] {
       if (present.has(b)) absorbed.add(b);
     }
   }
-  return patterns.filter((p) => !absorbed.has(p.name));
+  const survived = patterns.filter((p) => !absorbed.has(p.name));
+  // 实例级：存活吸收者按 cap 削减见字实例数
+  let cut = 0;
+  for (const p of survived) {
+    const rule = INST_ABSORB[p.name];
+    if (rule) cut += rule.cap;
+  }
+  if (cut === 0) return survived;
+  const out: MatchedPattern[] = [];
+  for (const p of survived) {
+    if (p.name === '见字' && p.count != null) {
+      const left = p.count - cut;
+      if (left > 0) out.push({ ...p, count: left, tiles: p.tiles?.slice(0, left) });
+    } else {
+      out.push(p);
+    }
+  }
+  return out;
 }

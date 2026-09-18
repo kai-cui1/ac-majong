@@ -121,6 +121,26 @@ Connection.send（ServerMsg：gameView/roomView/event/ack/…）
 
 见 [`../5-backlog/README.md`](../5-backlog/README.md) BL-013。
 
+## 12. 房间积分周期与重启重建（BL-016，✅ 已实现 2026-09-18）
+
+- **积分账本**：`GameHooks.onGameEnd(roomId, gameId, endType, result, scores)` 每局末带出各家累计分 → 网关写 `rooms.member_scores`（与 drain/finishGame 同批 fire-and-forget）。
+- **房号全局唯一**：`RoomManager.genUniqueId()` 双重查重（内存活跃房 + `GameStore.roomIdExists` 历史表）；`create` 支持传入预生成房号；散场后房号永不复用。
+- **重进/重启重建**：`join` 内存未命中 → `rebuildRoomFromStore`（已关闭→拒绝「房间已关闭」；否则：座位/昵称 ← `room_member_events`+`users`；对局现场 ← 最新一局 `game_initial_states` 快照（积分以账本注入）+ `game_actions` + Redis `peekActions` 未落盘缓冲 → `replayRound` 重演；回顾/胡数 ← `games.result`）→ `RoomManager.createRestored` + `RoomActor.restore`；Bot 座位 `attachBot` 挂回，未重连真人对局中立即转托管。
+- **降级路径**：重演失败/快照缺失 → `waiting` + 账本作为下局各家初始累计分（BL-017 后于仪式收尾 `finalizeCeremony` 建桌时注入）。
+- **Bot 流水**：`addBot` 消息与 AUTO_BOTS 自动补位均补记 `room_member_events:join`（重建时恢复 Bot 座位）。
+- 验证：roomScore.test 5 例（账本/重启重建/局中缓冲重演/已关闭拒绝/房号不复用/waiting 重建）+ 真实环境 e2e（重启后 H5 重进第 7 局局中现场、积分 25/-10/-5/-10 保留，CDP 截图）。
+
+## 13. 开局仪式与摸牌位骰（BL-017，✅ 已实现 2026-09-18）
+
+- **房间玩法参数**：`RoomSettings { wallMode: 'physical'|'random', breakDice: boolean }` 随 `create` 消息携带 → `rooms.settings` 落库；开局后不可改；重建（`createRestored`）沿用。选位仪式为每房标准流程恒开启（无开关）。
+- **seating 状态机**：`RoomPhase` 新增 `'seating'`（waiting→seating→playing）。`start()` 不再直接发牌，而是进入仪式：`roll`（四家选位骰 2d6，同点者仅同点者重掷）→ `pick`（点数最大者 A 自由选座，其余按点数降序依次坐 A 下手位 `(picked+i)%4`，座位/昵称/骰点全量重索引）→ `dealerDice`（A 掷 N，`dealerSeat=(seatA+(N-1)%4)%4`，7=对面、9=自己）→ `breakDice`（若启用，首庄掷摸牌位骰）→ `finalizeCeremony`。
+- **仪式收尾**：A 上 1 子 + 首庄庄子（同一家则 2）映射到引擎 `createTable(opts.initialZi)`，后续轮次沿用既有 zi 语义（上庄/连庄 +1，计分公式不变）；physical 模式 `buildPhysicalLayout(seed)` 固化 4 排×36 张，`drawOrderFromLayout(layout, dealerSeat, breakN)` 生成摸牌序（庄家排 g(N+1) 起、排尽续上手家排、末尾循环回跳区）；仪式日志经 `GameHooks.onSeating` 落 `rooms.seating`。
+- **局间摸牌位骰**：`breakDice` 启用时 `nextRound` 不直接开新局，而是进入 `roundBreak` 阶段（掷骰者=轮换后庄家 `state.dealerSeat`，随 gameView 下发 `view.seating`），掷后 `beginNextRoundWithBreak` 按新开牌点建墙开局；期间 `nextRound`/`handleAction` 被拒。
+- **超时自动**：手动掷按钮 + 真人 10s 超时自动代掷；Bot 0.4~0.8s 自动掷；选座超时=保留自己当前座位。
+- **协议**：`ClientMsg` 新增 `roll`/`pickSeat`/`create.settings`；`RoomView` 新增 `settings`/`seating`；`ViewState` 新增 `wallInfo`（四边牌墙栈高 0/1/2 + 开牌点，physical 模式）/`seating`（roundBreak）。仪式结束后先广播 `roomView`（seating 已清，客户端关闭仪式 UI）再广播 `gameView`。
+- **快照/回放**：`game_initial_states` 新增 `layout`/`break_group` 列；`RoundSnapshot` 携 `layout`/`breakGroups`/`initialWallLen` 三字段，`rehydrate` 还原后回放/重建可复现牌墙展示。
+- 验证：`seatingCeremony.test.ts` 12 例（状态机/同点重掷/选座重排/定庄骰四方位映射/仪式子/breakDice/roundBreak/视图携带）+ 引擎 `bl017-physical-wall.test.ts` 10 例（布局确定性/摸牌序/快照往返/栈高推算）；既有测试经 `ceremonyHelper.driveCeremony`/`driveCeremonyWs` 驱动仪式后全绿。
+
 ---
 
 ## 维护记录
@@ -132,3 +152,5 @@ Connection.send（ServerMsg：gameView/roomView/event/ack/…）
 | 2026-09-16 | M-C 文档先行：细化 `create` 的 `rooms` 落库接线（§4）与 `maxRounds`「不限」=`0`/`null` 表示、`nextRound` 不限不做上限判定（§5）、`join` 房号校验；将 Bot 从「本地自动补齐」演进为「房主主动陪玩」设计（§7 + `addBot` 协议 + `roomView.isBot`，落地 M-D）；更新 §11 接线进度（房间创建→M-C）|
 | 2026-09-16 | M-C 实现回填：§11「房间创建」转 ✅ 已接线（网关 `create` 分支 `rooms.create` 后调 `createRoom`）；`roomActor.nextRound` 已改为 `maxRounds>0 &&` 守卫（不限=0 不因上限 finished）；e2e + MySQL `rooms` 落库验证（创建/加入/入座广播/房号校验/不限=0），server 24 测试绿 |
 | 2026-09-17 | M-I 断线/托管接线：WS close 与对局中 leave 均走 `RoomActor.playerDisconnected`（离线标记+60s 计时→`enterTrustee` 挂 `makeTrusteeConnection` 保守代打）；重连 addPlayer 重绑+`cancelOffline` 卸托管；roomView seats 增 `offline`/`trusteed`；散场清计时器 |
+| 2026-09-18 | **BL-016 房间积分周期**：新增 §12——`onGameEnd` 带出累计分写 `rooms.member_scores` 账本；`genUniqueId` 双重查重房号永不复用；`join` 未命中走 `rebuildRoomFromStore` 事件溯源重建（快照+动作+Redis 缓冲重演，座位/积分/回顾恢复，Bot 挂回/真人转托管）+ `RoomActor.restore`/`createRestored`；已关闭拒绝「房间已关闭」；Bot 入座补流水；roomScore.test 5 例 + 真实环境重启重进 e2e + CDP 截图 |
+| 2026-09-18 | **BL-017 开局仪式与摸牌位骰**：新增 §13——`RoomSettings` 建房参数落库；seating 状态机（选位骰同点重掷→最大者选座重排→定庄骰四方位映射→摸牌位骰）；仪式子 initialZi；physical 物理墙固化+开牌点摸牌序；局间 roundBreak；超时自动代掷；协议 roll/pickSeat/wallInfo/seating；快照 layout/break_group 回放可复现；seatingCeremony.test 12 例 + 引擎 bl017 10 例，既有测试适配仪式驱动全绿 |

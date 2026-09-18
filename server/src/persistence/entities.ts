@@ -1,4 +1,5 @@
 import type { Action, RoundSnapshot, TileId } from '@ac-majong/engine';
+import type { RoomSettings } from '@ac-majong/protocol';
 
 /** 存储实体（对应 MySQL 6 表）+ 持久/热存储契约。见架构文档 §11.3。 */
 
@@ -11,6 +12,8 @@ export interface UserRow {
   openid: string;
   nickname: string;
   avatarUrl: string;
+  /** H5 账号路线：scrypt 哈希串；微信/mock 路线为 null */
+  passHash?: string | null;
   createdAt?: Date;
   lastLoginAt?: Date | null;
 }
@@ -20,6 +23,12 @@ export interface RoomRow {
   hostOpenid: string;
   maxRounds: number;
   initialScore: ScoreMap;
+  /** 局中积分账本 {[seat]:score}：每局末更新，重进/服务重启恢复依据（BL-016） */
+  memberScores?: ScoreMap | null;
+  /** BL-017 房间玩法参数（建房设定，开局后不可改） */
+  settings?: RoomSettings | null;
+  /** BL-017 开局仪式日志（选位骰/选座/定庄骰/摸牌位骰，事件溯源可复现） */
+  seating?: unknown | null;
   finalScore: ScoreMap | null;
   status: RoomStatus;
   createdAt?: Date;
@@ -51,6 +60,10 @@ export interface InitialStateRow {
   wall: TileId[];
   hands: RoundSnapshot['players'];
   lianzhuangCount: number;
+  /** BL-017 physical 模式：固化物理牌墙 4 排×36 张 */
+  layout?: TileId[][] | null;
+  /** BL-017：开牌点跳组数 */
+  breakGroup?: number | null;
 }
 
 export interface ActionRow {
@@ -74,6 +87,14 @@ export interface GameStore {
 
   createRoom(r: RoomRow): Promise<void>;
   getRoom(roomId: string): Promise<RoomRow | null>;
+  /** BL-016：房号全局唯一——发号前对照历史表查重（永不复用） */
+  roomIdExists(roomId: string): Promise<boolean>;
+  /** BL-016：开局置 status='playing'（重进/重建判定依据） */
+  markRoomPlaying(roomId: string): Promise<void>;
+  /** BL-016：每局末写积分账本 member_scores */
+  updateRoomScores(roomId: string, memberScores: ScoreMap): Promise<void>;
+  /** BL-017：开局仪式结束落 seating 日志 */
+  updateRoomSeating(roomId: string, seating: unknown): Promise<void>;
   closeRoom(roomId: string, finalScore: ScoreMap, closedAt: Date): Promise<void>;
 
   addMemberEvent(e: MemberEventRow): Promise<void>;
@@ -87,6 +108,8 @@ export interface GameStore {
   getInitialState(gameId: string): Promise<InitialStateRow | null>;
   listActions(gameId: string): Promise<ActionRow[]>;
   listGames(roomId: string): Promise<GameRow[]>;
+  /** BL-012：按 openid 查本人参赛房间（房主或入座成员，创建时间倒序） */
+  listRoomsByPlayer(openid: string): Promise<RoomRow[]>;
 
   close(): Promise<void>;
 }
@@ -105,6 +128,8 @@ export interface RealtimeStore {
 
   bufferActions(gameId: string, rows: ActionRow[]): Promise<void>;
   drainActions(gameId: string): Promise<ActionRow[]>;
+  /** BL-016：非破坏性查看未落盘动作缓冲（服务重启后事件溯源重建用） */
+  peekActions(gameId: string): Promise<ActionRow[]>;
 
   close(): Promise<void>;
 }
@@ -118,5 +143,8 @@ export function toRoundSnapshot(g: GameRow, s: InitialStateRow): RoundSnapshot {
     currentSeat: g.dealerSeat,
     lianzhuangCount: s.lianzhuangCount,
     round: g.roundNo,
+    layout: s.layout ?? undefined,
+    breakGroups: s.breakGroup ?? undefined,
+    initialWallLen: s.layout ? 144 : undefined,
   };
 }

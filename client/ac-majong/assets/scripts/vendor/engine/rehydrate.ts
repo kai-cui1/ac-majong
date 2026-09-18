@@ -2,6 +2,7 @@ import type { Meld, TileId } from './types';
 import type { TableState } from './table';
 import type { Action, GameEvent } from './reducer';
 import { applyAction } from './reducer';
+import type { WallOpts } from './table';
 
 /**
  * 一局开始时的「业务事实」快照（事件溯源的还原锚点）。
@@ -23,6 +24,10 @@ export interface RoundSnapshot {
   currentSeat: number;
   lianzhuangCount: number;
   round: number;
+  /** BL-017 physical 模式：固化物理牌墙 + 开牌点（回放/重建展示依据） */
+  layout?: TileId[][];
+  breakGroups?: number;
+  initialWallLen?: number;
 }
 
 const cloneMelds = (ms: Meld[]): Meld[] => ms.map((m) => ({ ...m, tiles: [...m.tiles] }));
@@ -43,6 +48,9 @@ export function snapshotRound(s: TableState): RoundSnapshot {
     currentSeat: s.currentSeat,
     lianzhuangCount: s.lianzhuangCount,
     round: s.round,
+    layout: s.layout ? s.layout.map((r) => [...r]) : undefined,
+    breakGroups: s.breakGroups,
+    initialWallLen: s.initialWallLen,
   };
 }
 
@@ -71,6 +79,9 @@ export function rehydrate(snap: RoundSnapshot): TableState {
     robKong: null,
     lianzhuangCount: snap.lianzhuangCount,
     round: snap.round,
+    layout: snap.layout ? snap.layout.map((r) => [...r]) : undefined,
+    breakGroups: snap.breakGroups,
+    initialWallLen: snap.initialWallLen,
   };
 }
 

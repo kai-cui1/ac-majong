@@ -4,7 +4,33 @@ import type { Action, GameEvent, ActionKind, Meld, TableState } from '../engine/
 export type { Action, GameEvent, ActionKind, Meld };
 
 /** 对局阶段（房间层） */
-export type RoomPhase = 'waiting' | 'playing' | 'finished';
+export type RoomPhase = 'waiting' | 'seating' | 'playing' | 'finished';
+
+/** BL-017 房间玩法参数（建房时房主设定，开局后不可改） */
+export interface RoomSettings {
+  /** 牌墙模式：physical=物理牌墙固化展示 / random=随机发牌（默认） */
+  wallMode: 'physical' | 'random';
+  /** 摸牌位骰：每局庄家掷骰定开牌点（默认关） */
+  breakDice: boolean;
+}
+
+/** BL-017 开局仪式/摸牌位骰视图（roomView 与 gameView 共用下发） */
+export interface SeatingView {
+  stage: 'roll' | 'pick' | 'dealerDice' | 'breakDice' | 'roundBreak';
+  /** 各座位当前骰点和（未掷=null，按现座位下标） */
+  rolls: (number | null)[];
+  /** 同点待重掷标记 */
+  reroll: boolean[];
+  /** 选位顺序（点数降序的座位列表，roll 完成后下发） */
+  order: number[];
+  picker: number | null;
+  picked: number | null;
+  dealerDice: number | null;
+  dealerSeat: number | null;
+  breakN: number | null;
+  /** roundBreak 阶段：待掷摸牌位骰的庄家 */
+  roller: number | null;
+}
 
 /**
  * 按座位裁剪后的牌桌视图（服务端 → 客户端）。
@@ -44,6 +70,14 @@ export interface ViewState {
     zi: number;
     score: number;
   }[];
+  /** BL-017 physical 模式：四边牌墙栈高（0/1/2）+ 开牌点；random 模式无此字段 */
+  wallInfo?: {
+    rows: { seat: number; stacks: number[] }[];
+    breakSeat: number;
+    breakGroups: number;
+  };
+  /** BL-017：局间摸牌位骰阶段（roundBreak）随 gameView 下发 */
+  seating?: SeatingView;
 }
 
 /** 房间/等待页视图 */
@@ -52,6 +86,10 @@ export interface RoomView {
   phase: RoomPhase;
   hostUserId: string;
   maxRounds: number;
+  /** BL-017 房间玩法参数 */
+  settings?: RoomSettings;
+  /** BL-017 开局仪式视图（phase=seating 时下发） */
+  seating?: SeatingView;
   seats: ({ userId: string; seat: number; isBot?: boolean; offline?: boolean; trusteed?: boolean } | null)[];
 }
 
@@ -83,28 +121,72 @@ export interface UserProfile {
   avatarUrl: string;
 }
 
+/** BL-012：回放列表——单局摘要 */
+export interface ReplayRoundSummary {
+  gameId: string;
+  roundNo: number;
+  endType: 'win' | 'exhaustive';
+  winnerSeats: number[];
+  /** 座位号 → 赢牌台数（荒庄为空） */
+  taiBySeat: Record<number, number>;
+  /** 结束时间 ISO */
+  at: string | null;
+}
+/** BL-012：回放列表——房间级（房间→局） */
+export interface ReplayRoomSummary {
+  roomId: string;
+  createdAt: string;
+  status: string;
+  /** 座位号 → 昵称（列表行显示赢家用，机器人为空） */
+  seatNames: Record<number, string>;
+  rounds: ReplayRoundSummary[];
+}
+/** BL-012：起始快照（与引擎 RoundSnapshot 同构，避免协议包依赖 engine） */
+export interface ReplaySnapshot {
+  wall: string[];
+  players: { seat: number; concealed: Record<string, number>; melds: unknown[]; flowers: string[]; zi: number; score: number }[];
+  dealerSeat: number;
+  currentSeat: number;
+  lianzhuangCount: number;
+  round: number;
+}
+/** BL-012：回放的单个动作行（action 为引擎 Action 的 JSON，客户端自行断言） */
+export interface ReplayActionRow {
+  seq: number;
+  seat: number | null;
+  action: unknown;
+}
+
 /** 客户端 → 服务端 */
 export type ClientMsg =
-  | { t: 'auth'; seq: number; token: string; profile?: UserProfile }
-  | { t: 'create'; seq: number; maxRounds?: number }
+  | { t: 'auth'; seq: number; token?: string; account?: { username: string; password: string }; profile?: UserProfile }
+  | { t: 'create'; seq: number; maxRounds?: number; settings?: RoomSettings }
   | { t: 'join'; seq: number; room: string }
   | { t: 'leave'; seq: number }
   | { t: 'start'; seq: number }
+  | { t: 'roll'; seq: number }              // BL-017：掷骰（选位/定庄/摸牌位，语境由服务端阶段决定）
+  | { t: 'pickSeat'; seq: number; seat: number } // BL-017：选位最大者选座
   | { t: 'addBot'; seq: number; count?: number }
   | { t: 'removeBot'; seq: number; seat: number }
   | { t: 'nextRound'; seq: number }
   | { t: 'dissolve'; seq: number }
   | { t: 'action'; seq: number; action: Action }
+  | { t: 'replayList'; seq: number }                // BL-012：战绩/回放列表（房间→局）
+  | { t: 'replayLoad'; seq: number; gameId: string } // BL-012：加载单局回放（参赛四方可看，D-29）
   | { t: 'ping'; seq: number };
 
 /** 服务端 → 客户端 */
 export type ServerMsg =
-  | { t: 'authOk'; userId: string; profile: UserProfile }
+  | { t: 'authOk'; userId: string; profile: UserProfile; session?: string }
   | { t: 'roomView'; room: RoomView }
   | { t: 'gameView'; view: ViewState }
   | { t: 'event'; events: GameEvent[] }
   | { t: 'roomEnd'; room: string; reason: RoomEndReason; standings: FinalStanding[]; rounds: RoundReview[] }
   | { t: 'legal'; seat: number; actions: ActionKind[] }
   | { t: 'ack'; seq: number; ok: boolean; reason?: string }
+  /** BL-012：回放列表（仅本人参赛房间；房间→局两级） */
+  | { t: 'replayList'; rooms: ReplayRoomSummary[] }
+  /** BL-012：单局回放数据（起始快照+动作序列；names=座号→昵称；客户端 rehydrate+applyAction 确定性重演） */
+  | { t: 'replayData'; gameId: string; snapshot: ReplaySnapshot; actions: ReplayActionRow[]; names: Record<number, string>; viewSeat: number }
   | { t: 'pong' }
   | { t: 'error'; reason: string };

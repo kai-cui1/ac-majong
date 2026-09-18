@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AC 麻将俱乐部 — 设置弹层（M-H 回补 2026-09-17）</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    /* 设置弹层：游戏内（牌桌/大厅）右上角 ⚙ 触发；实底木色底衬 + 金边圆角 */
+    .dim-bg {
+      min-height: 100vh; min-height: 100dvh;
+      background:
+        radial-gradient(ellipse at top, rgba(212, 165, 55, 0.08) 0%, transparent 55%),
+        linear-gradient(to bottom, var(--color-bg-wood) 0%, var(--color-bg-table) 60%);
+      display: flex; align-items: center; justify-content: center; padding: 24px;
+    }
+    .settings-modal {
+      width: min(420px, 100%);
+      background: var(--color-bg-wood-dark);
+      border: 1px solid rgba(212,165,55,0.45); border-radius: var(--radius-lg);
+      box-shadow: 0 16px 48px rgba(0,0,0,0.6);
+      padding: 18px 20px 16px;
+      position: relative;
+    }
+    .settings-title { font-size: 16px; font-weight: 800; color: var(--color-gold); letter-spacing: 2px; text-align: center; }
+    .settings-close {
+      position: absolute; top: 10px; right: 12px;
+      width: 26px; height: 26px; border-radius: 50%;
+      background: rgba(0,0,0,0.4); border: 1px solid rgba(212,165,55,0.25);
+      color: var(--color-text-secondary); font-size: 12px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .settings-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 2px; border-bottom: 1px solid rgba(212,165,55,0.12);
+      font-size: 13px; color: var(--color-text-primary);
+    }
+    .settings-row:last-of-type { border-bottom: none; }
+    .settings-row .desc { font-size: 10px; color: var(--color-text-muted); margin-top: 2px; }
+    .toggle-btn {
+      min-width: 64px; padding: 6px 12px; border-radius: var(--radius-full);
+      border: 1px solid rgba(212,165,55,0.4); background: rgba(0,0,0,0.35);
+      color: var(--color-gold); font-size: 12px; cursor: pointer; font-family: var(--font-cn);
+    }
+    .danger-btn {
+      width: 100%; margin-top: 6px; padding: 10px;
+      border-radius: var(--radius-full); border: 1px solid rgba(224,91,74,0.5);
+      background: rgba(224,91,74,0.12); color: var(--color-danger, #e05b4a);
+      font-size: 13px; font-weight: 700; cursor: pointer; font-family: var(--font-cn);
+    }
+    .settings-footer { margin-top: 10px; text-align: center; font-size: 10px; color: var(--color-text-muted); }
+    .settings-footer a { color: var(--color-gold); text-decoration: none; margin: 0 4px; }
+  </style>
+</head>
+<body>
+  <div class="dim-bg">
+    <div class="settings-modal">
+      <div class="settings-title">⚙ 设置</div>
+      <button class="settings-close">✕</button>
+
+      <div class="settings-row">
+        <div>
+          音效
+          <div class="desc">牌张拟音 / 番种语音 / UI 音（持久化 ac_muted）</div>
+        </div>
+        <button class="toggle-btn" id="muteToggle">🔊 开</button>
+      </div>
+
+      <div class="settings-row">
+        <div>
+          退出房间
+          <div class="desc">对局中退出＝离线托管流程（M-I）</div>
+        </div>
+        <button class="toggle-btn">退出</button>
+      </div>
+
+      <div class="settings-row">
+        <div>
+          返回登录
+          <div class="desc">清除会话令牌，回登录页</div>
+        </div>
+        <button class="toggle-btn">返回</button>
+      </div>
+
+      <button class="danger-btn">解散房间（仅房主·等待期）</button>
+
+      <div class="settings-footer">
+        v0.1.0 · 内测版<br>
+        <a href="#">《用户协议》</a>·<a href="#">《隐私政策》</a>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const t = document.getElementById('muteToggle');
+    let muted = false;
+    t.addEventListener('click', () => {
+      muted = !muted;
+      t.textContent = muted ? '🔇 关' : '🔊 开';
+    });
+  </script>
+</body>
+</html>

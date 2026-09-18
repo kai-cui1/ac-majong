@@ -1,5 +1,7 @@
+import { sys } from 'cc';
 import { GameClient, WebTransport } from '../vendor/client-core/index';
-import type { ViewState, RoomView, ServerMsg, UserProfile } from '../vendor/protocol/index';
+import type { Transport } from '../vendor/client-core/index';
+import type { ViewState, RoomView, ServerMsg, UserProfile, ReplayRoomSummary, ReplaySnapshot, ReplayActionRow, RoomSettings } from '../vendor/protocol/index';
 
 export type ViewListener = (v: ViewState) => void;
 export type RoomListener = (r: RoomView) => void;
@@ -28,10 +30,16 @@ export class NetService {
   private roomEndListeners: RoomEndListener[] = [];
   private reconnectListeners: ReconnectListener[] = [];
   /** M-I：重连凭据与房间记忆（意外断线后自动重连并重入房间） */
-  private cred: { url: string; token: string; profile?: UserProfile } | null = null;
+  private cred: { url: string; token?: string; account?: { username: string; password: string }; profile?: UserProfile; transport?: Transport } | null = null;
+  /** H5 账号路线：服务端签发的会话令牌（30 天，持久化后重连/复登免密码） */
+  private sessionToken: string | null = null;
   private lastRoom: string | null = null;
   private intentionalClose = false;
   private reconnecting = false;
+  /** BL-016：最近一次收到 gameView 的时刻（大厅加入→对局中重进时判定切页，避免 RoomScreen 未构建错过订阅广播） */
+  lastGameViewAt = 0;
+  /** BL-017：最近一次建房的玩法设置（「再来一局」沿用） */
+  private lastSettings: RoomSettings | undefined = undefined;
 
   onView(cb: ViewListener): void {
     this.viewListeners.push(cb);
@@ -78,26 +86,84 @@ export class NetService {
 
   /**
    * 连接并登录（单例幂等：已连接则复用同一连接）。
+   * @param cred token（mock/微信/会话复登）或 account（H5 账号密码注册即登录）
    * @param profile 客户端上报的展示资料（昵称/头像）；服务端登录后 upsertUser 落库
    */
-  async connect(url: string, token: string, profile?: UserProfile): Promise<void> {
+  async connect(
+    url: string,
+    cred: { token?: string; account?: { username: string; password: string } },
+    profile?: UserProfile,
+    transport?: Transport,
+  ): Promise<void> {
     if (this.client) return;
-    this.cred = { url, token, profile };
+    this.cred = { url, ...cred, profile, transport };
     this.intentionalClose = false;
     const client = this.buildClient();
     this.client = client;
     await client.connect();
-    client.auth(token, profile);
-    await client.waitFor((m) => m.t === 'authOk');
+    const sel = this.authSelection();
+    client.auth(sel.token, profile, sel.account);
+    await this.waitAuth(client);
   }
 
-  /** 构建 GameClient（首连与重连共用同一套订阅转发） */
+  /** 已持久化的会话令牌（登录页用于免密复登） */
+  storedSession(): string | null {
+    if (this.sessionToken) return this.sessionToken;
+    try {
+      this.sessionToken = sys.localStorage.getItem('ac_session') || null;
+    } catch {
+      this.sessionToken = null;
+    }
+    return this.sessionToken;
+  }
+
+  /** 登录凭据选择：会话令牌优先 → mock/微信 token → 账号密码 */
+  private authSelection(): { token?: string; account?: { username: string; password: string } } {
+    if (this.sessionToken) return { token: this.sessionToken };
+    if (this.cred?.token) return { token: this.cred.token };
+    if (this.cred?.account) return { account: this.cred.account };
+    return {};
+  }
+
+  /** 等 authOk；ack 失败（密码错/会话过期）则抛错供登录页展示 */
+  private async waitAuth(client: GameClient): Promise<void> {
+    const m = await client.waitFor((x) => x.t === 'authOk' || (x.t === 'ack' && x.ok === false));
+    if (m.t !== 'authOk') {
+      this.client = null;
+      const reason = (m as Extract<ServerMsg, { t: 'ack' }>).reason ?? '鉴权失败';
+      if (reason.includes('会话过期')) this.clearSession();
+      client.close();
+      throw new Error(reason);
+    }
+  }
+
+  private clearSession(): void {
+    this.sessionToken = null;
+    try {
+      sys.localStorage.removeItem('ac_session');
+    } catch {
+      /* 忽略存储异常 */
+    }
+  }
+
+  /** 构建 GameClient（首连与重连共用同一套订阅转发）；微信端用注入的 WeChatTransport */
   private buildClient(): GameClient {
-    return new GameClient(new WebTransport(this.cred!.url), {
-      onAuth: (_uid, p) => {
+    return new GameClient(this.cred!.transport ?? new WebTransport(this.cred!.url), {
+      onAuth: (_uid, p, session) => {
         this._profile = p;
+        if (session) {
+          this.sessionToken = session;
+          try {
+            sys.localStorage.setItem('ac_session', session);
+          } catch {
+            /* 忽略存储异常：仅本次会话有效 */
+          }
+        }
       },
-      onGameView: (v) => this.viewListeners.forEach((f) => f(v)),
+      onGameView: (v) => {
+        this.lastGameViewAt = Date.now();
+        this.viewListeners.forEach((f) => f(v));
+      },
       onRoomView: (r) => {
         this.lastRoom = r.room;
         this.roomListeners.forEach((f) => f(r));
@@ -126,8 +192,9 @@ export class NetService {
       try {
         const client = this.buildClient();
         await client.connect();
-        client.auth(this.cred!.token, this.cred!.profile);
-        await client.waitFor((m) => m.t === 'authOk');
+        const sel = this.authSelection();
+        client.auth(sel.token, this.cred!.profile, sel.account);
+        await this.waitAuth(client);
         this.client = client;
         if (this.lastRoom) client.join(this.lastRoom); // 重入房间→服务端重绑座位+广播全量视图
         this.reconnecting = false;
@@ -152,25 +219,42 @@ export class NetService {
     this.client = null;
     this._profile = null;
     this.lastRoom = null;
+    this.clearSession();
   }
 
-  /** 创建房间并等待进入等待页（返回房间视图）；未连接则抛错 */
-  async createRoom(maxRounds = 8): Promise<RoomView> {
+  /** 创建房间并等待进入等待页（返回房间视图）；未连接则抛错。BL-017：携带玩法设置（牌墙模式/摸牌位骰） */
+  async createRoom(maxRounds = 8, settings?: RoomSettings): Promise<RoomView> {
     if (!this.client) throw new Error('未连接');
-    this.client.create(maxRounds);
+    this.lastSettings = settings;
+    this.client.create(maxRounds, settings);
     const m = await this.client.waitForNext((x) => x.t === 'roomView');
     return (m as Extract<ServerMsg, { t: 'roomView' }>).room;
   }
-  /** 加入房间并等待进入等待页；房间不存在/已满/已开始则抛错（含原因） */
+  /** 加入房间并等待进入等待页；房间不存在/已满则抛错（含原因）。
+   * BL-016：重进「对局中」房间时服务端直接下发 gameView（无 roomView），同样视为加入成功。 */
   async joinRoom(room: string): Promise<RoomView> {
     if (!this.client) throw new Error('未连接');
+    // 先注册等待器再发送，避免 ack 与视图消息间的派发竞态；服务端顺序：视图广播先于 ack
+    const p = this.client.waitForNext((x) => x.t === 'roomView' || x.t === 'gameView' || x.t === 'ack');
     this.client.join(room);
-    const m = await this.client.waitForNext((x) => x.t === 'roomView' || (x.t === 'ack' && x.ok === false));
-    if (m.t === 'ack') throw new Error(m.reason ?? '加入失败');
+    let m = await p;
+    if (m.t === 'ack') {
+      if (!m.ok) throw new Error(m.reason ?? '加入失败');
+      m = await this.client.waitForNext((x) => x.t === 'roomView' || x.t === 'gameView');
+    }
+    if (m.t === 'gameView') return this.room!; // 对局中重进：调用方不依赖返回值切页（RoomScreen.onView 已订阅 → 自动切牌桌）
     return (m as Extract<ServerMsg, { t: 'roomView' }>).room;
   }
   start(): void {
     this.client?.start();
+  }
+  /** BL-017：开局仪式掷骰（选位/定庄/摸牌位，语境由服务端阶段决定） */
+  roll(): void {
+    this.client?.roll();
+  }
+  /** BL-017：选位最大者选座 */
+  pickSeat(seat: number): void {
+    this.client?.pickSeat(seat);
   }
   /** 房主为空位放入 Bot 陪玩（FR-房间-08）；等待房间视图刷新后返回 */
   async addBot(count = 1): Promise<RoomView> {
@@ -186,6 +270,7 @@ export class NetService {
   /** 离开当前房间（回大厅）；保留连接与会话 */
   leave(): void {
     this.client?.leave();
+    if (this.client) { this.client.view = null; this.client.room = null; } // 清陈旧视图缓存（BL-016：防重进切页误判）
   }
   /** 结算后开下一局（相位守卫在服务端，达上限则服务端置 finished） */
   nextRound(): void {
@@ -195,10 +280,10 @@ export class NetService {
   dissolve(): void {
     this.client?.dissolve();
   }
-  /** 对局结束后“再来一局”：离开旧房并重新建房（服务端会重新补 Bot 并开局） */
+  /** 对局结束后“再来一局”：离开旧房并重新建房（服务端会重新补 Bot 并开局）；BL-017：沿用上次玩法设置 */
   restart(maxRounds = 8): void {
     this.client?.leave();
-    this.client?.create(maxRounds);
+    this.client?.create(maxRounds, this.lastSettings);
   }
 
   // —— 对局动作（透传引擎 Action，seat 由调用方按 view.you.seat 提供）——
@@ -219,5 +304,24 @@ export class NetService {
   }
   respond(seat: number, move: 'win' | 'pong' | 'kong_exposed' | 'chi' | 'pass', chiTiles?: string[]): void {
     this.client?.action({ type: 'respond', seat, move, chiTiles });
+  }
+
+  /** BL-012：战绩/回放列表（房间→局两级；仅本人参赛房间，D-29） */
+  async replayList(): Promise<ReplayRoomSummary[]> {
+    if (!this.client) throw new Error('未连接');
+    this.client.replayList();
+    const m = await this.client.waitForNext((x) => x.t === 'replayList' || (x.t === 'ack' && x.ok === false));
+    if (m.t === 'ack') throw new Error((m as Extract<ServerMsg, { t: 'ack' }>).reason ?? '战绩加载失败');
+    return (m as Extract<ServerMsg, { t: 'replayList' }>).rooms;
+  }
+
+  /** BL-012：加载单局回放（快照+动作序列+座号昵称；客户端 rehydrate+applyAction 确定性重演） */
+  async replayLoad(gameId: string): Promise<{ snapshot: ReplaySnapshot; actions: ReplayActionRow[]; names: Record<number, string>; viewSeat: number }> {
+    if (!this.client) throw new Error('未连接');
+    this.client.replayLoad(gameId);
+    const m = await this.client.waitForNext((x) => x.t === 'replayData' || (x.t === 'ack' && x.ok === false));
+    if (m.t === 'ack') throw new Error((m as Extract<ServerMsg, { t: 'ack' }>).reason ?? '回放加载失败');
+    const d = m as Extract<ServerMsg, { t: 'replayData' }>;
+    return { snapshot: d.snapshot, actions: d.actions, names: d.names, viewSeat: d.viewSeat };
   }
 }

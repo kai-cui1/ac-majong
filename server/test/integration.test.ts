@@ -48,6 +48,38 @@ describe('全链路集成 · 4 机器人打完整一局（真实 WS）', () => {
     }
 
     clients[0]!.start();
+    // BL-017 开局仪式：各客户端按 roomView(seating) 自动掷骰/选座，直至 gameView 发牌
+    const USERS = ['u0', 'u1', 'u2', 'u3'];
+    for (let step = 0; step < 80; step++) {
+      if (clients[0]!.view) break; // 已发牌
+      const rv = clients[0]!.room;
+      const sv = rv?.seating;
+      if (!sv) {
+        // seating 广播尚未到达（start 与广播异步）→ 等待下一轮
+        await new Promise((r) => setTimeout(r, 40));
+        continue;
+      }
+      const seatOfUser = new Map<string, number>();
+      rv!.seats.forEach((st) => {
+        if (st) seatOfUser.set(st.userId, st.seat);
+      });
+      const idxOfSeat = (seat: number) => USERS.findIndex((u) => seatOfUser.get(u) === seat);
+      if (sv.stage === 'roll') {
+        USERS.forEach((u, i) => {
+          const seat = seatOfUser.get(u);
+          // 同点重掷：rolls 非空但 reroll 标记的座位也需再掷
+          if (seat != null && (sv.rolls[seat] == null || sv.reroll[seat])) clients[i]!.roll();
+        });
+      } else if (sv.stage === 'pick') {
+        const i = idxOfSeat(sv.picker!);
+        if (i >= 0) clients[i]!.pickSeat(sv.picker!);
+      } else {
+        const roller = sv.stage === 'dealerDice' ? sv.picker : sv.dealerSeat;
+        const i = roller == null ? -1 : idxOfSeat(roller);
+        if (i >= 0) clients[i]!.roll();
+      }
+      await new Promise((r) => setTimeout(r, 40));
+    }
     await Promise.all(clients.map((c) => c.waitFor((m) => m.t === 'gameView')));
 
     // 机器人自动对局，等待本局结束事件

@@ -41,6 +41,21 @@ export class MemoryGameStore implements GameStore {
   async getRoom(roomId: string): Promise<RoomRow | null> {
     return clone(this.rooms.get(roomId) ?? null);
   }
+  async roomIdExists(roomId: string): Promise<boolean> {
+    return this.rooms.has(roomId);
+  }
+  async markRoomPlaying(roomId: string): Promise<void> {
+    const r = this.rooms.get(roomId);
+    if (r) r.status = 'playing';
+  }
+  async updateRoomScores(roomId: string, memberScores: ScoreMap): Promise<void> {
+    const r = this.rooms.get(roomId);
+    if (r) r.memberScores = clone(memberScores)!;
+  }
+  async updateRoomSeating(roomId: string, seating: unknown): Promise<void> {
+    const r = this.rooms.get(roomId);
+    if (r) r.seating = clone(seating);
+  }
   async closeRoom(roomId: string, finalScore: ScoreMap, closedAt: Date): Promise<void> {
     const r = this.rooms.get(roomId);
     if (r) {
@@ -87,6 +102,19 @@ export class MemoryGameStore implements GameStore {
   async listActions(gameId: string): Promise<ActionRow[]> {
     return clone([...(this.actions.get(gameId) ?? [])].sort((a, b) => a.seq - b.seq));
   }
+  async listRoomsByPlayer(openid: string): Promise<RoomRow[]> {
+    const ids = new Set<string>();
+    for (const r of this.rooms.values()) if (r.hostOpenid === openid) ids.add(r.roomId);
+    for (const m of this.memberEvents.values()) if (m.openid === openid) ids.add(m.roomId);
+    return clone(
+      [...ids]
+        .map((id) => this.rooms.get(id)!)
+        .filter(Boolean)
+        .sort((x, y) => (y.createdAt?.getTime() ?? 0) - (x.createdAt?.getTime() ?? 0))
+        .slice(0, 200),
+    );
+  }
+
   async listGames(roomId: string): Promise<GameRow[]> {
     return clone(
       [...this.games.values()].filter((g) => g.roomId === roomId).sort((a, b) => a.roundNo - b.roundNo),
@@ -141,6 +169,9 @@ export class MemoryRealtime implements RealtimeStore {
     const arr = this.buffers.get(gameId) ?? [];
     this.buffers.delete(gameId);
     return arr;
+  }
+  async peekActions(gameId: string): Promise<ActionRow[]> {
+    return [...(this.buffers.get(gameId) ?? [])].map((r) => ({ ...r }));
   }
   async close(): Promise<void> {}
 }

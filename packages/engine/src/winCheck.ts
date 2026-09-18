@@ -9,7 +9,7 @@ export interface MeldUnit {
 
 /** 一种胡牌分解 */
 export interface WinDecomp {
-  kind: 'standard' | 'pairs8' | 'orphans13';
+  kind: 'standard' | 'pairs8' | 'orphans13' | 'flowers8';
   pair: TileId | null;
   concealedMelds: MeldUnit[];
 }

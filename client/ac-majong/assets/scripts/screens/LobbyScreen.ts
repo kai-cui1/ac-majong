@@ -1,7 +1,7 @@
 import { Node, Label, UITransform, Graphics } from 'cc';
 import { Screen } from '../app/SceneRouter';
 import { Theme } from '../ui/Theme';
-import { uiBackground, uiLabel, uiButton, uiPanel, uiModal, uiMuteToggle, type Modal } from '../ui/UiKit';
+import { uiBackground, uiLabel, uiButton, uiPanel, uiModal, uiMuteToggle, uiSwitch, type Modal } from '../ui/UiKit';
 import { openRulesModal } from '../ui/RulesModal';
 import { openSettingsModal } from '../ui/SettingsModal';
 import { NetService } from '../game/NetService';
@@ -48,6 +48,10 @@ export class LobbyScreen extends Screen {
     const rules = uiButton('规则说明 · 台数速查 / 算账公式', () => this.openRules(), { variant: 'secondary', width: 460, height: 40, fontSize: 13 });
     rules.setParent(root);
     rules.setPosition(0, -92, 0);
+    // BL-012：战绩/回放入口（房间→局列表，D-30 大厅入口）
+    const replay = uiButton('🎬 战绩 / 回放', () => this.router.show('replayList'), { variant: 'secondary', width: 110, height: 40, fontSize: 13 });
+    replay.setParent(root);
+    replay.setPosition(-272, -92, 0);
     // M-H：设置入口（静音/返回登录/版本协议）
     const gear = uiButton('⚙ 设置', () => openSettingsModal(this.node!, {
       onRelogin: () => {
@@ -162,31 +166,109 @@ export class LobbyScreen extends Screen {
     return card;
   }
 
+  /** 建房弹层（还原 home.html 创建房间弹层）：局数单选 + BL-017 玩法设置双开关 + 创建并分享 */
   private openCreate(): void {
-    const m = uiModal('创建房间', { width: 360, height: 230 });
-    const tip = uiLabel('选择局数上限（「不限」= 无限续局，直到房主解散）', { size: 12, color: Theme.color.textMuted, width: 310 });
+    const m = uiModal('创建房间', { width: 380, height: 402 });
+    const tip = uiLabel('选择局数上限（「不限」= 无限续局，直到房主解散）', { size: 12, color: Theme.color.textMuted, width: 330 });
     tip.setParent(m.panel);
-    tip.setPosition(0, 56, 0);
-    const status = uiLabel('', { size: 12, color: Theme.color.textSecondary, width: 310 });
-    const statusLbl = status.getComponent(Label)!;
-    status.setParent(m.panel);
-    status.setPosition(0, -88, 0);
-    const opts: [string, number][] = [['4 局', 4], ['8 局', 8], ['16 局', 16], ['不限', 0]];
-    opts.forEach(([text, rounds], i) => {
+    tip.setPosition(0, 160, 0);
+
+    // 局数单选（默认 8 局标准局）：选中=金底 primary 样式
+    let rounds = 8;
+    const opts: [string, number][] = [['4 局 · 快餐局', 4], ['8 局 · 标准局', 8], ['16 局 · 酣战局', 16], ['不限 · 尽兴', 0]];
+    const btns: { node: Node; g: Graphics; lb: Label; v: number }[] = [];
+    const paint = (b: { g: Graphics; lb: Label }, sel: boolean): void => {
+      b.g.clear();
+      b.g.lineWidth = 1;
+      b.g.fillColor = sel ? Theme.color.gold : Theme.color.bgCard;
+      b.g.strokeColor = sel ? Theme.color.goldLight : Theme.color.goldDark;
+      b.g.roundRect(-78, -19, 156, 38, 19);
+      if (sel) b.g.fill();
+      b.g.stroke();
+      b.lb.color = sel ? Theme.color.bgWoodDark : Theme.color.textSecondary;
+    };
+    opts.forEach(([text, v], i) => {
       const col = i % 2;
       const row = Math.floor(i / 2);
-      const btn = uiButton(text, () => void this.doCreate(rounds, m, statusLbl), { variant: 'primary', width: 140, height: 44 });
-      btn.setParent(m.panel);
-      btn.setPosition(-78 + col * 156, 12 - row * 52, 0);
+      const node = new Node(`Rounds_${v}`);
+      node.addComponent(UITransform).setContentSize(156, 38);
+      const g = node.addComponent(Graphics);
+      const ln = new Node('Label');
+      ln.addComponent(UITransform);
+      const lb = ln.addComponent(Label);
+      lb.string = text;
+      lb.fontSize = 13;
+      lb.lineHeight = 17;
+      lb.isBold = true;
+      lb.horizontalAlign = Label.HorizontalAlign.CENTER;
+      lb.verticalAlign = Label.VerticalAlign.CENTER;
+      ln.setParent(node);
+      const b = { node, g, lb, v };
+      btns.push(b);
+      paint(b, v === rounds);
+      node.on(Node.EventType.TOUCH_END, () => {
+        rounds = v;
+        for (const x of btns) paint(x, x.v === rounds);
+      });
+      node.setParent(m.panel);
+      node.setPosition(-82 + col * 164, 108 - row * 48, 0);
     });
+
+    // BL-017 玩法设置：两开关（默认均关）；选位仪式恒开不可关
+    const psTitle = uiLabel('玩法设置', { size: 12, color: Theme.color.textMuted });
+    psTitle.setParent(m.panel);
+    psTitle.setPosition(0, 26, 0);
+    let physical = false;
+    let breakDice = false;
+    const row1 = this.makePlayRow('物理牌墙展示', '预生成固化 4 排×18 组牌堆并四边展示；关闭=随机发牌', physical, (on) => { physical = on; });
+    row1.setParent(m.panel);
+    row1.setPosition(0, -16, 0);
+    const row2 = this.makePlayRow('摸牌位骰', '每局庄家掷骰定开牌点（右端起跳 N 组）；关闭=庄家排右端开摸', breakDice, (on) => { breakDice = on; });
+    row2.setParent(m.panel);
+    row2.setPosition(0, -76, 0);
+    const fixed = uiLabel('选位仪式（掷骰→选座→定首庄）为每房标准流程，恒开启', { size: 10, color: Theme.color.textMuted, width: 330 });
+    fixed.setParent(m.panel);
+    fixed.setPosition(0, -122, 0);
+
+    const status = uiLabel('', { size: 12, color: Theme.color.textSecondary, width: 330 });
+    const statusLbl = status.getComponent(Label)!;
+    status.setParent(m.panel);
+    status.setPosition(0, -148, 0);
+    const submit = uiButton('创建并分享', () => void this.doCreate(rounds, { wallMode: physical ? 'physical' : 'random', breakDice }, m, statusLbl), { variant: 'primary', width: 300, height: 44 });
+    submit.setParent(m.panel);
+    submit.setPosition(0, -176, 0);
+
     m.root.setParent(this.node!);
   }
 
-  private async doCreate(maxRounds: number, m: Modal, statusLbl: Label): Promise<void> {
+  /** 玩法设置行（还原 .play-row）：暗底金细边 + 名称/副文案 + 右侧开关，整行可点切换 */
+  private makePlayRow(name: string, sub: string, initial: boolean, onChange: (on: boolean) => void): Node {
+    const row = uiPanel(336, 54, { variant: 'panel', radius: Theme.radius.md });
+    row.name = `PlayRow_${name}`;
+    const nameL = uiLabel(name, { size: 13, color: Theme.color.textPrimary, bold: true, align: 'left' });
+    nameL.setParent(row);
+    nameL.setPosition(-168 + 80, 14, 0);
+    const subL = uiLabel(sub, { size: 9, color: Theme.color.textMuted, align: 'left', width: 264 });
+    subL.setParent(row);
+    subL.setPosition(-168 + 8, -8, 0);
+    const sw = uiSwitch(initial, onChange, { interactive: false });
+    sw.node.setParent(row);
+    sw.node.setPosition(336 / 2 - 34, 0, 0);
+    // 整行可点（开关不自身响应，避免双触发）
+    let on = initial;
+    row.on(Node.EventType.TOUCH_END, () => {
+      on = !on;
+      sw.set(on);
+      onChange(on);
+    });
+    return row;
+  }
+
+  private async doCreate(maxRounds: number, settings: { wallMode: 'physical' | 'random'; breakDice: boolean }, m: Modal, statusLbl: Label): Promise<void> {
     statusLbl.string = '创建中…';
     statusLbl.color = Theme.color.textSecondary;
     try {
-      await NetService.instance.createRoom(maxRounds);
+      await NetService.instance.createRoom(maxRounds, settings);
       m.close();
       this.router.show('room');
     } catch (e) {
@@ -245,9 +327,13 @@ export class LobbyScreen extends Screen {
     statusLbl.string = '加入中…';
     statusLbl.color = Theme.color.textSecondary;
     try {
-      await NetService.instance.joinRoom(room);
+      const t0 = Date.now();
+      const room = await NetService.instance.joinRoom(room);
       m.close();
-      this.router.show('room');
+      // BL-016：对局中重进时服务端直接下发 gameView（加入期间到达，RoomScreen 可能尚未构建错过广播）→ 直接切牌桌
+      // BL-017：仪式阶段（seating）重进同样切牌桌展示仪式遮罩
+      const inGame = Date.now() - t0 < 5000 && Date.now() - NetService.instance.lastGameViewAt < 5000;
+      this.router.show(inGame || room.phase === 'playing' || room.phase === 'seating' ? 'table' : 'room');
     } catch (e) {
       statusLbl.string = e instanceof Error ? e.message : '加入失败';
       statusLbl.color = Theme.color.danger;

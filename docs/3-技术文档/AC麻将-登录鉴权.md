@@ -110,7 +110,8 @@ idn = identity.authenticate({ token, headers })
 
 ## 8. 待办与边界
 
-- 真实微信 `wx.login → code2Session`、服务端签发 session token → **M-K**。
+- **H5 账号鉴权（IDENTITY=account，2026-09-17）**：`accountAuth.ts` = scrypt(N=16384) 哈希 `s$salt$hash` + 注册即登录（openid=`h5:`+小写用户名，与微信/mock 共用 users 表）+ Redis 会话令牌 30 天滑动续期；协议 `auth` 增 `account{username,password}`、`authOk` 增 `session`；客户端会话持久化 `ac_session`、凭据选择序=会话→token→账号；鉴权失败累计 5 次断连防穷举；users 表增 `pass_hash` 列（迁移：ALTER 追加，schema 已含）。公网部署务必 TLS（https+wss）防凭据嗅探。
+- 真实微信接入（M-K 本地切片已备）：**云托管 `wx.cloud.connectContainer` 握手自动注入 `x-wx-openid`**，服务端 `IDENTITY=wechat` 走 WeChatIdentity（免 code2Session/appid 秘钥）；客户端 `IS_WX` 平台分支选 WeChatTransport；部署镜像 `deploy/Dockerfile`。余：微信开发者工具构建上传 + 云环境 ID/服务名配置 + 真机验证 + 合规（BL-009）。
 - 断线重连恢复登录态与对局 → **M-I**（BL-007 断线重连与托管 UI）。
 - `TokenIdentity` 的签名/会话校验 → 上线前。
 
@@ -122,3 +123,5 @@ idn = identity.authenticate({ token, headers })
 |---|---|
 | 2026-09-16 | 首次产出（补记 M-B 已实现方案）：可插拔 `IdentityProvider`、`auth`/`authOk` + `UserProfile` 协议、登录落库 `users` + Redis 会话、客户端 mock 身份 / NetService 幂等连接 / LoginScreen / LobbyScreen；标注真实 `code2Session` → M-K、重连 → M-I |
 | 2026-09-16 | 回填交叉引用：持久化 / 客户端网络层 / 前端基座三份技术方案产出后，将文中「待补」占位链接改为真实相对路径 |
+| 2026-09-17 | M-K 本地切片：云托管头鉴权路线确认（免 code2Session）；identity 6 测试；Dockerfile 产出 |
+| 2026-09-17 | H5 账号鉴权模块：accountAuth + 网关 accountMode + 协议 account/session + 客户端表单/会话；测试 5 例 + 网关 e2e |

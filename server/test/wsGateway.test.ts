@@ -51,6 +51,7 @@ function client(port: number) {
   return {
     ws,
     opened,
+    msgs,
     send: (m: unknown) => ws.send(JSON.stringify(m)),
     wait: (pred: (m: ServerMsg) => boolean, timeout = 3000) =>
       new Promise<ServerMsg>((res, rej) => {
@@ -66,6 +67,41 @@ function client(port: number) {
         });
       }),
   };
+}
+
+/** BL-017：异步驱动开局仪式至发牌（以 cs[0] 收到 gameView 为终点）；每步按 seating 阶段发 roll/pickSeat */
+async function driveCeremonyWs(cs: ReturnType<typeof client>[]): Promise<void> {
+  const last = <T,>(arr: T[]): T | undefined => arr[arr.length - 1];
+  const gameViewOf = (c: ReturnType<typeof client>) =>
+    last(c.msgs.filter((m): m is Extract<ServerMsg, { t: 'gameView' }> => m.t === 'gameView'));
+  const roomViewOf = (c: ReturnType<typeof client>) =>
+    last(c.msgs.filter((m): m is Extract<ServerMsg, { t: 'roomView' }> => m.t === 'roomView'));
+  for (let step = 0; step < 60; step++) {
+    if (gameViewOf(cs[0]!)) return; // 发牌完成
+    const rv = roomViewOf(cs[0]!);
+    const sv = rv?.room.seating;
+    if (!sv) {
+      // seating 视图尚未到达（start ack 与广播异步）或仪式已结束 → 等待下一轮
+      await new Promise((r) => setTimeout(r, 40));
+      continue;
+    }
+    const users: (string | null)[] = rv.room.seats.map((s) => s?.userId ?? null);
+    const bySeat = (seat: number | null | undefined) => (seat == null ? undefined : cs.find((_, ci) => users[ci] === users[seat]));
+    if (sv.stage === 'roll') {
+      for (let seat = 0; seat < 4; seat++) {
+        if (users[seat] && (sv.rolls[seat] == null || sv.reroll[seat])) {
+          bySeat(seat)?.send({ t: 'roll', seq: 900 + step });
+        }
+      }
+    } else if (sv.stage === 'pick') {
+      bySeat(sv.picker)?.send({ t: 'pickSeat', seq: 900 + step, seat: sv.picker });
+    } else {
+      const roller = sv.stage === 'dealerDice' ? sv.picker : sv.stage === 'roundBreak' ? sv.roller : sv.dealerSeat;
+      bySeat(roller)?.send({ t: 'roll', seq: 900 + step });
+    }
+    await new Promise((r) => setTimeout(r, 40));
+  }
+  throw new Error('driveCeremonyWs: 仪式未在限定步数内完成');
 }
 
 describe('wsGateway · 端到端（真实 WebSocket）', () => {
@@ -93,6 +129,7 @@ describe('wsGateway · 端到端（真实 WebSocket）', () => {
 
     cs[0]!.send({ t: 'start', seq: 3 });
     await cs[0]!.wait((m) => m.t === 'ack' && m.seq === 3);
+    await driveCeremonyWs(cs);
 
     for (let i = 0; i < 4; i++) {
       const gv = (await cs[i]!.wait((m) => m.t === 'gameView')) as Extract<ServerMsg, { t: 'gameView' }>;
@@ -222,6 +259,7 @@ describe('wsGateway · 端到端（真实 WebSocket）', () => {
       await cs[i]!.wait((m) => m.t === 'ack' && m.seq === 2);
     }
     cs[0]!.send({ t: 'start', seq: 3 });
+    await driveCeremonyWs(cs);
     await cs[0]!.wait((m) => m.t === 'gameView');
     await new Promise((r) => setTimeout(r, 50)); // 等 fire-and-forget 落库
     const games = await store.listGames(roomId);
@@ -250,6 +288,7 @@ describe('wsGateway · 端到端（真实 WebSocket）', () => {
       await cs[i]!.wait((m) => m.t === 'ack' && m.seq === 2);
     }
     cs[0]!.send({ t: 'start', seq: 3 });
+    await driveCeremonyWs(cs);
     await cs[0]!.wait((m) => m.t === 'gameView');
     driveRoomToEnd(gw!.rooms.get(roomId)!); // 服务端同步打完本局
     cs[0]!.send({ t: 'nextRound', seq: 4 });
@@ -280,6 +319,7 @@ describe('wsGateway · 端到端（真实 WebSocket）', () => {
       await cs[i]!.wait((m) => m.t === 'ack' && m.seq === 2);
     }
     cs[0]!.send({ t: 'start', seq: 3 });
+    await driveCeremonyWs(cs);
     await cs[0]!.wait((m) => m.t === 'gameView');
     driveRoomToEnd(gw!.rooms.get(roomId)!);
     cs[0]!.send({ t: 'dissolve', seq: 4 });

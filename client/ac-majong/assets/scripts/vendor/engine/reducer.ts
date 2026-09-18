@@ -1,5 +1,5 @@
 import type { TileId, Hand, ScoreDetail } from './types';
-import type { TableState, Response } from './table';
+import type { TableState, Response, WallOpts } from './table';
 import {
   addTile,
   removeTile,
@@ -286,7 +286,7 @@ function applyChi(s: TableState, seat: number, tile: TileId, chiTiles: TileId[],
   const p = getPlayer(s, seat);
   for (const t of chiTiles) removeTile(p.concealed, t);
   const meldTiles = [tile, ...chiTiles].sort();
-  p.melds.push({ type: 'chi', tiles: meldTiles });
+  p.melds.push({ type: 'chi', tiles: meldTiles, called: tile }); // FR-对局-17：记录被吃牌供横置标记
   s.discards.pop();
   s.lastDiscard = null;
   s.pending = {};
@@ -377,8 +377,9 @@ function settleWins(
   applyDeltas(s, allDelta);
   getPlayer(s, payer).zi = 0; // 放炮方子清零
   events.push({ type: 'win', winners: winTais, delta: allDelta, revealed: revealedHands(s) });
-  // 一炮多响时按最近赢家轮庄（多家胡的轮庄规则待复核）
-  endRound(s, closestByTurn(s, payer, winTais.map((w) => w.seat)), events);
+  // D-28（BL-008）：一炮多响轮庄——庄家在赢家中→连庄；否则换庄（下家上庄）
+  const rotSeat = winTais.some((w) => w.seat === s.dealerSeat) ? s.dealerSeat : closestByTurn(s, payer, winTais.map((w) => w.seat));
+  endRound(s, rotSeat, events);
 }
 
 function doSelfWin(s: TableState, seat: number, events: GameEvent[]): void {
@@ -432,11 +433,11 @@ function doExhaustive(s: TableState, events: GameEvent[]): void {
   events.push({ type: 'roundEnd', dealerSeat: s.dealerSeat, lianzhuangCount: s.lianzhuangCount, round: s.round });
 }
 
-/** 开下一局：保留积分/子，重新发牌 */
-export function startNextRound(state: TableState, seed: number): { state: TableState; events: GameEvent[] } {
+/** 开下一局：保留积分/子，重新发牌（BL-017：physical 模式传新局 layout+breakGroups） */
+export function startNextRound(state: TableState, seed: number, opts?: WallOpts): { state: TableState; events: GameEvent[] } {
   const savedScore = Object.fromEntries(state.players.map((p) => [p.seat, p.score]));
   const savedZi = Object.fromEntries(state.players.map((p) => [p.seat, p.zi]));
-  const fresh = createTable(state.dealerSeat, seed, seatList(state));
+  const fresh = createTable(state.dealerSeat, seed, seatList(state), opts);
   for (const p of fresh.players) {
     p.score = savedScore[p.seat] ?? 0;
     p.zi = savedZi[p.seat] ?? 0;

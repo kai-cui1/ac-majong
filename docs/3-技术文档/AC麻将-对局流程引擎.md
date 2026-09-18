@@ -98,6 +98,13 @@ type GameEvent =
 ### 5.8 续局 `startNextRound(state, seed)`
 保留各家 `score`/`zi` 与 `lianzhuangCount`，用新 `seed` 重新 `createTable`，`round+1`。**相位守卫在服务端**（仅 `settled`/`exhaustive` 受理，见网关文档）。
 
+### 5.9 物理牌墙与开牌点（BL-017，`wallMode=physical`）
+
+- `buildPhysicalLayout(seed)`：`shuffle(fullWall(), seed)` 后按 seat 0..3 切 4 排 × 36 张（18 组，排内自右端 g1 起 `[上,下]` 成组）；布局固化入快照（`game_initial_states.layout`），不依赖洗牌算法可长期还原。
+- `drawOrderFromLayout(layout, dealerSeat, breakGroups)`：循环摸牌序列 S = [庄家排 g(N+1)..18 → 上手家排 g1..18 → 再上手 → 再上手 → 庄家排 g1..N]（排尽续**上手家**排，2026-09-18 用户确认），组内先上后下；`createTable/startNextRound` 以 S 为 `wall`（开牌点即 `wall[0]`），其余发牌/摸牌/死牌逻辑不变（末尾 4 张=开牌点前最后 2 组）。
+- `breakGroups=0`（摸牌位骰关）= 自庄家排右端第 1 组开摸；`random` 模式不走布局、直接线性洗牌（现状）。
+- 展示数据：`redact` 下发 `wallInfo`（各排栈高 0/1/2 数组 + 开牌排/跳组数），客户端按已摸张数确定性推算（补花/杠补摸均顺序消耗，组高可为 1）。
+
 ## 6. 事件溯源还原（`rehydrate.ts`）
 
 - `snapshotRound(state)`：抽取一局开始的「业务事实」（发牌后剩余牌墙 + 各家 concealed/melds/flowers/zi/score + 庄家/连庄/round）。
@@ -125,3 +132,4 @@ type GameEvent =
 |---|---|
 | 2026-09-16 | 首次产出（补记 M0 对局流程 + 续局 + M-A2 还原）：TableState/PlayerState/Phase 数据结构、Action/GameEvent、状态机相位转移、摸牌补花/响应解析优先级/杠与抢杠/胡牌结算/诈胡罚/轮庄/续局、`rehydrate`·`replayRound` 事件溯源还原、确定性与可移植、测试与 BL-008 待复核项 |
 | 2026-09-16 | 持久化技术方案（04）产出后回填交叉引用：头部「还原落库」由指向 README 的「待补」占位链接改为真实的 `AC麻将-数据持久化与事件溯源.md` |
+| 2026-09-18 | **BL-017 立项**：新增 §5.9 物理牌墙与开牌点（buildPhysicalLayout/drawOrderFromLayout/wallInfo 展示推算；排尽续上手家排、组内先上后下、跳组循环末尾摸）；§5.1/5.8 增 `opts{layout,breakGroups,initialZi}` 分支 |

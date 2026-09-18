@@ -135,6 +135,11 @@
       <span class="page-header-title">📖 规则说明</span>
     </div>
 
+    <!-- 游戏内形态注记（2026-09-17 回补）：牌桌/大厅内以可滚动弹层呈现，五节结构 -->
+    <div class="formula-note" style="margin-bottom:var(--spacing-md);">
+      游戏内形态：可滚动弹层（RulesModal），五节＝一、发牌与行牌／二、胡牌牌型／三、台数与番种／四、结算与连庄／五、终局与摊牌；本页为其完整内容源。
+    </div>
+
     <!-- 筛选标签 -->
     <div class="rules-filter">
       <div class="filter-chips">
@@ -234,25 +239,23 @@
     <div class="formula-card">
       <div style="font-size:14px;font-weight:600;color:var(--color-gold);margin-bottom:var(--spacing-md);">基础信息</div>
       <div class="formula-note">
-        • 一台 = 20 元<br>
-        • 最低胡牌：6 台（否则诈胡）<br>
-        • N = 胡牌方桌上子数 + 点炮方桌上子数
+        • 1 台 = 1 积分（D-25，2026-09-17 简化）<br>
+        • 最低胡牌：6 台（否则诈胡）；门槛只看基础番种，子/连庄加成不计入<br>
+        • 加成显性计入台数明细与合计
       </div>
 
-      <div style="font-size:14px;font-weight:600;color:var(--color-gold);margin:var(--spacing-md) 0 var(--spacing-sm);">点炮胡（单一结算）</div>
-      <div class="formula-box">胡牌台数 + 3×(N+1) + dealerBonus?</div>
+      <div style="font-size:14px;font-weight:600;color:var(--color-gold);margin:var(--spacing-md) 0 var(--spacing-sm);">每家最终台数（点炮/自摸通用）</div>
+      <div class="formula-box">winTai + 3×(胡方子 + 付方子) + (庄家涉及 ? 2n−1 : 0)</div>
       <div class="formula-note">
-        • 非庄胡 + 非庄炮：无 dealerBonus<br>
-        • 庄家胡 或 庄家被炮：有 dealerBonus<br>
-        • dealerBonus：连庄第1次+1台、第2次+3台、第3次+5台...
+        • 庄家涉及 = 庄家胡牌 或 庄家点炮；n = 连庄次数（n≥1，刚上庄不加）<br>
+        • 明细展示「子 ×Z +3Z」「连庄 n +2n−1」行；点炮局付方超出部分小字「含子/连庄 +N」<br>
+        • 非庄家也可能遗留子：其胡牌/点炮同样计入（称「子」不称「庄子」）
       </div>
 
-      <div style="font-size:14px;font-weight:600;color:var(--color-gold);margin:var(--spacing-md) 0 var(--spacing-sm);">自摸胡（逐人结算）</div>
-      <div class="formula-box">每个输家 i 单独计算 Nᵢ</div>
+      <div style="font-size:14px;font-weight:600;color:var(--color-gold);margin:var(--spacing-md) 0 var(--spacing-sm);">支付方向与子清零</div>
       <div class="formula-note">
-        • Nᵢ = 胡牌子数 + 输家i桌上子数<br>
-        • 各输家应付金额可能不同<br>
-        • 被自摸者桌上子数清零
+        • 点炮 = 点炮方一人付；自摸 = 其余三家各付<br>
+        • 自己点炮或被自摸时，自己桌上子数清零；上庄/连庄 +1 子
       </div>
     </div>
 

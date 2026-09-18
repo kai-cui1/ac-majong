@@ -33,10 +33,10 @@
 | 表 | 关键字段 | 说明 |
 |---|---|---|
 | `users` | `openid`(PK) / nickname / avatar_url / created_at / last_login_at | 登录 upsert |
-| `rooms` | `room_id`(PK) / host_openid / max_rounds / initial_score(JSON) / final_score(JSON) / status / created_at / closed_at | 积分随房间生命周期（D-32，不做账户余额）|
+| `rooms` | `room_id`(PK) / host_openid / max_rounds / initial_score(JSON) / member_scores(JSON) / final_score(JSON) / status / created_at / closed_at | 积分随房间生命周期（D-32，不做账户余额）；`member_scores`=局中积分账本（每局末更新，BL-016 重进/重启恢复依据），`final_score`=关闭定格（线下结算依据）；房号全局唯一永不复用（发号对照本表查重）；**BL-017 增 `settings` JSON（wallMode/breakDice）与 `seating` JSON（选位骰日志/座位排列/定庄骰/摸牌位骰）** |
 | `room_member_events` | room_id / openid / seat / event(`create`/`join`/`leave`/`ready`) / at | 进出流水 |
 | `games` | `game_id`(PK) / room_id / round_no / dealer_seat / seed / end_type / result(JSON) / started_at / ended_at | 每局一行 |
-| `game_initial_states` | `game_id`(PK) / wall(JSON) / hands(JSON) / lianzhuang_count | 初始牌墙 + 各家起手 |
+| `game_initial_states` | game_id(PK) / wall(JSON) / hands(JSON) / lianzhuang_count | 初始牌墙 + 各家起手；**BL-017 增 `layout` JSON（物理牌墙 4 排×36 张）与 `break_group` INT（开牌点跳组数，physical 模式回放/重建依据）** |
 | `game_actions` | game_id / seq / seat / action_type / payload(JSON) / at；`unique(game_id,seq)` | 动作日志，payload 为完整 Action |
 
 ## 5. Repository 契约（`persistence/entities.ts`）
@@ -62,6 +62,8 @@
 | 开局 | `games` + `game_initial_states`（`snapshotRound`）| ✅ 已接线（M-E，RoomActor.start→GameHooks.onGameStart）|
 | 局内动作 | 先 `bufferActions` 到 Redis，局末 `drainActions` → `appendActions` 批量落 MySQL | ✅ 已接线（M-E，handleAction→onGameAction 缓冲、局末→onGameEnd drain+appendActions）|
 | 结算 / 关闭 | `finishGame`（M-E 局末，`result` JSON 含台数明细/积分/亮牌）+ `closeRoom(final_score)`（M-G 散场）| ✅ 均已接线：`finishGame`（M-E，M-F 补 `win` 事件台数明细 `detail` 透传入 `result`）、`closeRoom`（M-G，RoomActor 散场→GameHooks.onRoomEnd→`closeRoom(final_score)`+`status=closed`）|
+| 每局末积分账本 | `updateRoomScores`（`rooms.member_scores`，onGameEnd 带出各家累计分） | ✅ 已接线（BL-016，重进/重启恢复依据）|
+| 开局置 playing | `markRoomPlaying`（onGameStart 内，覆盖 AUTO_BOTS 自动开局与 start 两路径） | ✅ 已接线（BL-016）|
 
 > **登录**（M-B）/**房间创建**（M-C）/**成员进出**（M-D）/**对局事件溯源**（M-E：开局 `games`+`game_initial_states`、局内动作 Redis 缓冲、局末 `drainActions`→`appendActions`+`finishGame`）/**结算台数明细**（M-F：`win` 事件透传 `detail` 入 `games.result`）/**散场关闭**（M-G：`closeRoom(final_score)`+`status=closed`）均已接线并端到端验证（e2e：单人+3Bot 打满 2 局→散场 `roomEnd`→MySQL `rooms.status=closed`+`final_score` 零和、`games`×2 `end_type`、`game_actions`、`game_initial_states`；不限局数房主 `dissolve` 散场同样落库）；6 表全量写入路径打通（见 [`../5-backlog/README.md`](../5-backlog/README.md) BL-013）。
 
@@ -71,9 +73,15 @@
 - `server/.env.example`：`DATABASE_URL` / `REDIS_URL` / `PORT` / `DB_IT`（连接账号口令见此文件与 compose，不写入其它文档）。
 - 启动：`cd deploy && docker compose up -d`。
 
-## 9. 回放数据接口（BL-012 前端回放 UI，低优先）
+## 9. 回放数据接口（BL-012，✅ 已实现 2026-09-18，见 PRD09）
 
 读回 `getGame` + `getInitialState` + `listActions` → `toRoundSnapshot` → `replayRound` → 逐帧事件供前端回放 UI 消费。
+
+**协议设计**（WS，实现时落 `packages/protocol`）：
+- `replayList`（req，无参）→ `replayList`（res）：`{ rooms: [{ roomId, createdAt, rounds: [{ gameId, roundNo, endType, winnerSeats, taiBySeat, at }] }] }`；仅返回**请求者参赛**的房间与局（按 `member_events`/`games` 关联过滤，倒序）；
+- `replayLoad { gameId }`（req）→ `replayData { gameId, snapshot, actions }`；**网关层权限校验**：请求者 ∈ 该局参赛四方（D-29），否则 ack 失败「无权查看该局」；
+- 服务端纯查询、无新存储；客户端 `rehydrate(snapshot)` + 按序 `applyAction` 重演（引擎确定性）。
+- 管理后台（admin 子系统，BL-015）复用同一读回链路，权限改为管理员全量（仲裁场景）。
 
 ## 10. 测试
 
@@ -92,7 +100,10 @@
 |---|---|
 | 2026-09-16 | 首次产出（补记 M-A2）：存储分层、事件溯源还原、MySQL 6 表 schema、Repository 契约（GameStore + RealtimeStore）、内存 / MySQL / Redis 实现、`createPersistence` 工厂、写入时机（BL-013 接线进度）、`deploy` 基础设施、回放接口、测试（含真实库 156 动作还原）|
 | 2026-09-16 | M-C 文档先行：§7 写入时机拆分「房间创建」（`createRoom`，M-C 接线中，`max_rounds`「不限」=`0`）与「成员进出」（M-D）；明确房间创建落库为弱依赖不阻断建房 |
+| 2026-09-17 | §9 回放接口设计定稿（BL-012/PRD09）：replayList/replayData 协议 + 参赛四方权限校验（D-29）；admin 全量复用预留 |
 | 2026-09-16 | M-C 实现回填：§7「房间创建」由「接线中」转 ✅ 已接线（网关 `create` 分支调 `createRoom`）；e2e + MySQL 验证 `rooms` 落库（含「不限」=`max_rounds:0`、`status=idle`、初始积分）|
 | 2026-09-16 | M-D 实现回填：§7「成员进出」转 ✅（网关 create/join/leave 经 `logMember` 弱依赖落 `room_member_events`）；e2e + MySQL 验证 create/join 流水 |
 | 2026-09-16 | M-E 实现回填：§7「开局/局内动作/结算」转 ✅（RoomActor `GameHooks` 同步触发 + 网关 fire-and-forget 落库：`createGame`+`saveInitialState`、`bufferActions`、局末 `drainActions`→`appendActions`+`finishGame`）；e2e 单人+3Bot 打完一局验证 MySQL `games`(end_type=exhaustive)/`game_actions`(171)/`game_initial_states`(wall75/hands4) |
 | 2026-09-16 | M-F/M-G 实现回填：§7「结算/关闭」全转 ✅——M-F `win` 事件透传台数明细 `detail`（随 `finishGame` 入 `games.result`，engine 136 测试断言 `detail` 合计=总台数）；M-G 散场 `RoomActor.finishRoom`（打满上限/房主 `dissolve` 共用）→ `GameHooks.onRoomEnd` → 网关 `closeRoom(final_score)`+`status=closed`，`RoomManager.remove` 回收房间。e2e 双场景验证：打满 2 局散场（`rooms.status=closed`+`final_score` 零和+`games`×2+`game_actions`+`game_initial_states`×2）、不限局数房主解散散场（`status=closed`）；server 35 测试绿 |
+| 2026-09-18 | BL-012 实现：网关 replayList（listRoomsByPlayer=房主 UNION room_member_events 成员，倒序 200）/replayLoad（getGame+getInitialState+listActions+names+viewSeat；D-29 参赛四方校验，拒绝返 ack 原因）；server replay.test 2 例 |
+| 2026-09-18 | **BL-016**：`rooms` 增 `member_scores` JSON 列（schema.sql + 存量库 ALTER）；GameStore 增 `roomIdExists`/`markRoomPlaying`/`updateRoomScores`，RealtimeStore 增 `peekActions`（非破坏性读缓冲）；§4 表说明/§7 接线表同步；重启重建依赖链：member_scores 账本 + 快照 + game_actions + peekActions → replayRound |

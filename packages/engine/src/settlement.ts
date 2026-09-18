@@ -1,7 +1,7 @@
 import type { WinBy } from './types';
 
-/** 1 台 = 20 虚拟积分（合规：不可兑现） */
-export const TAI_TO_POINTS = 20;
+/** 积分与台数 1:1（2026-09-17 规则简化：废除 1 台=20 倍率） */
+export const TAI_TO_POINTS = 1;
 
 /** 连庄加分：n≥1 → 2n−1（1/3/5/7/9…）；刚上庄 n=0 不加（D-18 / N4） */
 export function bonus(n: number): number {
@@ -25,9 +25,10 @@ export interface SettleInput {
 }
 
 /**
- * 结算：返回各座位积分变动（正=得，负=失）。
+ * 结算：返回各座位积分变动（正=得，负=失）。积分与台数 1:1。
  * - 点炮胡：仅点炮方付；自摸：其余三家各付（D-17）。
- * - 最终台数 = 胡牌台数 + 3×(N+1) + (庄家涉及 ? bonus(n) : 0)，N = 胡牌方子数 + 付方子数（规格书 6.2）。
+ * - 每家付的最终台数 = 胡牌台数 + 3×(胡方子+付方子) + (庄家涉及 ? bonus(n) : 0)；
+ *   子每只 +3 台（§9.1，非庄家遗留子 likewise），连庄加成在庄家胡或庄家点炮时计入（2026-09-17 口径）。
  */
 export function settle(inp: SettleInput): Record<number, number> {
   if (inp.winBy === 'dianpao' && inp.discarderSeat == null) {
@@ -44,12 +45,20 @@ export function settle(inp: SettleInput): Record<number, number> {
       : [inp.discarderSeat as number];
 
   for (const payer of payers) {
-    const N = (inp.seatsZi[inp.winnerSeat] ?? 0) + (inp.seatsZi[payer] ?? 0);
+    const ziAdd = 3 * ((inp.seatsZi[inp.winnerSeat] ?? 0) + (inp.seatsZi[payer] ?? 0));
     const dealerInvolved = inp.winnerSeat === inp.dealerSeat || payer === inp.dealerSeat;
-    const taiFinal = inp.winTai + 3 * (N + 1) + (dealerInvolved ? bonus(inp.lianzhuangCount) : 0);
+    const taiFinal = inp.winTai + ziAdd + (dealerInvolved ? bonus(inp.lianzhuangCount) : 0);
     const pts = taiFinal * TAI_TO_POINTS;
     add(inp.winnerSeat, pts);
     add(payer, -pts);
   }
   return delta;
+}
+
+/** 胡方视角的展示加成行（结算明细/预览用）：胡方子 + 庄家涉及时的连庄 */
+export function winBonusLines(o: { winnerZi: number; dealerInvolved: boolean; lianzhuangCount: number }): { name: string; tai: number; count: number }[] {
+  const lines: { name: string; tai: number; count: number }[] = [];
+  if (o.winnerZi > 0) lines.push({ name: '子', tai: 3 * o.winnerZi, count: o.winnerZi });
+  if (o.dealerInvolved && o.lianzhuangCount >= 1) lines.push({ name: '连庄', tai: bonus(o.lianzhuangCount), count: o.lianzhuangCount });
+  return lines;
 }

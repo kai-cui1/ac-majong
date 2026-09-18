@@ -1,4 +1,4 @@
-import { Node, Label, UITransform, Graphics, Color, UIOpacity } from 'cc';
+import { Node, Label, UITransform, Graphics, Color, UIOpacity, EditBox } from 'cc';
 import { Theme, rgba } from './Theme';
 import { AudioManager } from './AudioManager';
 
@@ -140,6 +140,99 @@ export function uiButton(text: string, onClick: () => void, opts: ButtonOpts = {
  * 🔊/🔇 静音切换按钮（BL-014 最简静音开关，完整设置弹层归 M-H）。
  * 点击切 `AudioManager` 静音态（写 localStorage 持久化）并刷新图标；跨屏与重启沿用。
  */
+/** 单行输入框（H5 账号登录用）：暗底圆角 + 金色 accent 竖条 + 聚焦高亮；web 端聚焦时 Cocos 自动弹 DOM 输入层 */
+export function uiInput(opts: { placeholder?: string; password?: boolean; width?: number; height?: number; maxLength?: number } = {}): { node: Node; box: EditBox } {
+  const w = opts.width ?? 280;
+  const h = opts.height ?? 42;
+  const node = new Node('Input');
+  // UITransform 比视觉框窄 18px：引擎按 LEFT_PADDING=2 定位 label，借此换来文字 ~11px 内边距（accent 竖条不遮字）
+  node.addComponent(UITransform).setContentSize(w - 18, h);
+  const g = node.addComponent(Graphics);
+  const draw = (focused: boolean): void => {
+    g.clear();
+    // 底
+    g.fillColor = Theme.color.bgWoodDark;
+    roundRectPath(g, w, h, 10);
+    g.fill();
+    // 边框：常态半透明金，聚焦亮金加粗
+    g.strokeColor = focused ? Theme.color.gold : Theme.color.goldFaint;
+    g.lineWidth = focused ? 1.6 : 1;
+    roundRectPath(g, w, h, 10);
+    g.stroke();
+    // 左侧 accent 竖条（视觉左缘内 5~8px；文字自 ~11px 起，不遮挡）
+    g.fillColor = focused ? Theme.color.gold : Theme.color.goldDark;
+    g.roundRect(-w / 2 + 5, -h / 2 + 9, 3, h - 18, 1.5);
+    g.fill();
+  };
+  draw(false);
+  const mkLabel = (name: string, color: Color, text: string): Label => {
+    const n = new Node(name);
+    n.setParent(node);
+    const ut = n.addComponent(UITransform);
+    ut.setContentSize(w - 20, h);
+    ut.anchorX = 0;
+    ut.anchorY = 1; // EditBox 引擎按 label 左上锚点自管布局
+    n.setPosition(0, 0);
+    const lb = n.addComponent(Label);
+    lb.fontSize = 15;
+    lb.lineHeight = h;
+    lb.color = color;
+    lb.string = text;
+    lb.horizontalAlign = Label.HorizontalAlign.LEFT;
+    lb.verticalAlign = Label.VerticalAlign.CENTER;
+    lb.overflow = Label.Overflow.CLAMP;
+    return lb;
+  };
+  // 修复：原误用不存在的 Theme.color.text（undefined→近黑），改用 textPrimary 暖白
+  const textLabel = mkLabel('TEXT', Theme.color.textPrimary, '');
+  const placeholder = mkLabel('PH', Theme.color.textMuted, opts.placeholder ?? '');
+  const box = node.addComponent(EditBox);
+  box.textLabel = textLabel;
+  box.placeholderLabel = placeholder;
+  box.maxLength = opts.maxLength ?? 32;
+  box.inputFlag = opts.password ? EditBox.InputFlag.PASSWORD : EditBox.InputFlag.DEFAULT;
+  // 关键：默认 InputMode.ANY 会被引擎强制 textLabel 顶部对齐（_updateTextLabel），改 SINGLE_LINE 保留 CENTER 垂直居中
+  box.inputMode = EditBox.InputMode.SINGLE_LINE;
+  box.returnType = EditBox.KeyboardReturnType.DONE;
+  box.node.on(EditBox.EventType.EDITING_DID_BEGIN, () => draw(true));
+  box.node.on(EditBox.EventType.EDITING_DID_END, () => draw(false));
+  return { node, box };
+}
+
+// ============ 开关（BL-017 建房玩法设置，还原 home.html .switch） ============
+
+/** 开关控件：40×22 轨道 + 16 圆点；点击切换并回调（金色=开）。interactive=false 时不自身响应点击（由外层行统一处理，避免双触发） */
+export function uiSwitch(initial: boolean, onChange: (on: boolean) => void, opts: { w?: number; h?: number; interactive?: boolean } = {}): { node: Node; set: (on: boolean) => void } {
+  const w = opts.w ?? 40;
+  const h = opts.h ?? 22;
+  const node = new Node('Switch');
+  node.addComponent(UITransform).setContentSize(w, h);
+  const g = node.addComponent(Graphics);
+  let on = initial;
+  const draw = (): void => {
+    g.clear();
+    g.fillColor = on ? rgba(212, 165, 55, 0.4) : rgba(255, 255, 255, 0.12);
+    g.strokeColor = on ? Theme.color.gold : Theme.color.goldFaint;
+    g.lineWidth = 1;
+    roundRectPath(g, w, h, h / 2);
+    g.fill();
+    g.stroke();
+    g.fillColor = on ? Theme.color.goldLight : Theme.color.textSecondary;
+    g.circle(on ? w / 2 - h / 2 : -w / 2 + h / 2, 0, h / 2 - 3);
+    g.fill();
+  };
+  draw();
+  if (opts.interactive !== false) {
+    node.on(Node.EventType.TOUCH_END, () => {
+      on = !on;
+      draw();
+      AudioManager.instance.play('click');
+      onChange(on);
+    });
+  }
+  return { node, set: (v: boolean) => { on = v; draw(); } };
+}
+
 export function uiMuteToggle(size = 34): Node {
   const am = AudioManager.instance;
   const icon = (): string => (am.muted ? '🔇' : '🔊');

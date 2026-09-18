@@ -27,7 +27,7 @@ async function main(): Promise<void> {
   const autoBots = Number(process.env.AUTO_BOTS ?? 0);
   // 设了 DATABASE_URL + REDIS_URL 用 MySQL+Redis，否则内存（见 .env.example / deploy）
   const persistence = await createPersistence(process.env);
-  const gateway: Gateway = startGateway({ port, identity: pickIdentity(mode), autoBots, persistence });
+  const gateway: Gateway = startGateway({ port, identity: pickIdentity(mode), autoBots, persistence, accountMode: mode === 'account' });
 
   log.info(
     `WS listening on :${port} (identity=${mode}, autoBots=${autoBots}, persistence=${persistence.kind}, logLevel=${getLogLevel()})`,

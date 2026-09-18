@@ -65,6 +65,9 @@
       transition: all var(--transition-fast);
     }
     .btn-exit:hover { border-color: var(--color-gold); color: var(--color-gold); }
+    /* 右上按钮簇（2026-09-17 回补）：静音/退出/规则/设置 右→左排布 */
+    .top-cluster { position: absolute; top: 6px; right: 10px; z-index: 50; display: flex; gap: 6px; }
+    .top-cluster .btn-exit { position: static; }
 
     /* ====== 通用：玩家信息条 ====== */
     .pinfo {
@@ -86,8 +89,9 @@
     @keyframes active-glow { 0%,100%{box-shadow:0 0 6px rgba(212,165,55,0.15);} 50%{box-shadow:0 0 14px rgba(212,165,55,0.35);} }
     /* pinfo 扩展: 子数 / 庄家角标 / 状态标签 */
     .pinfo-zi { font-size: 9px; color: var(--color-text-muted); font-family: var(--font-mono); border-left: 1px solid rgba(212,165,55,0.18); padding-left: 5px; }
-    .pinfo-dealer { font-size: 9px; font-weight: 800; color: var(--color-bg-wood-dark); background: linear-gradient(135deg, var(--color-gold), var(--color-gold-dark)); border-radius: 6px; padding: 1px 5px; }
-    .pinfo-auto-tag { font-size: 9px; color: var(--color-info); background: rgba(33,150,243,0.15); padding: 1px 5px; border-radius: 6px; }
+    .pinfo-dealer { font-size: 10px; font-weight: 900; color: #fff; background: var(--color-danger, #c0392b); border: 1.5px solid var(--color-gold-light); border-radius: 6px; padding: 1px 6px; box-shadow: 0 0 6px rgba(192,57,43,0.55); }
+    .pinfo-lian { font-size: 9px; font-weight: 700; color: var(--color-gold-light); }
+    .pinfo-auto-tag { font-size: 9px; color: #fff; background: rgba(7,193,96,0.85); padding: 1px 5px; border-radius: 6px; } /* 托管=绿 */
     .pinfo-off-tag { font-size: 9px; color: #ccc; background: rgba(255,255,255,0.12); padding: 1px 5px; border-radius: 6px; display: none; }
     .pinfo.offline { opacity: 0.45; filter: grayscale(0.7); }
     .pinfo.offline .pinfo-off-tag { display: inline; }
@@ -132,6 +136,12 @@
     /* ====== 明牌组标签（四家通用，新手提示）====== */
     .meld-item { display: flex; flex-direction: column; align-items: center; gap: 1px; }
     .meld-label { font-size: 9px; color: var(--color-text-secondary); letter-spacing: 1px; line-height: 1.2; opacity: 0.9; }
+    /* 吃副被吃牌标记（2026-09-18）：横置 90° + 金色描边，四家可见 */
+    .meld-group .tile.called img { transform: rotate(90deg); }
+    .meld-group .tile.called { border-color: var(--color-gold); box-shadow: 0 0 4px rgba(212,165,55,0.45); }
+    .south-melds .tile.called { width: 34px; height: 24px; }
+    .north-melds .tile.called { width: 22px; height: 16px; }
+    .side-melds .tile.called { width: 19px; height: 14px; }
 
     /* 北家明牌: 横排在牌条左侧（北家右手边） */
     .north-body { display: flex; align-items: flex-start; gap: 10px; }
@@ -331,8 +341,8 @@
       position: absolute; bottom: 128px; left: 50%; transform: translateX(-50%) translateY(8px);
       background: rgba(9,30,18,0.94); backdrop-filter: blur(10px);
       border: 1px solid rgba(212,165,55,0.35); border-radius: var(--radius-lg);
-      padding: 10px 14px 12px; z-index: 200;
-      display: flex; flex-direction: column; gap: 8px;
+      padding: 14px 16px 16px; min-height: 112px; justify-content: space-between; z-index: 200;
+      display: flex; flex-direction: column; gap: 10px;
       opacity: 0; pointer-events: none;
       transition: opacity 200ms ease, transform 200ms ease;
       box-shadow: 0 8px 32px rgba(0,0,0,0.5);
@@ -353,6 +363,22 @@
     @keyframes countdown-shrink { from { width: 100%; } to { width: 0%; } }
     .action-bar-custom { display: flex; gap: 6px; justify-content: center; }
     .action-overlay .btn-action { min-width: 56px; height: 42px; font-size: 16px; }
+
+    /* 重连遮罩（2026-09-17 回补，M-I） */
+    .reconnect-mask {
+      position: absolute; inset: 0; z-index: 400;
+      background: rgba(0,0,0,0.68); backdrop-filter: blur(3px);
+      display: none; align-items: center; justify-content: center; flex-direction: column; gap: 10px;
+      color: var(--color-text); font-size: 14px; letter-spacing: 2px;
+    }
+    .reconnect-mask.show { display: flex; }
+    .reconnect-mask .rc-sub { font-size: 10px; color: var(--color-text-muted); letter-spacing: 1px; }
+    /* 终局摊牌 2×2（结算弹层内） */
+    .reveal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 10px; }
+    .reveal-cell { background: rgba(0,0,0,0.3); border: 1px solid rgba(212,165,55,0.12); border-radius: 8px; padding: 5px 8px; }
+    .reveal-name { font-size: 9px; color: var(--color-gold); margin-bottom: 2px; }
+    .reveal-tiles { font-size: 10px; color: var(--color-text-secondary); letter-spacing: 1px; }
+    .result-note { margin-top: 6px; font-size: 9px; color: var(--color-text-muted); text-align: center; }
 
     /* ====== 台数详情浮层（徽章点击展开）====== */
     .score-popover {
@@ -420,6 +446,37 @@
       .south-hand .tile { width: 36px; height: 50px; }
       .south-top-row { padding-top: 2px; }
     }
+    /* ====== 四边物理牌墙排（BL-017 FR-对局-20，physical 模式）====== */
+    .wall-board { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
+    .wall-row { position: absolute; left: 50%; transform: translateX(-50%); display: flex; gap: 2px; }
+    .wall-row.north { top: 64px; }
+    .wall-row.south { bottom: 118px; }
+    .wall-col { position: absolute; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 2px; }
+    .wall-col.west { left: 150px; }
+    .wall-col.east { right: 150px; }
+    .wstack { width: 10px; height: 16px; border-radius: 2px; background: linear-gradient(180deg, #f7f3e8 0 3px, #1d3a6b 3px); border: 1px solid rgba(0,0,0,0.4); }
+    .wall-col .wstack { width: 16px; height: 10px; background: linear-gradient(90deg, #f7f3e8 0 3px, #1d3a6b 3px); }
+    .wstack.spent { opacity: 0.18; }
+    .wstack.skip { background: transparent; border: 1px dashed rgba(212,165,55,0.65); }
+    .wstack.breakpt { box-shadow: 0 0 6px rgba(212,165,55,0.9); border-color: var(--color-gold); }
+    .wall-legend { position: absolute; bottom: 96px; left: 50%; transform: translateX(-50%); font-size: 9px; color: var(--color-gold); background: rgba(0,0,0,0.45); padding: 2px 10px; border-radius: 8px; border: 1px solid rgba(212,165,55,0.35); white-space: nowrap; }
+
+    /* ====== 开局仪式遮罩（BL-017 FR-对局-18/19）====== */
+    .seating-panel { width: 560px; }
+    .seating-dice-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 12px 0; }
+    .dice-slot { position: relative; padding: 10px 6px; text-align: center; background: rgba(0,0,0,0.3); border: 1px solid rgba(212,165,55,0.2); border-radius: 10px; }
+    .dice-slot.win { border-color: var(--color-gold); box-shadow: 0 0 8px rgba(212,165,55,0.35); }
+    .dice-name { font-size: 11px; color: var(--color-text-secondary); }
+    .dice-faces { font-size: 24px; letter-spacing: 4px; margin: 4px 0; }
+    .dice-sum { font-size: 15px; font-weight: 700; color: var(--color-gold-light); }
+    .dice-reroll { position: absolute; top: -8px; right: -4px; font-size: 8px; color: var(--color-danger); background: rgba(0,0,0,0.6); border: 1px solid rgba(220,80,80,0.5); border-radius: 6px; padding: 1px 5px; }
+    .seating-rank { font-size: 10px; color: var(--color-text-muted); text-align: center; margin-bottom: 10px; }
+    .seating-pick-row { display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 10px; }
+    .seating-pick-label { font-size: 11px; color: var(--color-text-secondary); margin-right: 4px; }
+    .seat-pick { padding: 6px 14px; font-size: 12px; border-radius: 8px; border: 1px solid rgba(212,165,55,0.3); background: rgba(0,0,0,0.3); color: var(--color-text-secondary); cursor: pointer; }
+    .seat-pick.selected { border-color: var(--color-gold); color: var(--color-gold-light); background: rgba(212,165,55,0.18); box-shadow: 0 0 6px rgba(212,165,55,0.4); }
+    .seating-banner { font-size: 11px; color: var(--color-text-primary); text-align: center; background: rgba(0,0,0,0.35); border: 1px solid rgba(212,165,55,0.25); border-radius: 8px; padding: 6px 10px; margin-bottom: 8px; }
+    .seating-banner.gold { color: var(--color-gold-light); border-color: rgba(212,165,55,0.5); }
   </style>
 </head>
 <body>
@@ -435,13 +492,25 @@
       <span class="status-divider"></span>
       <span class="status-item">剩余 <span class="value" style="color: var(--color-danger);">4</span> 张</span>
       <span class="status-divider"></span>
-      <span class="status-item">连庄 <span class="value">1</span></span>
-      <span class="status-divider"></span>
       <span class="status-item">⏱ <span class="value">12</span>s</span>
     </div>
 
-    <!-- 退出按钮 -->
-    <a class="btn-exit" href="home.html" title="返回首页">✕</a>
+    <!-- ====== 四边物理牌墙排（BL-017 FR-对局-20；physical 模式演示：庄家=我/南排，摸牌位骰 N=5；JS 生成 18 组/排）====== -->
+    <div class="wall-board">
+      <div class="wall-row north" id="wallN"></div>
+      <div class="wall-col west" id="wallW"></div>
+      <div class="wall-col east" id="wallE"></div>
+      <div class="wall-row south" id="wallS"></div>
+      <div class="wall-legend">开牌点：庄家（我）排右端起跳 5 组 · 自第 6 组开摸 · 排尽续上手家排右端</div>
+    </div>
+
+    <!-- 右上按钮簇：静音/退出/规则/设置 -->
+    <div class="top-cluster">
+      <button class="btn-exit" title="静音">🔊</button>
+      <a class="btn-exit" href="home.html" title="退出房间">✕</a>
+      <button class="btn-exit" title="规则" onclick="location.href='rules.html'">📋</button>
+      <button class="btn-exit" title="设置" onclick="location.href='settings.html'">⚙</button>
+    </div>
 
     <!-- 原型演示抽屉 -->
     <div class="demo-controls">
@@ -452,6 +521,7 @@
         <button data-demo="huang">荒庄流局</button>
         <button data-demo="zhahu">诈胡提示</button>
         <button data-demo="offline">西家离线状态</button>
+        <button data-demo="reconnect">重连遮罩</button>
       </div>
     </div>
 
@@ -576,6 +646,7 @@
           <span class="pinfo-score">+520</span>
           <span class="pinfo-zi">子2</span>
           <span class="pinfo-dealer">庄</span>
+          <span class="pinfo-lian">连2</span>
         </div>
         <div class="flower-area">
           <div class="tile"><img src="res/tiles/flower_spring.png?v=3" alt="春"/></div>
@@ -585,7 +656,8 @@
           <div class="meld-item">
             <div class="meld-group">
               <div class="tile"><img src="res/tiles/wan_2.png?v=3" alt="二萬"/></div>
-              <div class="tile"><img src="res/tiles/wan_3.png?v=3" alt="三萬"/></div>
+              <!-- 被吃牌（他舍三萬）横置+金描边标记 -->
+              <div class="tile called"><img src="res/tiles/wan_3.png?v=3" alt="三萬"/></div>
               <div class="tile"><img src="res/tiles/wan_4.png?v=3" alt="四萬"/></div>
             </div>
             <div class="meld-label">吃</div>
@@ -657,7 +729,7 @@
     <div class="result-overlay" id="resultOverlay">
       <div class="result-panel">
         <div class="result-panel-title">🎉 我 · 自摸胡！</div>
-        <div class="result-panel-sub">第 2/8 局 · 庄家胡牌连庄 +1 · 1 台 = 20 积分</div>
+        <div class="result-panel-sub">第 2/8 局 · 1 台 = 1 积分</div>
         <div class="result-panel-body">
           <div class="result-col">
             <div class="result-col-title">台数明细（必然包含叠加）</div>
@@ -667,19 +739,48 @@
             <div class="result-row"><span>独独</span><span>+2</span></div>
             <div class="result-row"><span>缺一门</span><span>+4</span></div>
             <div class="result-row"><span>一条龙</span><span>+8</span></div>
-            <div class="result-row"><span>连庄追加</span><span>+1</span></div>
-            <div class="result-row total"><span>合计</span><span>26 台</span></div>
+            <div class="result-row"><span>子 ×2</span><span>+6</span></div>
+            <div class="result-row"><span>连庄 ×2</span><span>+3</span></div>
+            <div class="result-row total"><span>合计</span><span>35 台</span></div>
           </div>
           <div class="result-col">
             <div class="result-col-title">积分变动</div>
-            <div class="result-row"><span>我（庄家）</span><span class="win">+520</span></div>
-            <div class="result-row"><span>令狐冲</span><span class="lose">-180</span></div>
-            <div class="result-row"><span>黄蓉</span><span class="lose">-170</span></div>
-            <div class="result-row"><span>杨过</span><span class="lose">-170</span></div>
-            <div class="result-row total"><span>我当前累计</span><span class="win">+520</span></div>
+            <div class="result-row"><span>我（庄家）</span><span class="win">+105</span></div>
+            <div class="result-row"><span>令狐冲</span><span class="lose">-35</span></div>
+            <div class="result-row"><span>黄蓉</span><span class="lose">-35</span></div>
+            <div class="result-row"><span>杨过</span><span class="lose">-35</span></div>
+            <div class="result-row total"><span>我当前累计</span><span class="win">+105</span></div>
           </div>
         </div>
+        <div class="result-note">点炮局：付方超出胡方台数部分以小字「含子/连庄 +N」标注</div>
+        <div class="reveal-grid">
+          <div class="reveal-cell"><div class="reveal-name">我（胡）</div><div class="reveal-tiles">🀄 123万 456万 789万 22筒 55筒</div></div>
+          <div class="reveal-cell"><div class="reveal-name">令狐冲</div><div class="reveal-tiles">🀄 111万 234筒 567条 88条 99条</div></div>
+          <div class="reveal-cell"><div class="reveal-name">黄蓉</div><div class="reveal-tiles">🀄 123条 456条 789条 11筒 22筒</div></div>
+          <div class="reveal-cell"><div class="reveal-name">杨过</div><div class="reveal-tiles">🀄 东东东 南南南 西西西 北北北 中中</div></div>
+        </div>
         <button class="result-next-btn" onclick="document.getElementById('resultOverlay').classList.remove('show')">下一局 ▶</button>
+      </div>
+    </div>
+
+    <!-- ====== 开局仪式遮罩（BL-017 FR-对局-18/19；默认隐藏，演示：seatingOverlay.classList.add('show')）====== -->
+    <div class="result-overlay" id="seatingOverlay">
+      <div class="result-panel small seating-panel">
+        <div class="result-panel-title">🎲 开局仪式 · 掷骰选位</div>
+        <div class="seating-dice-row">
+          <div class="dice-slot win"><div class="dice-name">我</div><div class="dice-faces">⚄ ⚅</div><div class="dice-sum">11</div></div>
+          <div class="dice-slot"><div class="dice-name">黄蓉</div><div class="dice-faces">⚄ </div><div class="dice-sum">7</div></div>
+          <div class="dice-slot"><div class="dice-name">令狐冲</div><div class="dice-faces">⚂ ⚂</div><div class="dice-sum">6</div><div class="dice-reroll">同点重掷×1</div></div>
+          <div class="dice-slot"><div class="dice-name">杨过</div><div class="dice-faces">⚀ ⚂</div><div class="dice-sum">4</div></div>
+        </div>
+        <div class="seating-rank">选位顺序：我 → 黄蓉 → 令狐冲 → 杨过（依次坐下手位）</div>
+        <div class="seating-pick-row">
+          <span class="seating-pick-label">最大者（我）选座</span>
+          <button class="seat-pick">东</button><button class="seat-pick selected">南</button><button class="seat-pick">西</button><button class="seat-pick">北</button>
+        </div>
+        <div class="seating-banner">定庄骰 <b>9</b> → 9 mod 4 = 1 → 首庄 = <b>我</b> · 我上 1 子 + 庄子 1</div>
+        <div class="seating-banner gold">摸牌位骰 <b>5</b> → 我排右端起跳 5 组 · 自第 6 组开摸</div>
+        <button class="result-next-btn" onclick="document.getElementById('seatingOverlay').classList.remove('show')">开始第 1 局发牌 ▶</button>
       </div>
     </div>
 
@@ -709,6 +810,14 @@
         <span class="score-total-label">合计</span>
         <span class="score-total-val">20台</span>
       </div>
+      <div class="result-note">6 台起胡门槛只看基础番种；子/连庄加成不计入门槛</div>
+    </div>
+
+    <!-- ====== 重连遮罩（默认隐藏，M-I）====== -->
+    <div class="reconnect-mask" id="reconnectMask">
+      <div style="font-size:30px;">📡</div>
+      <div>重连中…</div>
+      <div class="rc-sub">恢复后自动重入房间 · 超时未连转托管</div>
     </div>
 
   </div>
@@ -815,6 +924,7 @@
         setTimeout(() => t.classList.remove('show'), 2500);
       }
       if (kind === 'offline') document.getElementById('pinfoWest').classList.toggle('offline');
+      if (kind === 'reconnect') document.getElementById('reconnectMask').classList.toggle('show');
       demoMenu.classList.remove('show');
     });
     document.addEventListener('click', (e) => {
@@ -829,6 +939,26 @@
         pop.classList.remove('show');
       }
     });
+    /* BL-017 物理牌墙排演示：每排 18 组；南=庄家排（右端 5 组跳区虚线 + 已摸 6 组淡出 + 开牌点金框），东=上手家排（续排已摸 3 组） */
+    (function () {
+      const mk = (id, n, cls) => {
+        const c = document.getElementById(id);
+        if (!c) return;
+        for (let i = 0; i < n; i++) {
+          const d = document.createElement('div');
+          d.className = 'wstack' + ((cls && cls[i]) || '');
+          c.appendChild(d);
+        }
+      };
+      mk('wallN', 18, null);
+      mk('wallW', 18, null);
+      mk('wallE', 18, { 0: ' spent', 1: ' spent', 2: ' spent' });
+      const s = {};
+      for (let i = 0; i < 5; i++) s[17 - i] = ' skip';
+      for (let i = 5; i < 11; i++) s[17 - i] = ' spent';
+      s[6] = ' breakpt';
+      mk('wallS', 18, s);
+    })();
   </script>
 </body>
 </html>
