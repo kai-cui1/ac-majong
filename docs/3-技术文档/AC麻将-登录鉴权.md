@@ -33,7 +33,7 @@ interface UserProfile { nickname: string; avatarUrl: string }
 
 ## 4. 服务端
 
-### 4.1 IdentityProvider（`server/src/identity.ts`）
+### 4.1 IdentityProvider（`apps/game-server/src/identity.ts`）
 
 ```ts
 interface Identity { userId: string; nickname?: string; avatarUrl?: string } // 身份源可自带资料
@@ -46,9 +46,9 @@ interface IdentityProvider { authenticate(ctx: { token?; headers? }): Promise<Id
 | `WeChatIdentity` | 握手头 `x-wx-openid` | 微信云托管（`IDENTITY=wechat`，M-K）|
 | `TokenIdentity` | `token` → `web:<token>` | Web/HTML5（占位；上线前校验 JWT/会话签名）|
 
-选择：`server/src/index.ts` 的 `pickIdentity(process.env.IDENTITY)`。
+选择：`apps/game-server/src/index.ts` 的 `pickIdentity(process.env.IDENTITY)`。
 
-### 4.2 登录处理（`server/src/wsGateway.ts` · `case 'auth'`）
+### 4.2 登录处理（`apps/game-server/src/wsGateway.ts` · `case 'auth'`）
 
 ```
 idn = identity.authenticate({ token, headers })
@@ -67,7 +67,7 @@ idn = identity.authenticate({ token, headers })
   send ack{ ok:true }
 ```
 
-- **持久化可插拔**：`GatewayOptions.persistence?: { store: GameStore; realtime: RealtimeStore }`，缺省用内存实现；`server/src/index.ts` 以 `createPersistence(env)` 注入（设 `DATABASE_URL` + `REDIS_URL` → MySQL + Redis，否则内存）。
+- **持久化可插拔**：`GatewayOptions.persistence?: { store: GameStore; realtime: RealtimeStore }`，缺省用内存实现；`apps/game-server/src/index.ts` 以 `createPersistence(env)` 注入（设 `DATABASE_URL` + `REDIS_URL` → MySQL + Redis，否则内存）。
 - 落库失败不阻断登录，保证弱依赖下仍可进游戏。
 
 ### 4.3 会话（Redis）
@@ -105,7 +105,7 @@ idn = identity.authenticate({ token, headers })
 
 ## 7. 测试与验证
 
-- **网关测试**（`server/test/wsGateway.test.ts`）：`auth` 带 profile → `authOk` 回传资料 + `users` 落库 + 会话建立；不带 profile → 兜底昵称「牌友」仍落库。
+- **网关测试**（`apps/game-server/test/wsGateway.test.ts`）：`auth` 带 profile → `authOk` 回传资料 + `users` 落库 + 会话建立；不带 profile → 兜底昵称「牌友」仍落库。
 - **端到端**（真实 MySQL/Redis）：WS `auth` → `authOk{profile}` → MySQL `users` 落库（昵称 UTF-8 存储校验正确）→ Redis `sess:<token>` 会话。
 
 ## 8. 待办与边界
@@ -125,3 +125,4 @@ idn = identity.authenticate({ token, headers })
 | 2026-09-16 | 回填交叉引用：持久化 / 客户端网络层 / 前端基座三份技术方案产出后，将文中「待补」占位链接改为真实相对路径 |
 | 2026-09-17 | M-K 本地切片：云托管头鉴权路线确认（免 code2Session）；identity 6 测试；Dockerfile 产出 |
 | 2026-09-17 | H5 账号鉴权模块：accountAuth + 网关 accountMode + 协议 account/session + 客户端表单/会话；测试 5 例 + 网关 e2e |
+| 2026-09-18 | 目录重构 P1：文中 `server/` 路径统一更新为 `apps/game-server/`（identity / index / wsGateway 源与测试） |

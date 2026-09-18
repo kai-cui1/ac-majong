@@ -136,12 +136,9 @@
     /* ====== 明牌组标签（四家通用，新手提示）====== */
     .meld-item { display: flex; flex-direction: column; align-items: center; gap: 1px; }
     .meld-label { font-size: 9px; color: var(--color-text-secondary); letter-spacing: 1px; line-height: 1.2; opacity: 0.9; }
-    /* 吃副被吃牌标记（2026-09-18）：横置 90° + 金色描边，四家可见 */
-    .meld-group .tile.called img { transform: rotate(90deg); }
-    .meld-group .tile.called { border-color: var(--color-gold); box-shadow: 0 0 4px rgba(212,165,55,0.45); }
-    .south-melds .tile.called { width: 34px; height: 24px; }
-    .north-melds .tile.called { width: 22px; height: 16px; }
-    .side-melds .tile.called { width: 19px; height: 14px; }
+    /* 吃副被吃牌标记（2026-09-18 v2 用户定案）：被吃牌居中竖放（展示序）+ 右上角小圆形角标（金底暗「吃」字），四家可见 */
+    .meld-group .tile.called { position: relative; }
+    .meld-group .tile.called::after { content: '吃'; position: absolute; top: -5px; right: -5px; width: 11px; height: 11px; border-radius: 50%; background: var(--color-gold); color: #2e2008; font-size: 8px; line-height: 11px; text-align: center; border: 1px solid rgba(46,32,8,0.6); }
 
     /* 北家明牌: 横排在牌条左侧（北家右手边） */
     .north-body { display: flex; align-items: flex-start; gap: 10px; }
@@ -315,6 +312,13 @@
     .result-row .lose { color: var(--color-danger); }
     .result-row.total { border-top: 1px solid rgba(212,165,55,0.15); margin-top: 4px; padding-top: 5px; font-weight: 700; }
     .result-row.total span:last-child { font-size: 14px; }
+    /* 角色个性化横幅（2026-09-18 v2）：胡方金 / 付方红 / 无关灰 */
+    .result-banner { text-align: center; font-size: 12px; font-weight: 700; margin: -4px 0 8px; }
+    .result-banner.win { color: var(--color-gold); }
+    .result-banner.pay { color: var(--color-danger); }
+    .result-banner.none { color: var(--color-text-muted); font-weight: 400; }
+    /* 子/庄明细子注（付方=底台+胡方子+自身子+连庄；胡方=收付构成） */
+    .result-subrow { font-size: 9px; color: var(--color-text-muted); text-align: right; padding: 0 0 3px; }
     .result-next-btn {
       margin-top: 12px; align-self: center;
       padding: 10px 44px; border-radius: var(--radius-full);
@@ -656,7 +660,7 @@
           <div class="meld-item">
             <div class="meld-group">
               <div class="tile"><img src="res/tiles/wan_2.png?v=3" alt="二萬"/></div>
-              <!-- 被吃牌（他舍三萬）横置+金描边标记 -->
+              <!-- 被吃牌（他舍三萬）居中竖放 + 右上小圆形角标 -->
               <div class="tile called"><img src="res/tiles/wan_3.png?v=3" alt="三萬"/></div>
               <div class="tile"><img src="res/tiles/wan_4.png?v=3" alt="四萬"/></div>
             </div>
@@ -728,8 +732,10 @@
     <!-- ====== 局末结算弹层（默认隐藏，P7）====== -->
     <div class="result-overlay" id="resultOverlay">
       <div class="result-panel">
-        <div class="result-panel-title">🎉 我 · 自摸胡！</div>
+        <div class="result-panel-title">🎉 你胡 26台！</div>
         <div class="result-panel-sub">第 2/8 局 · 1 台 = 1 积分</div>
+        <!-- 角色横幅三态：win=本局你为胡方 / pay=你点炮·对方自摸你付 N 分 / none=本局与你无关 -->
+        <div class="result-banner win">🎉 本局你为胡方 · 共收 +105 分</div>
         <div class="result-panel-body">
           <div class="result-col">
             <div class="result-col-title">台数明细（必然包含叠加）</div>
@@ -739,20 +745,23 @@
             <div class="result-row"><span>独独</span><span>+2</span></div>
             <div class="result-row"><span>缺一门</span><span>+4</span></div>
             <div class="result-row"><span>一条龙</span><span>+8</span></div>
-            <div class="result-row"><span>子 ×2</span><span>+6</span></div>
-            <div class="result-row"><span>连庄 ×2</span><span>+3</span></div>
-            <div class="result-row total"><span>合计</span><span>35 台</span></div>
+            <div class="result-row total"><span>合计</span><span>26 台</span></div>
+            <div class="result-subrow" style="text-align:center;">子/连庄加成按付方逐家计入（右列子注）</div>
           </div>
           <div class="result-col">
             <div class="result-col-title">积分变动</div>
             <div class="result-row"><span>我（庄家）</span><span class="win">+105</span></div>
-            <div class="result-row"><span>令狐冲</span><span class="lose">-35</span></div>
+            <div class="result-subrow">胡 26 台 · 自摸收 3 家</div>
+            <div class="result-row"><span>令狐冲</span><span class="lose">-38</span></div>
+            <div class="result-subrow">庄家·底 26·胡方子 2(+6)·自身子 1(+3)·连庄 2(+3)</div>
             <div class="result-row"><span>黄蓉</span><span class="lose">-35</span></div>
+            <div class="result-subrow">底 26·胡方子 2(+6)·连庄 2(+3)</div>
             <div class="result-row"><span>杨过</span><span class="lose">-35</span></div>
+            <div class="result-subrow">底 26·胡方子 2(+6)·连庄 2(+3)</div>
             <div class="result-row total"><span>我当前累计</span><span class="win">+105</span></div>
           </div>
         </div>
-        <div class="result-note">点炮局：付方超出胡方台数部分以小字「含子/连庄 +N」标注</div>
+        <div class="result-note">付方子注列明：底台 + 胡方子(每只+3) + 自身子(每只+3) + 连庄(2n−1，庄家涉及时)；庄家几庄几子、各加多少一目瞭然</div>
         <div class="reveal-grid">
           <div class="reveal-cell"><div class="reveal-name">我（胡）</div><div class="reveal-tiles">🀄 123万 456万 789万 22筒 55筒</div></div>
           <div class="reveal-cell"><div class="reveal-name">令狐冲</div><div class="reveal-tiles">🀄 111万 234筒 567条 88条 99条</div></div>

@@ -98,7 +98,7 @@ Meld {
 
 - `allMelds` = `melds` + 由 `concealed` 分解出的暗副（含将）。
 - `pungCount` / `seqCount` / `pairCount`：刻子/顺子/对子数量。
-- `concealedPungCount`（暗坎数 = 暗刻数 + **暗杠数**，N3）、`kongCount`（明杠/暗杠数）。
+- `concealedPungCount`（暗坎数 = 暗刻数 + **暗杠数**，N3；**点炮胡时由胡牌张凑成的第三张刻子不计**，2026-09-18 用户确认）、`kongCount`（明杠/暗杠数）。
 - `suitSet`：手牌出现的数牌花色集合（判断缺一门/混一色/清一色）。
 - `hasHonor` / `honorPungs`：是否含字、字刻列表。
 - `flowerCount`：花数。
@@ -286,6 +286,7 @@ function waitingTiles(readyHand):        # readyHand = 16 张听牌手
 | 五暗坎 | 50 | `concealedPungCount == 5` |
 
 > ✅ **暗坎数 = 暗刻 + 暗杠**（暗杠计入暗坎，N3）；暗杠另计暗杠(2台)。例：1暗杠 + 2暗刻 = 三暗坎(8台) + 暗杠(2台)。
+> ✅ **点炮口径（2026-09-18）**：点炮胡时由胡牌张凑成的第三张刻子**不计入暗坎**（自摸计入；胡牌张作将/另作他用时其余刻子不受影响）；实现 `analyze.isPungConcealed`。
 
 ### 3.11 补牌胡
 
@@ -782,7 +783,7 @@ Meld {
 
 - `allMelds` = `melds` + 由 `concealed` 分解出的暗副（含将）。
 - `pungCount` / `seqCount` / `pairCount`：刻子/顺子/对子数量。
-- `concealedPungCount`（暗坎数 = 暗刻数 + **暗杠数**，N3）、`kongCount`（明杠/暗杠数）。
+- `concealedPungCount`（暗坎数 = 暗刻数 + **暗杠数**，N3；**点炮胡时由胡牌张凑成的第三张刻子不计**，2026-09-18 用户确认）、`kongCount`（明杠/暗杠数）。
 - `suitSet`：手牌出现的数牌花色集合（判断缺一门/混一色/清一色）。
 - `hasHonor` / `honorPungs`：是否含字、字刻列表。
 - `flowerCount`：花数。
@@ -970,6 +971,7 @@ function waitingTiles(readyHand):        # readyHand = 16 张听牌手
 | 五暗坎 | 50 | `concealedPungCount == 5` |
 
 > ✅ **暗坎数 = 暗刻 + 暗杠**（暗杠计入暗坎，N3）；暗杠另计暗杠(2台)。例：1暗杠 + 2暗刻 = 三暗坎(8台) + 暗杠(2台)。
+> ✅ **点炮口径（2026-09-18）**：点炮胡时由胡牌张凑成的第三张刻子**不计入暗坎**（自摸计入；胡牌张作将/另作他用时其余刻子不受影响）；实现 `analyze.isPungConcealed`。
 
 ### 3.11 补牌胡
 
@@ -1367,3 +1369,4 @@ PatternDef {
 | 2026-09-16 | PRD 全量拆分后回填上游引用：由过渡存根 `AC麻将小游戏-PRD.md` 改指模块文件 04-对局与牌桌（FR-对局-06 台数计算）与 05-结算与积分战绩 |
 | 2026-09-17 | 结算简化（D-25）：TAI_TO_POINTS=1；settle 每家最终台数 = winTai + 3×(胡方子+付方子) + (庄家涉及?2n−1:0)；scoreAndSettle 明细追加「子/连庄」行且 total=结算台数；previewTai 增 myZi 并并入加成；winBonusLines 新增 |
 | 2026-09-17 | previewTai 听张门槛过滤：听张逐张算分仅保留 ≥6 台可胡听张（D-15）；C 分支无达门槛听张不再误报 tenpai；B 分支 waits 剔除诈胡听张；engine 143 测试绿（新增门槛过滤 2 例） |
+| 2026-09-18 | **暗坎点炮口径（用户报障：点炮胡九筒被计三暗坎）**：`analyze.isPungConcealed`——点炮胡时胡牌张凑成的第三张刻子不计暗坎（暗牌该牌仅 2 张+胡牌张→非暗；暗牌足 3 张或自摸→仍暗）；recognize-kong-flow 新增 3 例（点炮降档/自摸仍计/胡牌张作将不受影响）；engine 172 绿、server 70 绿；vendor 同步+server 重启+H5 重建 |

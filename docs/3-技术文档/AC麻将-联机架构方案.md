@@ -251,7 +251,7 @@ flowchart LR
 ### 10.1 容器化
 
 - `Dockerfile`：Node **20 LTS**（非本地 v25，求稳）+ `pnpm install --frozen-lockfile` + `pnpm -r build` + 启动 WS 服务。
-- monorepo 整体入镜（server 直接依赖 `@ac-majong/engine`）。
+- monorepo 整体入镜（`apps/game-server` 依赖 `@ac-majong/engine` / `@ac-majong/persistence`）；多服务编排与 Admin 预留见 [08 目录结构重构与Admin系统架构](./AC麻将-目录结构重构与Admin系统架构.md)。
 
 ### 10.2 WebSocket 与域名（✅ 已核实，A1 消解）
 
@@ -413,9 +413,12 @@ sequenceDiagram
 ### 16.3 工程结构（决策2）
 
 ```
-packages/engine    # 规则引擎（server + client 共享，零平台依赖）
-server/            # 后端：Node+TS+ws+engine；可插拔 auth；一份镜像双接入
-client/            # 一个 Cocos Creator 工程 → 构建 微信小游戏 + Web
+apps/game-server/    # 游戏后端：Node+TS+ws+engine；可插拔 auth；一份镜像双接入
+apps/admin-server/   # Admin 后端（HTTP/REST+RBAC），P2 落地
+apps/admin-web/      # Admin 控制台 SPA，P2 落地
+packages/engine      # 规则引擎（server + client 共享，零平台依赖）
+packages/persistence # 跨系统共享存储层（事件溯源落库/还原，game/admin 共用）
+client/              # 一个 Cocos Creator 工程 → 构建 微信小游戏 + Web
   assets/scripts/
     net/           # Transport 接口 + WeChatTransport + WebTransport
     platform/      # 分享/存储/系统信息 适配（wx / web）
@@ -451,3 +454,4 @@ interface IdentityProvider { login(): Promise<{ userId: string; token?: string }
 |---|---|
 | 2026-09-16 | 建立维护记录。当前 v0.2：数据存储升级为 Redis（热/实时）+ MySQL（权威/永久）双层，§11 重写为**事件溯源**（只存业务事实：初始牌墙+手牌+动作日志+结算，可经 `rehydrate`/`replayRound` 还原）；§14 里程碑迁入 [`../5-backlog/`](../5-backlog/开发计划-路线图.md)；新增风险 A8（事件溯源依赖引擎确定性）；对齐 D-32（积分不做账户、随房间生命周期）。存储落地细节将由 [AC麻将-数据持久化与事件溯源.md](./AC麻将-数据持久化与事件溯源.md) 承接 |
 | 2026-09-16 | 持久化技术方案（04）产出后回填交叉引用：§11 顶部指向 04 为落地细节准绳、§11.2 还原入口由「需增加」更新为「已实现（M-A2 `rehydrate`/`replayRound`）」、上游 PRD 改指 PRD 索引，并修正维护记录中指向 README 的占位链接 |
+| 2026-09-18 | 目录重构 P0/P1：§10.1 与 §16.3 工程结构更新为 apps/packages/client 三分法（server→apps/game-server、新增 packages/persistence、预留 admin-server/admin-web）；多服务编排与 Admin 架构详见 [08](./AC麻将-目录结构重构与Admin系统架构.md) |

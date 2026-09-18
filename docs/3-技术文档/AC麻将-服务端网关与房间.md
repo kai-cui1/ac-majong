@@ -1,6 +1,6 @@
 # A&C 麻将 · 服务端网关与房间（技术方案）
 
-> **模块**：服务端联机层（`server/src` 的 `wsGateway.ts` / `roomManager.ts` / `roomActor.ts` / `redact.ts` / `connection.ts` / `devBots.ts` / `index.ts`）。产品需求见 [`../1-prd/04-对局与牌桌.md`](../1-prd/04-对局与牌桌.md)、[`../1-prd/03-房间系统.md`](../1-prd/03-房间系统.md)。
+> **模块**：服务端联机层（`apps/game-server/src` 的 `wsGateway.ts` / `roomManager.ts` / `roomActor.ts` / `redact.ts` / `connection.ts` / `devBots.ts` / `index.ts`）。产品需求见 [`../1-prd/04-对局与牌桌.md`](../1-prd/04-对局与牌桌.md)、[`../1-prd/03-房间系统.md`](../1-prd/03-房间系统.md)。
 > **关联**：对局状态机 [`AC麻将-对局流程引擎.md`](./AC麻将-对局流程引擎.md)｜鉴权 [`AC麻将-登录鉴权.md`](./AC麻将-登录鉴权.md)｜持久化 [`AC麻将-数据持久化与事件溯源.md`](./AC麻将-数据持久化与事件溯源.md)｜总体 [`AC麻将-联机架构方案.md`](./AC麻将-联机架构方案.md)
 > 遵循[《文档总纲》](../README.md)三原则：本文件为服务端网关与房间模块的全量技术说明。
 
@@ -154,3 +154,4 @@ Connection.send（ServerMsg：gameView/roomView/event/ack/…）
 | 2026-09-17 | M-I 断线/托管接线：WS close 与对局中 leave 均走 `RoomActor.playerDisconnected`（离线标记+60s 计时→`enterTrustee` 挂 `makeTrusteeConnection` 保守代打）；重连 addPlayer 重绑+`cancelOffline` 卸托管；roomView seats 增 `offline`/`trusteed`；散场清计时器 |
 | 2026-09-18 | **BL-016 房间积分周期**：新增 §12——`onGameEnd` 带出累计分写 `rooms.member_scores` 账本；`genUniqueId` 双重查重房号永不复用；`join` 未命中走 `rebuildRoomFromStore` 事件溯源重建（快照+动作+Redis 缓冲重演，座位/积分/回顾恢复，Bot 挂回/真人转托管）+ `RoomActor.restore`/`createRestored`；已关闭拒绝「房间已关闭」；Bot 入座补流水；roomScore.test 5 例 + 真实环境重启重进 e2e + CDP 截图 |
 | 2026-09-18 | **BL-017 开局仪式与摸牌位骰**：新增 §13——`RoomSettings` 建房参数落库；seating 状态机（选位骰同点重掷→最大者选座重排→定庄骰四方位映射→摸牌位骰）；仪式子 initialZi；physical 物理墙固化+开牌点摸牌序；局间 roundBreak；超时自动代掷；协议 roll/pickSeat/wallInfo/seating；快照 layout/break_group 回放可复现；seatingCeremony.test 12 例 + 引擎 bl017 10 例，既有测试适配仪式驱动全绿 |
+| 2026-09-18 | 目录重构 P1：模块路径 `server/src` 更新为 `apps/game-server/src` |

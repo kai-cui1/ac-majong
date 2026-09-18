@@ -1,6 +1,6 @@
 # A&C 麻将 · 数据持久化与事件溯源（技术方案）
 
-> **模块**：存储层（`server/src/persistence/`）+ 引擎还原（`rehydrate`）+ 本地基础设施（`deploy/`）。
+> **模块**：存储层（`packages/persistence/`）+ 引擎还原（`rehydrate`）+ 本地基础设施（`deploy/`）。
 > **关联**：总体架构 [`AC麻将-联机架构方案.md`](./AC麻将-联机架构方案.md) §11（存储概览，本文档为落地细节）｜还原入口 [`AC麻将-对局流程引擎.md`](./AC麻将-对局流程引擎.md) §6｜登录落库 [`AC麻将-登录鉴权.md`](./AC麻将-登录鉴权.md)｜接线方 [`AC麻将-服务端网关与房间.md`](./AC麻将-服务端网关与房间.md) §11
 > **产品**：FR-积分-04（无账户、全量持久化用于审计/还原，见 [`../1-prd/05-结算与积分战绩.md`](../1-prd/05-结算与积分战绩.md)）、决策 D-32。
 > 遵循[《文档总纲》](../README.md)三原则。
@@ -70,7 +70,7 @@
 ## 8. 本地基础设施（`deploy/`）
 
 - `docker-compose.yml`：MySQL 8（3306，库 `ac_majong`，首启自动执行 `schema.sql` 建表）+ Redis 7（6379），均带 healthcheck。
-- `server/.env.example`：`DATABASE_URL` / `REDIS_URL` / `PORT` / `DB_IT`（连接账号口令见此文件与 compose，不写入其它文档）。
+- `apps/game-server/.env.example`：`DATABASE_URL` / `REDIS_URL` / `PORT` / `DB_IT`（连接账号口令见此文件与 compose，不写入其它文档）。
 - 启动：`cd deploy && docker compose up -d`。
 
 ## 9. 回放数据接口（BL-012，✅ 已实现 2026-09-18，见 PRD09）
@@ -107,3 +107,4 @@
 | 2026-09-16 | M-F/M-G 实现回填：§7「结算/关闭」全转 ✅——M-F `win` 事件透传台数明细 `detail`（随 `finishGame` 入 `games.result`，engine 136 测试断言 `detail` 合计=总台数）；M-G 散场 `RoomActor.finishRoom`（打满上限/房主 `dissolve` 共用）→ `GameHooks.onRoomEnd` → 网关 `closeRoom(final_score)`+`status=closed`，`RoomManager.remove` 回收房间。e2e 双场景验证：打满 2 局散场（`rooms.status=closed`+`final_score` 零和+`games`×2+`game_actions`+`game_initial_states`×2）、不限局数房主解散散场（`status=closed`）；server 35 测试绿 |
 | 2026-09-18 | BL-012 实现：网关 replayList（listRoomsByPlayer=房主 UNION room_member_events 成员，倒序 200）/replayLoad（getGame+getInitialState+listActions+names+viewSeat；D-29 参赛四方校验，拒绝返 ack 原因）；server replay.test 2 例 |
 | 2026-09-18 | **BL-016**：`rooms` 增 `member_scores` JSON 列（schema.sql + 存量库 ALTER）；GameStore 增 `roomIdExists`/`markRoomPlaying`/`updateRoomScores`，RealtimeStore 增 `peekActions`（非破坏性读缓冲）；§4 表说明/§7 接线表同步；重启重建依赖链：member_scores 账本 + 快照 + game_actions + peekActions → replayRound |
+| 2026-09-18 | 目录重构 P0/P1：存储层抽为共享包 `packages/persistence`（`@ac-majong/persistence`）；模块头与 `.env.example` 路径同步为 `apps/game-server/.env.example` |
