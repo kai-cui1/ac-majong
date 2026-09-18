@@ -12,6 +12,40 @@ importers:
         specifier: ^5.6.3
         version: 5.9.3
 
+  apps/game-server:
+    dependencies:
+      '@ac-majong/engine':
+        specifier: workspace:*
+        version: link:../../packages/engine
+      '@ac-majong/persistence':
+        specifier: workspace:*
+        version: link:../../packages/persistence
+      '@ac-majong/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
+      ws:
+        specifier: ^8.18.0
+        version: 8.21.3
+    devDependencies:
+      '@ac-majong/client-core':
+        specifier: workspace:*
+        version: link:../../packages/client-core
+      '@types/node':
+        specifier: ^22.10.2
+        version: 22.20.2
+      '@types/ws':
+        specifier: ^8.5.13
+        version: 8.18.1
+      tsx:
+        specifier: ^4.19.2
+        version: 4.23.13
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.2)
+
   packages/client-core:
     dependencies:
       '@ac-majong/engine':
@@ -71,40 +105,6 @@ importers:
       typescript:
         specifier: ^5.6.3
         version: 5.9.3
-
-  server:
-    dependencies:
-      '@ac-majong/engine':
-        specifier: workspace:*
-        version: link:../packages/engine
-      '@ac-majong/persistence':
-        specifier: workspace:*
-        version: link:../packages/persistence
-      '@ac-majong/protocol':
-        specifier: workspace:*
-        version: link:../packages/protocol
-      ws:
-        specifier: ^8.18.0
-        version: 8.21.3
-    devDependencies:
-      '@ac-majong/client-core':
-        specifier: workspace:*
-        version: link:../packages/client-core
-      '@types/node':
-        specifier: ^22.10.2
-        version: 22.20.2
-      '@types/ws':
-        specifier: ^8.5.13
-        version: 8.18.1
-      tsx:
-        specifier: ^4.19.2
-        version: 4.23.13
-      typescript:
-        specifier: ^5.6.3
-        version: 5.9.3
-      vitest:
-        specifier: ^2.1.8
-        version: 2.1.9(@types/node@22.20.2)
 
 packages:
 

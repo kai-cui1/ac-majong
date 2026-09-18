@@ -88,4 +88,4 @@ fi
 
 cd "$ROOT"
 echo "[start-server] 端口=$PORT Bot=$BOTS 鉴权=mock 日志=$LOG_LEVEL 目录=$ROOT"
-PORT="$PORT" AUTO_BOTS="$BOTS" IDENTITY=mock LOG_LEVEL="$LOG_LEVEL" pnpm --filter @ac-majong/server dev
+PORT="$PORT" AUTO_BOTS="$BOTS" IDENTITY=mock LOG_LEVEL="$LOG_LEVEL" pnpm --filter @ac-majong/game-server dev

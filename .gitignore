@@ -26,9 +26,9 @@ client/*/.DS_Store
 # ---- 微信开发者工具 ----
 project.private.config.json
 
-# ---- 微信云托管 / server ----
-server/dist/
-server/.turbo/
+# ---- 微信云托管 / 后端服务 ----
+apps/*/dist/
+apps/*/.turbo/
 
 # ---- OS ----
 .DS_Store

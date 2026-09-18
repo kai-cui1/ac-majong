@@ -1,4 +1,3 @@
 packages:
   - 'packages/*'
-  - 'miniwxapp'
-  - 'server'
+  - 'apps/*'

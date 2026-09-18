@@ -31,7 +31,7 @@ services:
       timeout: 3s
       retries: 30
 
-  server:
+  game-server:
     build:
       context: ..
       dockerfile: deploy/Dockerfile
@@ -58,7 +58,7 @@ services:
     volumes:
       - ../client/ac-majong/build/web-mobile:/usr/share/nginx/html:ro
     depends_on:
-      - server
+      - game-server
 
 volumes:
   ac_prod_mysql:

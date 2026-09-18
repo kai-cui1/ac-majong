@@ -6,7 +6,7 @@ RUN corepack enable && corepack prepare pnpm@10.33.2 --activate
 WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages ./packages
-COPY server ./server
+COPY apps ./apps
 RUN pnpm install --frozen-lockfile
 EXPOSE 8080
-CMD ["pnpm", "--filter", "server", "exec", "tsx", "src/index.ts"]
+CMD ["pnpm", "--filter", "@ac-majong/game-server", "exec", "tsx", "src/index.ts"]
