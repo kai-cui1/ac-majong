@@ -99,7 +99,7 @@ describe('BL-017 · 开局仪式 seating 状态机（FR-对局-18/19）', () => 
     const seats = room.roomView().seats.map((s) => s?.userId);
     expect(seats).toEqual(['u0', 'u3', 'u1', 'u2']);
     const sv = room.roomView().seating!;
-    expect(sv.stage).toBe('dealerDice');
+    expect(sv.stage).toBe('dealerBreak');
     expect(sv.picker).toBe(1); // u3 现坐 seat1
     expect(sv.rolls[1]).toBe(12); // 点数随座位重排
   });
@@ -152,26 +152,19 @@ describe('BL-017 · 开局仪式 seating 状态机（FR-对局-18/19）', () => 
     expect(st.players.find((p) => p.seat === 2)!.zi).toBe(2); // 1 子 + 1 庄子
   });
 
-  it('breakDice=true：定庄后进摸牌位骰，庄家掷 N 决定开牌点', () => {
+  it('breakDice=true：开局仪式一掷同时定庄+定开牌点（合并流程 2026-09-19）', () => {
     const { room } = setup({ wallMode: 'physical', breakDice: true });
-    stubDice(5, 9, 7, 12, 7, 6); // N=7 → 庄 seat3；摸牌位骰 6
+    stubDice(5, 9, 7, 12, 7); // A=u3(seat1)，N=7 → 庄=seat3，breakN=7
     room.start('u0');
     for (const u of ['u0', 'u1', 'u2', 'u3']) room.handleRoll(u);
     room.handlePickSeat('u3', 1);
-    room.handleRoll('u3'); // 定庄骰（A=u3）
-    let sv = room.roomView().seating!;
-    expect(sv.stage).toBe('breakDice');
-    expect(sv.dealerSeat).toBe(3);
-    expect(room.handleRoll('u0').ok).toBe(false); // 仅庄家可掷
-    const dealerUser = room.roomView().seats[3]!.userId;
-    const rr = room.handleRoll(dealerUser);
-    expect(rr.ok).toBe(true);
-    expect(room.roomView().seating).toBeUndefined();
+    room.handleRoll('u3'); // 定庄摸牌位骰（A=u3，一掷定庄+开牌点）
+    expect(room.roomView().seating).toBeUndefined(); // 直接发牌，无单独 breakDice 阶段
     expect(room.phase).toBe('playing');
     const st = room.getState()!;
-    expect(st.breakGroups).toBe(6);
+    expect(st.dealerSeat).toBe(3);
+    expect(st.breakGroups).toBe(7); // 同一点数兼定开牌点
     expect(st.layout).toBeTruthy(); // physical 模式固化牌墙
-    // 发牌 71 张（庄 17 闲 16）+ 补花从墙头补摸：余墙 = 144 - 71 - 花张数
     const flowers = st.players.reduce((s, p) => s + p.flowers.length, 0);
     expect(st.wall.length).toBe(144 - 17 - 16 * 3 - flowers);
     expect(st.initialWallLen).toBe(144);
@@ -240,14 +233,12 @@ describe('BL-017 · 局间摸牌位骰 roundBreak（FR-对局-20）', () => {
 
   it('breakDice=true：nextRound → roundBreak，掷骰者为轮换后庄家；掷后开新局带新 breakGroups', () => {
     const { room } = setup({ wallMode: 'physical', breakDice: true });
-    stubDice(5, 9, 7, 12, 7, 6); // 仪式：庄 seat3，首局 break=6
+    stubDice(5, 9, 7, 12, 7); // 仪式：庄 seat3，首局 break=7（合并流程）
     room.start('u0');
     for (const u of ['u0', 'u1', 'u2', 'u3']) room.handleRoll(u);
     room.handlePickSeat('u3', 1);
-    room.handleRoll('u3'); // 定庄骰（A=u3，N=7 → 庄=seat3）
-    const dealerUser = room.roomView().seats[3]!.userId;
-    room.handleRoll(dealerUser); // 摸牌位骰（庄家，N=6）
-    expect(room.getState()!.breakGroups).toBe(6);
+    room.handleRoll('u3'); // 定庄摸牌位骰（A=u3，N=7 → 庄=seat3，breakN=7）
+    expect(room.getState()!.breakGroups).toBe(7);
     driveToEnd(room);
     // 局末庄家已轮换（非连庄时 = 下家）
     const nextDealer = room.getState()!.dealerSeat;

@@ -159,32 +159,48 @@ describe('pipeline · 完整结算', () => {
   });
 });
 
-describe('BL-021 保底台数（securedLines / previewTai.secured）', () => {
-  const conc = { W1: 1, W3: 1, W5: 1, T2: 1, T4: 1, T6: 1, B1: 1, B3: 1, B5: 1, W9: 1 } as Record<string, number>;
-  it('用户截图案例：3 花+暗杠+门清 = 6 台保底（未听牌也显示）', () => {
+describe('BL-021 保底台数 v2（当前最佳拆解 recognize 口径）', () => {
+  const conc = { W1: 1, W3: 1, W5: 1, T2: 1, T4: 1, T6: 1, B1: 1, B3: 1, B5: 1 } as Record<string, number>;
+  it('3 花+暗杠(中)+门清 = 7 台（见花3/见字1·字杠计见字/暗杠2/门清1）', () => {
     const p = previewTai(conc, [{ type: 'kong_concealed', tiles: ['Z3', 'Z3', 'Z3', 'Z3'] }], ['H1', 'H2', 'H3'], {});
-    expect(p.secured).toBe(6);
-    expect(p.securedDetail.map((d) => [d.name, d.tai])).toEqual([['见花', 3], ['暗杠', 2], ['门清', 1]]);
+    expect(p.secured).toBe(7);
+    expect(p.securedDetail.map((d) => [d.name, d.tai])).toEqual([['见花', 3], ['见字', 1], ['暗杠', 2], ['门清', 1]]);
   });
-  it('明杠九万特番 10 台且吸收明杠；明杠破门清', () => {
-    const p = previewTai(conc, [{ type: 'kong_exposed', tiles: ['W9', 'W9', 'W9', 'W9'] }], [], {});
-    expect(p.secured).toBe(10);
-    expect(p.securedDetail.some((d) => d.name === '明杠九万' && d.tai === 10)).toBe(true);
-    expect(p.securedDetail.some((d) => d.name === '明杠' || d.name === '门清')).toBe(false);
+  it('缺失类当前态+吸收：无花无字 3（吸收无花+无字）+ 3九万 5 + 明杠九万 10（吸收明杠）= 18', () => {
+    const p = previewTai({ ...conc, W9: 1 }, [{ type: 'kong_exposed', tiles: ['W9', 'W9', 'W9', 'W9'] }], [], {});
+    expect(p.secured).toBe(18);
+    expect(p.securedDetail.map((d) => d.name).sort()).toEqual(['3九万', '无花无字', '明杠九万']);
   });
-  it('暗杠九万吸收暗杠：暗杠九万+普通暗杠 → 15+门清=16（吸收为名称级，与结算 dedup 同口径）', () => {
-    const p = previewTai(conc, [
+  it('暗坎类计入：无花无字3 + 3九万5 + 暗杠九万15(吸收暗杠) + 2暗坎2 + 门清1 = 26', () => {
+    const p = previewTai({ ...conc, W9: 1 }, [
       { type: 'kong_concealed', tiles: ['W9', 'W9', 'W9', 'W9'] },
       { type: 'kong_concealed', tiles: ['T5', 'T5', 'T5', 'T5'] },
     ], [], {});
-    expect(p.secured).toBe(16);
+    expect(p.secured).toBe(26); // 无花无字3+3九万5+暗杠九万15+2暗坎2+门清1
+    expect(p.securedDetail.some((d) => d.name === '暗杠九万' && d.tai === 15)).toBe(true);
+    expect(p.securedDetail.some((d) => d.name === '2暗坎' && d.tai === 2)).toBe(true);
     expect(p.securedDetail.some((d) => d.name === '暗杠')).toBe(false);
   });
-  it('已副露东风刻计入（庄 3）；吃副破门清且无保底', () => {
-    const p1 = previewTai(conc, [{ type: 'pong', tiles: ['Z1', 'Z1', 'Z1'] }], [], { isDealer: true });
-    expect(p1.securedDetail.map((d) => [d.name, d.tai])).toEqual([['东风字_庄', 3]]);
-    const p2 = previewTai(conc, [{ type: 'chi', tiles: ['W1', 'W2', 'W3'], called: 'W3' }], [], {});
-    expect(p2.secured).toBe(0);
-    expect(p2.securedDetail).toEqual([]);
+  it('碰字刻计见字：碰东(庄) = 见字1 + 东风字_庄3 + 无花1 = 5', () => {
+    const p = previewTai(conc, [{ type: 'pong', tiles: ['Z1', 'Z1', 'Z1'] }], [], { isDealer: true });
+    expect(p.secured).toBe(5);
+    expect(p.securedDetail.map((d) => d.name).sort()).toEqual(['东风字_庄', '无花', '见字']);
+  });
+  it('用户截图案例：碰南 + 无花 + 手内有西 = 见字1 + 无花1 = 2（门清被碰破、无字不成立）', () => {
+    const c = { W3: 1, W5: 1, W6: 1, W7: 1, W8: 1, T4: 1, T5: 1, B5: 1, B6: 1, Z3: 1 } as Record<string, number>;
+    const p = previewTai(c, [{ type: 'pong', tiles: ['Z2', 'Z2', 'Z2'] }], [], {});
+    expect(p.secured).toBe(2);
+    expect(p.securedDetail.map((d) => [d.name, d.tai]).sort()).toEqual([['无花', 1], ['见字', 1]]);
+  });
+  it('已成型牌型番计入：无花无字3 + 缺一门4 + 一条龙8 + 门清1 = 16；拆散后一条龙实时去除', () => {
+    const c = { W1: 1, W2: 1, W3: 1, W4: 1, W5: 1, W6: 1, W7: 1, W8: 1, W9: 1, T5: 1 } as Record<string, number>;
+    const p = previewTai(c, [], [], {});
+    expect(p.securedDetail.some((d) => d.name === '一条龙' && d.tai === 8)).toBe(true);
+    expect(p.secured).toBe(16);
+    // 打散一条龙（缺 W5）→ 一条龙消失
+    const c2 = { ...c, W5: 0 } as Record<string, number>;
+    delete c2.W5;
+    const p2 = previewTai(c2, [], [], {});
+    expect(p2.securedDetail.some((d) => d.name === '一条龙')).toBe(false);
   });
 });

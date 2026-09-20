@@ -191,6 +191,7 @@ export class RoomActor {
       seats: this.userAtSeat.map((u, seat) => (u ? {
         userId: u,
         seat,
+        nickname: this.names[seat] ?? undefined,
         isBot: u.startsWith('bot-'),
         offline: this.offlineSince.has(u) || undefined,
         trusteed: this.trusteeOf.has(u) || undefined,
@@ -262,7 +263,7 @@ export class RoomActor {
     if (this.phase !== 'waiting') return { ok: false, reason: '已开始' };
     if (byUserId !== this.hostUserId) return { ok: false, reason: '仅房主可开始' };
     if (this.seatOf.size < 4) return { ok: false, reason: '需满 4 人' };
-    // BL-017：开局仪式（选位骰→选座→定庄骰→摸牌位骰）为每房标准流程，完成后才发牌
+    // BL-017：开局仪式（选位骰→选座→定庄摸牌位一掷）为每房标准流程，完成后才发牌
     this.phase = 'seating';
     this.seating = {
       stage: 'roll', rolls: [null, null, null, null], reroll: [false, false, false, false],
@@ -295,10 +296,8 @@ export class RoomActor {
       for (let i = 0; i < 4; i++) if (s.rolls[i] == null) pending.push(i);
     } else if (s.stage === 'pick' && s.picker != null) {
       pending.push(s.picker);
-    } else if (s.stage === 'dealerDice' && s.picker != null) {
+    } else if (s.stage === 'dealerBreak' && s.picker != null) {
       pending.push(s.picker);
-    } else if (s.stage === 'breakDice' && s.dealerSeat != null) {
-      pending.push(s.dealerSeat);
     } else if (s.stage === 'roundBreak' && s.roller != null) {
       pending.push(s.roller);
     }
@@ -331,27 +330,13 @@ export class RoomActor {
       this.broadcastAll();
       return { ok: true };
     }
-    if (s.stage === 'dealerDice') {
-      if (seat !== s.picker) return { ok: false, reason: '仅选位最大者掷定庄骰' };
+    if (s.stage === 'dealerBreak') {
+      if (seat !== s.picker) return { ok: false, reason: '仅选位最大者掷定庄摸牌位骰' };
       const v = RoomActor.roll2d6();
       s.dealerDice = v;
       s.dealerSeat = (seat + ((v - 1) % 4)) % 4; // 1=自己 2=下手 3=对面 4=上手
-      this.seatingLog.push({ stage: 'dealerDice', seat, v, dealerSeat: s.dealerSeat });
-      if (this.settings.breakDice) {
-        s.stage = 'breakDice';
-        s.breakN = null;
-        this.scheduleSeatingAuto();
-        this.broadcastAll();
-      } else {
-        this.finalizeCeremony(0);
-      }
-      return { ok: true };
-    }
-    if (s.stage === 'breakDice') {
-      if (seat !== s.dealerSeat) return { ok: false, reason: '仅庄家掷摸牌位骰' };
-      const v = RoomActor.roll2d6();
-      s.breakN = v;
-      this.seatingLog.push({ stage: 'breakDice', seat, v });
+      s.breakN = v; // 同一点数兼定开牌点（B 门前牌墙右端起跳 N 组）
+      this.seatingLog.push({ stage: 'dealerBreak', seat, v, dealerSeat: s.dealerSeat, breakN: v });
       this.finalizeCeremony(v);
       return { ok: true };
     }
@@ -424,7 +409,7 @@ export class RoomActor {
     // 重排后 order[0] 即 A 的新座
     s.picker = s.order[0]!;
     this.seatingLog.push({ stage: 'pick', seat: s.picker, picked: seat });
-    s.stage = 'dealerDice';
+    s.stage = 'dealerBreak';
     log.info(`选座完成: room=${this.id} A=seat${s.picker} → 座位重排 ${newUserAt.map((u) => u ?? '-').join(',')}`);
     this.scheduleSeatingAuto();
     this.broadcastAll();
@@ -585,9 +570,11 @@ export class RoomActor {
     }
     // BL-017：启用摸牌位骰时，庄家轮换后先掷骰定开牌点再开下一局
     if (this.settings.breakDice) {
+      const ziCounts = this.state.players.map((p) => p.zi);
       this.seating = {
         stage: 'roundBreak', rolls: [null, null, null, null], reroll: [false, false, false, false],
         order: [], picker: null, picked: null, dealerDice: null, dealerSeat: this.state.dealerSeat, breakN: null, roller: this.state.dealerSeat,
+        ziCounts,
       };
       log.info(`摸牌位骰: room=${this.id} 下一局=${this.state.round + 1} 掷骰者=seat${this.state.dealerSeat}`);
       this.scheduleSeatingAuto();

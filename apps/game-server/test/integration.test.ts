@@ -74,7 +74,7 @@ describe('全链路集成 · 4 机器人打完整一局（真实 WS）', () => {
         const i = idxOfSeat(sv.picker!);
         if (i >= 0) clients[i]!.pickSeat(sv.picker!);
       } else {
-        const roller = sv.stage === 'dealerDice' ? sv.picker : sv.dealerSeat;
+        const roller = sv.stage === 'dealerBreak' ? sv.picker : sv.roller;
         const i = roller == null ? -1 : idxOfSeat(roller);
         if (i >= 0) clients[i]!.roll();
       }

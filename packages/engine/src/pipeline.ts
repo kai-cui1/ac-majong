@@ -1,5 +1,5 @@
-import type { Hand, ScoreResult, TileId, Meld, ScoreDetail, MatchedPattern } from './types';
-import { winDecompositions, waitingTiles, isWin, type WinDecomp, type MeldUnit } from './winCheck';
+import type { Hand, ScoreResult, TileId, Meld, ScoreDetail } from './types';
+import { winDecompositions, waitingTiles, isWin, partialDecomps, type WinDecomp, type MeldUnit } from './winCheck';
 import { analyze } from './analyze';
 import { recognizePatterns } from './recognize';
 import { computeTai } from './scoring';
@@ -101,27 +101,35 @@ export interface TaiPreview {
 }
 
 /**
- * BL-021 保底（锁定）台数明细：不依赖未来摸牌与拆解的番种 = 见花 / 杠（含九万九筒特番）/ 门清（当前状态）/ 已副露东风刻。
- * 番名与分值与 recognize 同源；杠族吸收复用 dedup（明杠九筒吸收明杠等），保证与结算口径一致。
- * 门清为「当前状态」保底：之后吃碰会实时消失（徽章/浮层随视图重算）。
+ * BL-021 保底（已锁定）台数明细（2026-09-19 用户确认口径 v2）：
+ * 当前手牌按**最大台数部分分解**跑 recognize（与结算同源），除胡牌流程/听牌型番种外**全部计入**——
+ * 含见花/见字/无花/无字/无花无字/门清（当前态）、杠族（含九万九筒特番与吸收）、暗坎类、
+ * 已成型的牌型番（一条龙/三相逢/三姊妹/碰碰胡/清一色…只要当前拆解成立）。
+ * 用户后续摸打/拆解导致番种不成立时，实时重算自然从保底中去除。
  */
-export function securedLines(melds: Meld[], flowers: TileId[], isDealer: boolean): ScoreDetail[] {
-  const raw: MatchedPattern[] = [];
-  if (flowers.length) raw.push({ name: '见花', count: flowers.length, tiles: [...flowers] });
-  let exp = 0;
-  let con = 0;
-  for (const m of melds) {
-    const b = [...m.tiles].sort()[0]!;
-    const nine = b === 'B9' ? '九筒' : b === 'W9' ? '九万' : '';
-    if (m.type === 'kong_concealed') { if (nine) raw.push({ name: `暗杠${nine}` }); else con++; }
-    else if (m.type === 'kong_exposed' || m.type === 'kong_added') { if (nine) raw.push({ name: `明杠${nine}` }); else exp++; }
-    else if (m.type === 'pong' && b === 'Z1') raw.push({ name: isDealer ? '东风字_庄' : '东风字_非庄' });
+/** 依赖胡牌流程/听牌语境的番种：不计入保底（胡牌/听牌时才结算） */
+const WIN_FLOW_PATTERNS = new Set([
+  '自摸', '门清一摸一', '门清一摸二', '门清一摸三',
+  '独独', '1独', '对碰',
+  '胡九筒', '胡九万', '自摸九筒', '自摸九万',
+  '杠开胡', '花开胡', '抢杠胡', '海底捞', '最小胡',
+]);
+
+export function securedLines(concealed: Record<string, number>, melds: Meld[], flowers: TileId[], isDealer: boolean): ScoreDetail[] {
+  // 伪手牌：winBy=dianpao + winTile=H1（暗牌永不含花牌 id）→ 门清按当前态档输出、暗坎不被胡牌张误降、流程番自然不触发
+  const hand: Hand = { concealed, melds, flowers, winTile: 'H1', winBy: 'dianpao', isDealer, wallRemaining: 99, lianzhuangCount: 0, seatsZi: {} };
+  let best: ScoreDetail[] = [];
+  let bestTai = -1;
+  for (const d of partialDecomps(concealed)) {
+    const a = analyze(hand, d);
+    const lines = dedup(recognizePatterns(hand, a)).filter((p) => !WIN_FLOW_PATTERNS.has(p.name));
+    const tai = lines.reduce((s, p) => s + patternTai(p), 0);
+    if (tai > bestTai) {
+      bestTai = tai;
+      best = lines.map((p) => ({ name: p.name, tai: patternTai(p), count: p.count, tiles: p.tiles }));
+    }
   }
-  if (exp) raw.push({ name: '明杠', count: exp });
-  if (con) raw.push({ name: '暗杠', count: con });
-  // 门清：无 吃/碰/明杠/加杠（暗杠不破，N2，与 analyze.isMenqing 同口径）
-  if (!melds.some((m) => m.type === 'chi' || m.type === 'pong' || m.type === 'kong_exposed' || m.type === 'kong_added')) raw.push({ name: '门清' });
-  return dedup(raw).map((p) => ({ name: p.name, tai: patternTai(p), count: p.count, tiles: p.tiles }));
+  return best;
 }
 
 /**
@@ -144,7 +152,7 @@ export function previewTai(
     return add > 0 ? { tai: tai + add, detail: [...detail, ...lines.map((l) => ({ name: l.name, tai: l.tai, count: l.count }))] } : { tai, detail };
   };
   /** BL-021：保底台数随预览一同返回（徽章/浮层常显） */
-  const securedDetail = securedLines(melds, flowers, opts.isDealer ?? false);
+  const securedDetail = securedLines(concealed, melds, flowers, opts.isDealer ?? false);
   const sec = { secured: securedDetail.reduce((s, d) => s + d.tai, 0), securedDetail };
   const mkHand = (conc: Record<string, number>, winTile: TileId): Hand => ({
     concealed: conc,

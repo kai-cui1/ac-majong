@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AC 麻将 · Admin — 用户管理</title>
+  <link rel="stylesheet" href="admin.css">
+</head>
+<body>
+  <div class="layout">
+    <!-- 侧栏 -->
+    <aside class="sider">
+      <div class="sider-logo">
+        <div class="tile">🀄</div>
+        <div class="txt">AC 麻将<small>管理后台</small></div>
+      </div>
+      <nav class="menu">
+        <div class="menu-group">查证</div>
+        <a class="menu-item active" href="users.html"><span class="ico">👥</span> 用户管理</a>
+        <a class="menu-item" href="rooms.html"><span class="ico">🚪</span> 房间 / 对局</a>
+        <a class="menu-item" href="replay.html"><span class="ico">▶️</span> 回放仲裁</a>
+        <div class="menu-group">系统 <span class="role-hint" style="color:rgba(255,255,255,.3);border-color:rgba(255,255,255,.2)">super</span></div>
+        <a class="menu-item" href="admins.html"><span class="ico">🛡️</span> 管理员管理 <span class="lock">🔒</span></a>
+        <a class="menu-item" href="audit.html"><span class="ico">📜</span> 审计日志 <span class="lock">🔒</span></a>
+      </nav>
+    </aside>
+
+    <!-- 主区 -->
+    <div class="main">
+      <header class="header">
+        <div class="crumb">查证 / <b>用户管理</b></div>
+        <div class="spacer"></div>
+        <span class="env-tag">内网 · 只读一期</span>
+        <div class="who"><span class="avatar">R</span> admin_root · <b>super</b> · <a href="login.html">登出</a></div>
+      </header>
+
+      <div class="content">
+        <h1 class="page-title">用户管理</h1>
+        <p class="page-desc">检索玩家、查看资料与战绩（一期<b>纯只读</b>，不含封禁/改资料等处置）。</p>
+
+        <!-- 检索工具栏 -->
+        <div class="card"><div class="card-body">
+          <div class="toolbar">
+            <div class="field"><label>关键词</label><input class="input wide" placeholder="openid / 昵称" value="牌友"></div>
+            <div class="field"><label>注册时间</label><input class="input" type="date" value="2026-09-01"> <span class="muted">~</span> <input class="input" type="date" value="2026-09-19"></div>
+            <button class="btn btn-primary">查询</button>
+            <button class="btn">重置</button>
+            <div class="grow"></div>
+            <span class="muted">共 128 位用户</span>
+          </div>
+        </div></div>
+
+        <!-- 结果表 -->
+        <div class="card"><div class="card-body flush">
+          <table class="table">
+            <thead><tr>
+              <th>用户</th><th>openid</th><th>注册时间</th><th>最后登录</th>
+              <th class="right">房间数</th><th class="right">对局数</th><th class="right">累计台数</th><th>操作</th>
+            </tr></thead>
+            <tbody>
+              <tr>
+                <td class="strong">牌友3021</td>
+                <td class="num">o8xK…3fA2</td>
+                <td>2026-09-03 14:22</td><td>2026-09-19 09:41</td>
+                <td class="right num">17</td><td class="right num">96</td><td class="right num">+214</td>
+                <td class="table-actions"><button class="btn btn-link" onclick="document.getElementById('drawerMask').style.display='block';document.getElementById('drawer').style.display='flex'">详情</button></td>
+              </tr>
+              <tr>
+                <td class="strong">老张</td>
+                <td class="num">h5:zhangsan</td>
+                <td>2026-09-05 20:10</td><td>2026-09-18 22:03</td>
+                <td class="right num">9</td><td class="right num">52</td><td class="right num">+66</td>
+                <td class="table-actions"><button class="btn btn-link">详情</button></td>
+              </tr>
+              <tr>
+                <td class="strong">牌友7788</td>
+                <td class="num">oQ2m…9bC1</td>
+                <td>2026-09-11 08:55</td><td>2026-09-17 19:30</td>
+                <td class="right num">4</td><td class="right num">21</td><td class="right num">−18</td>
+                <td class="table-actions"><button class="btn btn-link">详情</button></td>
+              </tr>
+              <tr>
+                <td class="strong">阿珍</td>
+                <td class="num">h5:azhen</td>
+                <td>2026-09-14 12:01</td><td>2026-09-16 21:14</td>
+                <td class="right num">2</td><td class="right num">8</td><td class="right num">+5</td>
+                <td class="table-actions"><button class="btn btn-link">详情</button></td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="pager">
+            <span class="total">共 128 条</span>
+            <span class="pg">‹</span><span class="pg active">1</span><span class="pg">2</span><span class="pg">3</span><span class="pg">…</span><span class="pg">32</span><span class="pg">›</span>
+          </div>
+        </div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 用户详情抽屉（默认展示态） -->
+  <div class="drawer-mask" id="drawerMask" onclick="this.style.display='none';document.getElementById('drawer').style.display='none'"></div>
+  <div class="drawer" id="drawer">
+    <div class="drawer-head">用户详情 · 牌友3021 <span class="x" onclick="document.getElementById('drawerMask').style.display='none';document.getElementById('drawer').style.display='none'">✕</span></div>
+    <div class="drawer-body">
+      <div class="desc" style="margin-bottom:20px">
+        <div class="k">openid</div><div class="v mono">o8xK2mP9q3fA2</div>
+        <div class="k">昵称</div><div class="v">牌友3021</div>
+        <div class="k">头像</div><div class="v muted">（未设置 · 头像功能延后）</div>
+        <div class="k">注册时间</div><div class="v">2026-09-03 14:22</div>
+        <div class="k">最后登录</div><div class="v">2026-09-19 09:41</div>
+      </div>
+
+      <div class="stat-grid" style="grid-template-columns:repeat(3,1fr)">
+        <div class="stat"><div class="label">参赛房间</div><div class="value">17</div></div>
+        <div class="stat"><div class="label">对局数</div><div class="value">96</div></div>
+        <div class="stat"><div class="label">累计台数</div><div class="value">+214</div></div>
+      </div>
+
+      <div class="card" style="box-shadow:none;border:1px solid var(--split)"><div class="card-head">近期房间 <span class="sub">listRoomsByPlayer</span></div>
+        <div class="card-body flush">
+          <table class="table">
+            <thead><tr><th>房间号</th><th>身份</th><th>局数上限</th><th>状态</th><th>最终分</th><th>操作</th></tr></thead>
+            <tbody>
+              <tr><td class="num strong">R84213</td><td><span class="tag tag-gold">房主</span></td><td>不限</td><td><span class="tag tag-gray">closed</span></td><td class="num">+86</td><td><a href="rooms.html">查看</a></td></tr>
+              <tr><td class="num strong">R77120</td><td><span class="tag tag-blue">成员</span></td><td>8</td><td><span class="tag tag-gray">closed</span></td><td class="num">−12</td><td><a href="rooms.html">查看</a></td></tr>
+              <tr><td class="num strong">R90011</td><td><span class="tag tag-blue">成员</span></td><td>16</td><td><span class="tag tag-green">playing</span></td><td class="muted">—</td><td><a href="rooms.html">查看</a></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="drawer-foot">
+      <span class="muted grow" style="align-self:center">一期只读 · 处置动作（封禁/改资料）归二期</span>
+      <button class="btn" onclick="document.getElementById('drawerMask').style.display='none';document.getElementById('drawer').style.display='none'">关闭</button>
+    </div>
+  </div>
+</body>
+</html>

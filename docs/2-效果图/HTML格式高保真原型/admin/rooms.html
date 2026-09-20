@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AC 麻将 · Admin — 房间 / 对局</title>
+  <link rel="stylesheet" href="admin.css">
+</head>
+<body>
+  <div class="layout">
+    <aside class="sider">
+      <div class="sider-logo"><div class="tile">🀄</div><div class="txt">AC 麻将<small>管理后台</small></div></div>
+      <nav class="menu">
+        <div class="menu-group">查证</div>
+        <a class="menu-item" href="users.html"><span class="ico">👥</span> 用户管理</a>
+        <a class="menu-item active" href="rooms.html"><span class="ico">🚪</span> 房间 / 对局</a>
+        <a class="menu-item" href="replay.html"><span class="ico">▶️</span> 回放仲裁</a>
+        <div class="menu-group">系统 <span class="role-hint" style="color:rgba(255,255,255,.3);border-color:rgba(255,255,255,.2)">super</span></div>
+        <a class="menu-item" href="admins.html"><span class="ico">🛡️</span> 管理员管理 <span class="lock">🔒</span></a>
+        <a class="menu-item" href="audit.html"><span class="ico">📜</span> 审计日志 <span class="lock">🔒</span></a>
+      </nav>
+    </aside>
+
+    <div class="main">
+      <header class="header">
+        <div class="crumb">查证 / <b>房间 / 对局</b></div>
+        <div class="spacer"></div>
+        <span class="env-tag">内网 · 只读一期</span>
+        <div class="who"><span class="avatar">R</span> admin_root · <b>super</b> · <a href="login.html">登出</a></div>
+      </header>
+
+      <div class="content">
+        <h1 class="page-title">房间 / 对局</h1>
+        <p class="page-desc">按房间号 / 房主 / 状态 / 时间检索；查看房间详情（成员进出 + 局列表），进入任意一局回放仲裁。</p>
+
+        <div class="card"><div class="card-body">
+          <div class="toolbar">
+            <div class="field"><label>房间号</label><input class="input" placeholder="R84213" value="R84213"></div>
+            <div class="field"><label>房主</label><input class="input" placeholder="openid / 昵称"></div>
+            <div class="field"><label>状态</label>
+              <select class="select"><option>全部</option><option>idle</option><option>playing</option><option selected>closed</option></select>
+            </div>
+            <div class="field"><label>创建时间</label><input class="input" type="date" value="2026-09-01"> <span class="muted">~</span> <input class="input" type="date" value="2026-09-19"></div>
+            <button class="btn btn-primary">查询</button>
+            <button class="btn">重置</button>
+          </div>
+        </div></div>
+
+        <div class="card"><div class="card-body flush">
+          <table class="table">
+            <thead><tr><th>房间号</th><th>房主</th><th>局数上限</th><th>状态</th><th>已打/总</th><th>创建时间</th><th>关闭时间</th><th>操作</th></tr></thead>
+            <tbody>
+              <tr style="background:var(--primary-bg)"><td class="num strong">R84213</td><td>牌友3021</td><td>不限</td><td><span class="tag tag-gray">closed</span></td><td class="num">6 / ∞</td><td>2026-09-18 20:11</td><td>2026-09-18 22:40</td><td><button class="btn btn-link">详情 ▾</button></td></tr>
+              <tr><td class="num strong">R90011</td><td>老张</td><td>16</td><td><span class="tag tag-green"><span class="dot dot-green"></span>playing</span></td><td class="num">3 / 16</td><td>2026-09-19 09:02</td><td class="muted">—</td><td><button class="btn btn-link">详情</button></td></tr>
+              <tr><td class="num strong">R77120</td><td>阿珍</td><td>8</td><td><span class="tag tag-gray">closed</span></td><td class="num">8 / 8</td><td>2026-09-17 19:20</td><td>2026-09-17 21:55</td><td><button class="btn btn-link">详情</button></td></tr>
+            </tbody>
+          </table>
+          <div class="pager"><span class="total">共 42 个房间</span><span class="pg">‹</span><span class="pg active">1</span><span class="pg">2</span><span class="pg">›</span></div>
+        </div></div>
+
+        <!-- 房间详情（选中 R84213） -->
+        <div class="card">
+          <div class="card-head">房间详情 · <span class="mono">R84213</span> <span class="sub">房主 牌友3021 · 不限局 · closed</span></div>
+          <div class="card-body">
+            <div class="desc" style="margin-bottom:20px">
+              <div class="k">积分账本</div><div class="v mono">seat0 +86 · seat1 −12 · seat2 −40 · seat3 −34</div>
+              <div class="k">最终分</div><div class="v mono">seat0 +86 · seat1 −12 · seat2 −40 · seat3 −34</div>
+              <div class="k">玩法参数</div><div class="v">牌墙模式 physical · 摸牌位骰 开 · 先看吃再碰 开</div>
+            </div>
+
+            <div class="row" style="align-items:flex-start;gap:24px">
+              <div class="grow">
+                <div class="card" style="box-shadow:none;border:1px solid var(--split);margin:0"><div class="card-head">局列表 <span class="sub">listGames</span></div>
+                  <div class="card-body flush">
+                    <table class="table">
+                      <thead><tr><th>局</th><th>game_id</th><th>庄家</th><th>结束</th><th>赢家/台数</th><th>仲裁</th><th>操作</th></tr></thead>
+                      <tbody>
+                        <tr><td class="num">1</td><td class="num">R84213:1</td><td>seat0</td><td><span class="tag tag-green">win</span></td><td>seat2 · 8台</td><td class="muted">—</td><td><a href="replay.html">回放</a></td></tr>
+                        <tr><td class="num">2</td><td class="num">R84213:2</td><td>seat2</td><td><span class="tag tag-green">win</span></td><td>seat0 · 12台</td><td><span class="tag tag-gold">已受理</span></td><td><a href="replay.html">回放</a></td></tr>
+                        <tr><td class="num">3</td><td class="num">R84213:3</td><td>seat0</td><td><span class="tag tag-gray">exhaustive</span></td><td class="muted">荒庄</td><td class="muted">—</td><td><a href="replay.html">回放</a></td></tr>
+                        <tr><td class="num">4</td><td class="num">R84213:4</td><td>seat0</td><td><span class="tag tag-green">win</span></td><td>seat0 · 5台(自摸)</td><td class="muted">—</td><td><a href="replay.html">回放</a></td></tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+              <div style="width:300px;flex-shrink:0">
+                <div class="card" style="box-shadow:none;border:1px solid var(--split);margin:0"><div class="card-head">成员进出 <span class="sub">room_member_events</span></div>
+                  <div class="card-body flush">
+                    <table class="table">
+                      <tbody>
+                        <tr><td class="nowrap">20:11</td><td><span class="tag tag-gold">create</span></td><td>牌友3021 · seat0</td></tr>
+                        <tr><td class="nowrap">20:12</td><td><span class="tag tag-blue">join</span></td><td>老张 · seat1</td></tr>
+                        <tr><td class="nowrap">20:12</td><td><span class="tag tag-blue">join</span></td><td>阿珍 · seat2</td></tr>
+                        <tr><td class="nowrap">20:13</td><td><span class="tag tag-gray">join</span></td><td>Bot · seat3</td></tr>
+                        <tr><td class="nowrap">22:40</td><td><span class="tag tag-red">leave</span></td><td>房主解散</td></tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

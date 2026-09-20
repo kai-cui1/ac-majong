@@ -96,7 +96,7 @@ async function driveCeremonyWs(cs: ReturnType<typeof client>[]): Promise<void> {
     } else if (sv.stage === 'pick') {
       bySeat(sv.picker)?.send({ t: 'pickSeat', seq: 900 + step, seat: sv.picker });
     } else {
-      const roller = sv.stage === 'dealerDice' ? sv.picker : sv.stage === 'roundBreak' ? sv.roller : sv.dealerSeat;
+      const roller = sv.stage === 'dealerBreak' ? sv.picker : sv.roller;
       bySeat(roller)?.send({ t: 'roll', seq: 900 + step });
     }
     await new Promise((r) => setTimeout(r, 40));

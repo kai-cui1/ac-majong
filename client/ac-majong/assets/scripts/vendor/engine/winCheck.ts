@@ -75,6 +75,38 @@ export function standardDecomps(concealed: Record<string, number>, formedMeldCou
   return res;
 }
 
+/**
+ * BL-021 部分分解：任意数量副（0..n）+ 可选将 + 余牌浮置——枚举当前手牌「已成型」牌型（保底台数用）。
+ * 规范序（恒先处理最小牌）保证不重不漏；cap 防枚举爆炸。
+ */
+export function partialDecomps(concealed: Record<string, number>, cap = 384): WinDecomp[] {
+  const res: WinDecomp[] = [];
+  const enumSets = (counts: Record<string, number>, acc: MeldUnit[], pair: TileId | null): void => {
+    if (res.length >= cap) return;
+    const present = ALL_KINDS.filter((t) => (counts[t] ?? 0) > 0);
+    if (present.length === 0) {
+      res.push({ kind: 'standard', pair, concealedMelds: acc });
+      return;
+    }
+    const t = present[0]!;
+    const c = counts[t]!;
+    enumSets(sub(counts, t, 1), acc, pair); // 浮置一张
+    if (c >= 3) enumSets(sub(counts, t, 3), [...acc, { kind: 'pung', tiles: [t, t, t] }], pair);
+    if (isSuited(t) && rankOf(t) <= 7) {
+      const t1 = `${suitOf(t)}${rankOf(t) + 1}` as TileId;
+      const t2 = `${suitOf(t)}${rankOf(t) + 2}` as TileId;
+      if ((counts[t1] ?? 0) > 0 && (counts[t2] ?? 0) > 0) {
+        enumSets(sub(sub(sub(counts, t, 1), t1, 1), t2, 1), [...acc, { kind: 'seq', tiles: [t, t1, t2] }], pair);
+      }
+    }
+  };
+  enumSets(concealed, [], null);
+  for (const p of ALL_KINDS) {
+    if ((concealed[p] ?? 0) >= 2) enumSets(sub(concealed, p, 2), [], p);
+  }
+  return res;
+}
+
 /** 八对半（N1）：无成型副，暗牌 17 张 = 8 对 + 1 奇张（8对+1单 或 7对+1刻 均满足） */
 export function isPairs8(concealed: Record<string, number>, formedMeldCount: number): boolean {
   if (formedMeldCount !== 0 || total(concealed) !== 17) return false;

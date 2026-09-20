@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AC 麻将 · Admin — 管理员管理</title>
+  <link rel="stylesheet" href="admin.css">
+  <style>
+    .modal-mask { position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:40; display:flex; align-items:flex-start; justify-content:center; }
+    .modal { width:440px; background:#fff; border-radius:var(--radius-lg); box-shadow:var(--shadow-pop); margin-top:100px; }
+    .modal-head { padding:16px 24px; border-bottom:1px solid var(--split); font-weight:600; font-size:16px; }
+    .modal-body { padding:24px; }
+    .modal-foot { padding:12px 24px; border-top:1px solid var(--split); display:flex; justify-content:flex-end; gap:8px; }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside class="sider">
+      <div class="sider-logo"><div class="tile">🀄</div><div class="txt">AC 麻将<small>管理后台</small></div></div>
+      <nav class="menu">
+        <div class="menu-group">查证</div>
+        <a class="menu-item" href="users.html"><span class="ico">👥</span> 用户管理</a>
+        <a class="menu-item" href="rooms.html"><span class="ico">🚪</span> 房间 / 对局</a>
+        <a class="menu-item" href="replay.html"><span class="ico">▶️</span> 回放仲裁</a>
+        <div class="menu-group">系统 <span class="role-hint" style="color:rgba(255,255,255,.3);border-color:rgba(255,255,255,.2)">super</span></div>
+        <a class="menu-item active" href="admins.html"><span class="ico">🛡️</span> 管理员管理 <span class="lock">🔒</span></a>
+        <a class="menu-item" href="audit.html"><span class="ico">📜</span> 审计日志 <span class="lock">🔒</span></a>
+      </nav>
+    </aside>
+
+    <div class="main">
+      <header class="header">
+        <div class="crumb">系统 / <b>管理员管理</b></div>
+        <div class="spacer"></div>
+        <span class="role-hint">仅 super 可见</span>
+        <div class="who"><span class="avatar">R</span> admin_root · <b>super</b> · <a href="login.html">登出</a></div>
+      </header>
+
+      <div class="content">
+        <div class="row" style="margin-bottom:4px">
+          <h1 class="page-title" style="margin:0">管理员管理</h1>
+          <div class="grow"></div>
+          <button class="btn btn-primary" onclick="document.getElementById('m').style.display='flex'">+ 新建管理员</button>
+        </div>
+        <p class="page-desc">创建 / 停用管理员、分配角色、重置密码。角色三档：super（全部）· operator（查询+仲裁）· viewer（只读）。</p>
+
+        <div class="card"><div class="card-body flush">
+          <table class="table">
+            <thead><tr><th>账号</th><th>角色</th><th>状态</th><th>创建时间</th><th>最后登录</th><th>操作</th></tr></thead>
+            <tbody>
+              <tr>
+                <td class="strong">admin_root</td>
+                <td><span class="tag tag-purple">super</span></td>
+                <td><span class="tag tag-green"><span class="dot dot-green"></span>启用</span></td>
+                <td>2026-09-18 10:00</td><td>2026-09-19 09:30</td>
+                <td class="table-actions"><span class="muted">当前账号</span></td>
+              </tr>
+              <tr>
+                <td class="strong">ops_zhang</td>
+                <td><span class="tag tag-blue">operator</span></td>
+                <td><span class="tag tag-green"><span class="dot dot-green"></span>启用</span></td>
+                <td>2026-09-18 11:20</td><td>2026-09-18 23:10</td>
+                <td class="table-actions">
+                  <button class="btn btn-link">改角色</button><button class="btn btn-link">重置密码</button><button class="btn btn-link" style="color:var(--error)">停用</button>
+                </td>
+              </tr>
+              <tr>
+                <td class="strong">cs_li</td>
+                <td><span class="tag tag-gray">viewer</span></td>
+                <td><span class="tag tag-green"><span class="dot dot-green"></span>启用</span></td>
+                <td>2026-09-18 14:02</td><td>2026-09-19 08:55</td>
+                <td class="table-actions">
+                  <button class="btn btn-link">改角色</button><button class="btn btn-link">重置密码</button><button class="btn btn-link" style="color:var(--error)">停用</button>
+                </td>
+              </tr>
+              <tr>
+                <td class="strong muted">ops_wang</td>
+                <td><span class="tag tag-blue">operator</span></td>
+                <td><span class="tag tag-red"><span class="dot dot-red"></span>已停用</span></td>
+                <td>2026-09-18 15:40</td><td class="muted">—</td>
+                <td class="table-actions"><button class="btn btn-link">启用</button><button class="btn btn-link">重置密码</button></td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="pager"><span class="total">共 4 位管理员</span><span class="pg">‹</span><span class="pg active">1</span><span class="pg">›</span></div>
+        </div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 新建管理员弹窗 -->
+  <div class="modal-mask" id="m" style="display:flex" onclick="if(event.target===this)this.style.display='none'">
+    <div class="modal">
+      <div class="modal-head">新建管理员</div>
+      <div class="modal-body">
+        <div class="form-item"><label><span class="req">*</span>账号</label><input class="input" placeholder="3-20 位字母/数字/下划线" value="ops_zhao"></div>
+        <div class="form-item"><label><span class="req">*</span>初始密码</label><input class="input" type="password" placeholder="≥8 位，含字母与数字" value="········"></div>
+        <div class="form-item"><label><span class="req">*</span>角色</label>
+          <select class="select" style="width:100%"><option>viewer（只读客服）</option><option selected>operator（运营·可仲裁）</option><option>super（超管·全部）</option></select>
+          <div class="form-tip">角色决定可访问模块，见权限矩阵（PRD 10 §3）。</div>
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button class="btn" onclick="document.getElementById('m').style.display='none'">取消</button>
+        <button class="btn btn-primary" onclick="document.getElementById('m').style.display='none'">创建</button>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

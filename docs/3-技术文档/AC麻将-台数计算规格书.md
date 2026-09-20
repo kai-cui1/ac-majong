@@ -674,7 +674,7 @@ PatternDef {
 
 - `ScoreDetail` 增 `count?`（按张计台番种的张数）与 `tiles?`（构成该番种的具体牌），供客户端展开显示（如「见花 ×2：春、夏」）。
 - `recognize` 对见花/见字填入 `count` 与 `tiles`（花牌列表 / 字刻字牌）；`name` 保持不变（必然包含矩阵与测试以 name 为键）。
-- `previewTai` 升级**三态实时**：A 可直接自摸→`canWin`+胡牌台数；B 3n+2 未胡→遍历打法取「打后听牌且台数最高」路线（`viaDiscard`）；C 3n+1 已听牌→最佳听张台数。复用 `scoreHand`，与真实结算一致。**BL-021 保底台数**：`securedLines(melds, flowers, isDealer)` 产锁定番种明细（见花/杠含九万九筒特番/门清当前态/已副露东风刻，吸收复用 `dedup`），`TaiPreview` 增 `secured/securedDetail` 随三态一同返回（徽章未听牌显保底、浮层保底区块常显）。**听张门槛过滤（D-15）**：`bestOverWaits` 逐听张算分，仅保留 `win && !zhaHu`（≥6 台）的「可胡听张」；B 路线 waits 仅含可胡听张，C 无达门槛听张时 `tenpai:false`——保证提示的听牌必然可胡。
+- `previewTai` 升级**三态实时**：A 可直接自摸→`canWin`+胡牌台数；B 3n+2 未胡→遍历打法取「打后听牌且台数最高」路线（`viaDiscard`）；C 3n+1 已听牌→最佳听张台数。复用 `scoreHand`，与真实结算一致。**BL-021 保底台数（v2）**：`securedLines(concealed, melds, flowers, isDealer)` = 当前手牌经 `partialDecomps`（winCheck：任意副+可选将+余牌浮置的部分分解）枚举、取**最大台数分解**跑 `analyze+recognizePatterns`，剔除胡牌流程/听牌型番种（`WIN_FLOW_PATTERNS`）后 dedup 产出；吸收/番名/分值与结算完全同源；`TaiPreview` 增 `secured/securedDetail` 随三态一同返回（徽章未听牌显保底、浮层保底区块常显）。**听张门槛过滤（D-15）**：`bestOverWaits` 逐听张算分，仅保留 `win && !zhaHu`（≥6 台）的「可胡听张」；B 路线 waits 仅含可胡听张，C 无达门槛听张时 `tenpai:false`——保证提示的听牌必然可胡。
 
 ## 维护记录
 
@@ -1359,7 +1359,7 @@ PatternDef {
 
 - `ScoreDetail` 增 `count?`（按张计台番种的张数）与 `tiles?`（构成该番种的具体牌），供客户端展开显示（如「见花 ×2：春、夏」）。
 - `recognize` 对见花/见字填入 `count` 与 `tiles`（花牌列表 / 字刻字牌）；`name` 保持不变（必然包含矩阵与测试以 name 为键）。
-- `previewTai` 升级**三态实时**：A 可直接自摸→`canWin`+胡牌台数；B 3n+2 未胡→遍历打法取「打后听牌且台数最高」路线（`viaDiscard`）；C 3n+1 已听牌→最佳听张台数。复用 `scoreHand`，与真实结算一致。**BL-021 保底台数**：`securedLines(melds, flowers, isDealer)` 产锁定番种明细（见花/杠含九万九筒特番/门清当前态/已副露东风刻，吸收复用 `dedup`），`TaiPreview` 增 `secured/securedDetail` 随三态一同返回（徽章未听牌显保底、浮层保底区块常显）。**听张门槛过滤（D-15）**：`bestOverWaits` 逐听张算分，仅保留 `win && !zhaHu`（≥6 台）的「可胡听张」；B 路线 waits 仅含可胡听张，C 无达门槛听张时 `tenpai:false`——保证提示的听牌必然可胡。
+- `previewTai` 升级**三态实时**：A 可直接自摸→`canWin`+胡牌台数；B 3n+2 未胡→遍历打法取「打后听牌且台数最高」路线（`viaDiscard`）；C 3n+1 已听牌→最佳听张台数。复用 `scoreHand`，与真实结算一致。**BL-021 保底台数（v2）**：`securedLines(concealed, melds, flowers, isDealer)` = 当前手牌经 `partialDecomps`（winCheck：任意副+可选将+余牌浮置的部分分解）枚举、取**最大台数分解**跑 `analyze+recognizePatterns`，剔除胡牌流程/听牌型番种（`WIN_FLOW_PATTERNS`）后 dedup 产出；吸收/番名/分值与结算完全同源；`TaiPreview` 增 `secured/securedDetail` 随三态一同返回（徽章未听牌显保底、浮层保底区块常显）。**听张门槛过滤（D-15）**：`bestOverWaits` 逐听张算分，仅保留 `win && !zhaHu`（≥6 台）的「可胡听张」；B 路线 waits 仅含可胡听张，C 无达门槛听张时 `tenpai:false`——保证提示的听牌必然可胡。
 
 ## 维护记录
 
@@ -1372,3 +1372,4 @@ PatternDef {
 | 2026-09-18 | **暗坎点炮口径（用户报障：点炮胡九筒被计三暗坎）**：`analyze.isPungConcealed`——点炮胡时胡牌张凑成的第三张刻子不计暗坎（暗牌该牌仅 2 张+胡牌张→非暗；暗牌足 3 张或自摸→仍暗）；recognize-kong-flow 新增 3 例（点炮降档/自摸仍计/胡牌张作将不受影响）；engine 172 绿、server 70 绿；vendor 同步+server 重启+H5 重建 |
 | 2026-09-18 | **计分口径陈旧描述同步（D-25 遗留）**：§6.1 基本量两处「1 台 = 20 虚拟积分」改「积分与台数 1:1（D-25 废除倍率）」；与 PRD00/PRD04/规则说明书/客户端房卡标签同批 |
 | 2026-09-19 | **BL-021 保底台数**：新增 `securedLines`（锁定番种=见花/杠含特番/门清当前态/已副露东风刻；番名分值与 recognize 同源、吸收复用 dedup）；`TaiPreview` 增 `secured/securedDetail`；pipeline.test 4 例（用户截图案例 3花+暗杠+门清=6 / 明杠九万吸收 / 暗杠九万名称级吸收 / 东风刻与吃副破门清），engine 177 绿 |
+| 2026-09-19 | **BL-021 保底口径 v2（用户复核修正）**：v1 白名单（花/杠/门清/东风刻）漏计无花/见字/暗坎类/已成型牌型番 → 改为「当前最佳部分分解跑 recognize 全量计入（除流程番）」；winCheck 新增 `partialDecomps`；pipeline `WIN_FLOW_PATTERNS` 黑名单；伪手牌 winBy=dianpao+winTile=H1 保证门清当前态档与暗坎不被误降；测试 6 例（含用户截图案例 碰南+无花=2），engine 179 绿 |

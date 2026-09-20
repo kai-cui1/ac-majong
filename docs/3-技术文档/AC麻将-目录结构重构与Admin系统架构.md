@@ -74,6 +74,7 @@ ac-majong-new/
 ## 6. Admin 系统架构（技术栈已选型，P2 落地）
 
 > 选型于 2026-09-18 确认。一期范围见 backlog **BL-015 管理后台子系统一期**（管理员鉴权角色 + 用户管理 + 对局/回放仲裁 + 审计日志；看板/运营配置二期）。
+> **本文为架构蓝图；一期落地细节（表结构 / REST API 契约 / Drizzle P2-a / Session-RBAC / 回放帧）以 [`AC麻将-Admin后台技术方案.md`](./AC麻将-Admin后台技术方案.md) 为准；产品需求见 [`../1-prd/10-Admin后台.md`](../1-prd/10-Admin后台.md)。**
 
 ### 6.1 admin-server（独立后端服务）
 - **形态**：独立 Node 20 + TypeScript(ESM) **HTTP/REST** 服务（`apps/admin-server`），独立进程/容器，可独立重启而不影响对局。工具链沿用 tsx / tsc / vitest（与 game-server 一致）。
@@ -152,3 +153,4 @@ ac-majong-new/
 | 2026-09-18 | 首次产出：目录三分法目标结构、系统依赖规则、persistence 抽包设计（P0）、Admin 系统架构蓝图（独立服务 + 同库 ac_majong，P2）、P0/P1/P2 迁移步骤与验证门禁、风险与回滚 |
 | 2026-09-18 | **P0/P1 执行完成**：persistence 抽为共享包 `@ac-majong/persistence`（源码+测试随包迁移）；`server`→`apps/game-server`（包名 `@ac-majong/game-server`）；workspace 改 `apps/*` 并清除空壳 miniwxapp；同步 Dockerfile/compose.prod/start-server/.gitignore 与 03/04/06 文档路径。门禁：typecheck/test(64+172+6)/build、compose config(dev+prod)、8082 起服冒烟 全绿 |
 | 2026-09-18 | **Admin 技术栈选型定稿**（§6 写实）：后端 Fastify 5 + zod、Session+RBAC（会话存 Redis + @fastify/csrf-protection）；前端 Vite+React 18+TS+AntD 5(自建布局)+TanStack Query+React Router 6+Zustand，ECharts 二期；部署三容器 + nginx 同源反代 + 网络隔离。数据层目标**全面 Drizzle 化**但**分 P2-a/P2-b 两阶段**（一期只为 admin 引入 Drizzle、不碰已 e2e 验证的对局写链路；二期将 persistence 整体迁 Drizzle 并退役 raw mysql2/schema.sql）；persistence 最终为 Drizzle-based 共享层、仍为唯一数据入口。同步更新 §7 P2 步骤与门禁 |
+| 2026-09-19 | Admin 一期细化拆出独立文档：新增 [`AC麻将-Admin后台技术方案.md`](./AC麻将-Admin后台技术方案.md)（schema + API 契约 + Drizzle P2-a + Session-RBAC + 回放帧 + 审计）；本文 §6 降为架构蓝图并链接至细化文档；同步产出 PRD [10-Admin后台](../1-prd/10-Admin后台.md) |

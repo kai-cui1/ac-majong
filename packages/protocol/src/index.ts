@@ -29,9 +29,9 @@ export interface PublicRoomEntry {
   status: 'waiting' | 'playing';
 }
 
-/** BL-017 开局仪式/摸牌位骰视图（roomView 与 gameView 共用下发） */
+/** BL-017 开局仪式/摸牌位骰视图（roomView 与 gameView 共用下发）；2026-09-19 流程合并：dealerDice+breakDice → dealerBreak（A 一掷同时定庄+定开牌点） */
 export interface SeatingView {
-  stage: 'roll' | 'pick' | 'dealerDice' | 'breakDice' | 'roundBreak';
+  stage: 'roll' | 'pick' | 'dealerBreak' | 'roundBreak';
   /** 各座位当前骰点和（未掷=null，按现座位下标） */
   rolls: (number | null)[];
   /** 同点待重掷标记 */
@@ -40,11 +40,14 @@ export interface SeatingView {
   order: number[];
   picker: number | null;
   picked: number | null;
+  /** 定庄摸牌位骰结果（dealerBreak 阶段）：N 同时定庄+定开牌点 */
   dealerDice: number | null;
   dealerSeat: number | null;
   breakN: number | null;
   /** roundBreak 阶段：待掷摸牌位骰的庄家 */
   roller: number | null;
+  /** 各家当前子数（局间罗盘卡展示用，下标=座位） */
+  ziCounts?: number[];
 }
 
 /**
@@ -107,7 +110,7 @@ export interface RoomView {
   settings?: RoomSettings;
   /** BL-017 开局仪式视图（phase=seating 时下发） */
   seating?: SeatingView;
-  seats: ({ userId: string; seat: number; isBot?: boolean; offline?: boolean; trusteed?: boolean } | null)[];
+  seats: ({ userId: string; seat: number; nickname?: string; isBot?: boolean; offline?: boolean; trusteed?: boolean } | null)[];
 }
 
 /** 散场原因：打满局数上限 / 房主主动解散（不限局数时） */

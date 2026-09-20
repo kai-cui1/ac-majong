@@ -16,7 +16,8 @@
 | 05 | [AC麻将-前端基座与设计系统.md](./AC麻将-前端基座与设计系统.md) | `Theme` 设计令牌 / `UiKit` 组件工厂 / `SceneRouter` / `App` / `Screen` | ✅ 已补（M-A） |
 | 06 | [AC麻将-登录鉴权.md](./AC麻将-登录鉴权.md) | `identity` 可插拔 / auth 流程 / `UserProfile` / `users` 落库 / Redis 会话 | ✅ 已补（M-B） |
 | 07 | [AC麻将-客户端网络层.md](./AC麻将-客户端网络层.md) | client-core `GameClient` / `Transport` / `NetService` / vendor 预编译同步 | ✅ 已补 |
-| 08 | [AC麻将-目录结构重构与Admin系统架构.md](./AC麻将-目录结构重构与Admin系统架构.md) | monorepo 三分法（apps/packages/client）/ persistence 抽包 / Admin 独立服务蓝图 / P0-P2 迁移 | ✅ P0/P1 已执行（P2 待 Admin 立项） |
+| 08 | [AC麻将-目录结构重构与Admin系统架构.md](./AC麻将-目录结构重构与Admin系统架构.md) | monorepo 三分法（apps/packages/client）/ persistence 抽包 / Admin 独立服务蓝图与技术栈选型 / P0-P2 迁移 | ✅ P0/P1 已执行（P2 Admin 立项中）|
+| 09 | [AC麻将-Admin后台技术方案.md](./AC麻将-Admin后台技术方案.md) | Admin 一期落地：Drizzle P2-a 数据层 / admin 自有表 schema / Session+RBAC / REST API 契约 / 回放帧服务 / 审计切面 | ✅ 已定稿（待编码）|
 
 > **说明**：02–07 为「文档先行」规范下补充的模块技术方案，覆盖当前已开发模块（对局引擎 / 网关房间 / 持久化 / 前端基座 / 登录 / 网络层），均已产出。架构方案（00）§11 为存储**概览**，落地细节以 [04 数据持久化与事件溯源](./AC麻将-数据持久化与事件溯源.md) 为准。
 
@@ -32,3 +33,4 @@
 | 2026-09-16 | 补齐 04 数据持久化与事件溯源、05 前端基座与设计系统、07 客户端网络层三份技术方案（对应 M-A2 / M-A / 网络层）；清单 02–07 全部由「待补」转「已补」并补全相对链接 |
 | 2026-09-18 | 新增 08 目录结构重构与Admin系统架构：多系统三分法目标结构、persistence 抽包（P0）、server→apps/game-server（P1）、Admin 独立服务+同库蓝图（P2）；状态「设计已定稿，待执行」 |
 | 2026-09-18 | 08 状态转「✅ P0/P1 已执行」：persistence 抽包 + server→apps/game-server + 清 miniwxapp 落地，门禁全绿；P2（Admin）待立项 |
+| 2026-09-19 | 新增 09 Admin 后台技术方案（schema + API 契约）：Drizzle P2-a 数据层（游戏表只读镜像 + admin 自有表，统一经 persistence admin 命名空间）、admins/arbitrations/admin_audit_logs 三表、Session+RBAC+CSRF、REST 契约、回放帧服务、审计切面；对应 PRD 10-Admin后台 与 BL-015 |

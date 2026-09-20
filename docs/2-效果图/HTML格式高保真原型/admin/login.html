@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AC 麻将 · Admin 后台 — 登录</title>
+  <link rel="stylesheet" href="admin.css">
+  <style>
+    body { background: #f0f2f5; }
+    .login-wrap { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      background:
+        radial-gradient(1200px 600px at 50% -10%, #e6f4ff 0%, transparent 60%),
+        linear-gradient(180deg, #f7f9fc 0%, #eef1f5 100%); }
+    .login-brand { display: flex; align-items: center; gap: 12px; margin-bottom: 28px; }
+    .login-brand .tile { width: 44px; height: 44px; border-radius: 10px; background: linear-gradient(145deg,#d4a537,#a07d1c);
+      display: flex; align-items: center; justify-content: center; font-size: 24px; box-shadow: 0 6px 18px rgba(212,165,55,0.35); }
+    .login-brand .t { font-size: 22px; font-weight: 700; color: var(--text); letter-spacing: 1px; }
+    .login-brand .t small { display: block; font-size: 12px; font-weight: 400; color: var(--text-3); letter-spacing: 2px; }
+    .login-card { width: 380px; background: #fff; border-radius: 12px; box-shadow: var(--shadow-pop); padding: 32px 32px 24px; }
+    .login-card h2 { margin: 0 0 4px; font-size: 18px; }
+    .login-card .sub { color: var(--text-3); font-size: 13px; margin-bottom: 24px; }
+    .login-card .form-item { margin-bottom: 16px; }
+    .login-card .input { height: 38px; }
+    .login-btn { width: 100%; height: 38px; font-size: 15px; margin-top: 4px; }
+    .login-err { background: var(--error-bg); border: 1px solid #ffccc7; color: var(--error); font-size: 13px;
+      padding: 7px 12px; border-radius: var(--radius); margin-bottom: 16px; display: none; }
+    .login-foot { text-align: center; color: var(--text-3); font-size: 12px; margin-top: 20px; line-height: 1.8; }
+    .login-cap { margin-top: 14px; font-size: 12px; color: var(--text-3); text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="login-wrap">
+    <div class="login-brand">
+      <div class="tile">🀄</div>
+      <div class="t">AC 麻将 · 管理后台<small>ADMIN CONSOLE</small></div>
+    </div>
+
+    <div class="login-card">
+      <h2>管理员登录</h2>
+      <div class="sub">运营 / 客服 / 超管专用入口 · 与玩家账号完全隔离</div>
+
+      <div class="login-err" id="err">账号或密码错误（连续失败将限流）</div>
+
+      <div class="form-item">
+        <label>账号</label>
+        <input class="input" placeholder="管理员账号" value="ops_zhang">
+      </div>
+      <div class="form-item">
+        <label>密码</label>
+        <input class="input" type="password" placeholder="登录密码" value="········">
+      </div>
+
+      <button class="btn btn-primary login-btn" onclick="location.href='users.html'">登 录</button>
+
+      <div class="login-cap">受保护系统 · 所有登录与操作均记入审计日志</div>
+    </div>
+
+    <div class="login-foot">
+      会话存 Redis（8h 滑动）· 写操作需 CSRF 校验 · 生产走独立域名 + HTTPS + IP 白名单<br>
+      AC Mahjong Admin v0.1.0 · 一期（BL-015）：用户查询 / 房间对局 / 回放仲裁 / 审计
+    </div>
+  </div>
+</body>
+</html>

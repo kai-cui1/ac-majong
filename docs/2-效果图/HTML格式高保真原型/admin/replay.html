@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AC 麻将 · Admin — 回放仲裁</title>
+  <link rel="stylesheet" href="admin.css">
+  <style>
+    .rp-meta { display:flex; gap:20px; flex-wrap:wrap; align-items:center; }
+    .rp-meta .m { font-size:13px; color:var(--text-2); }
+    .rp-meta .m b { color:var(--text); font-family:var(--mono); }
+    /* 牌面 */
+    .mtile { display:inline-flex; width:22px; height:30px; background:#fffef5; border:1px solid #d8c79a; border-bottom-width:2px;
+      border-radius:3px; align-items:center; justify-content:center; font-size:17px; line-height:1; color:#2b2b2b; margin:1px; }
+    .mtile.back { background:linear-gradient(145deg,#2f7d4f,#1c5c37); border-color:#174d2e; color:transparent; }
+    .mtile.hit { outline:2px solid var(--primary); }
+    .tiles { display:flex; flex-wrap:wrap; }
+    /* 牌桌回放板 */
+    .board { background:radial-gradient(ellipse at center,#1a6b40,#0d4a2a); border-radius:12px; padding:16px; position:relative; min-height:360px; }
+    .seat { position:absolute; }
+    .seat .name { color:#f5e6c8; font-size:12px; margin-bottom:4px; display:flex; gap:6px; align-items:center; }
+    .seat .name .badge { background:#d4a537; color:#3d1f0d; border-radius:3px; padding:0 4px; font-size:10px; font-weight:700; }
+    .seat-n { top:12px; left:50%; transform:translateX(-50%); text-align:center; }
+    .seat-s { bottom:12px; left:50%; transform:translateX(-50%); text-align:center; }
+    .seat-w { left:14px; top:50%; transform:translateY(-50%); }
+    .seat-e { right:14px; top:50%; transform:translateY(-50%); text-align:right; }
+    .river { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:min(300px, 46%); }
+    .river .rt { background:rgba(0,0,0,.25); border-radius:8px; padding:8px; }
+    .river .rt .cap { color:#cfe6d6; font-size:11px; margin-bottom:4px; text-align:center; }
+    /* 控制条 */
+    .ctrl { display:flex; align-items:center; gap:10px; padding:12px 16px; border-top:1px solid var(--split); }
+    .ctrl .cb { width:34px; height:34px; border:1px solid var(--border); border-radius:var(--radius); background:#fff; cursor:pointer; font-size:15px; }
+    .ctrl .cb:hover { border-color:var(--primary); color:var(--primary); }
+    .ctrl .cb.play { background:var(--primary); border-color:var(--primary); color:#fff; width:40px; }
+    .ctrl input[type=range] { flex:1; }
+    .ctrl .frame-no { font-family:var(--mono); color:var(--text-2); font-size:13px; min-width:70px; text-align:right; }
+    /* 动作序列 */
+    .acts { max-height:230px; overflow-y:auto; }
+    .act { display:flex; gap:8px; padding:7px 12px; border-bottom:1px solid var(--split); font-size:13px; cursor:pointer; align-items:center; }
+    .act:hover { background:#fafafa; }
+    .act.cur { background:var(--primary-bg); border-left:3px solid var(--primary); padding-left:9px; }
+    .act .seq { font-family:var(--mono); color:var(--text-3); width:28px; }
+    .act .who { color:var(--text-2); width:52px; }
+    /* 仲裁面板 */
+    .arb-status { display:flex; gap:8px; margin-bottom:12px; }
+    .arb-status .s { flex:1; text-align:center; padding:6px 0; border:1px solid var(--border); border-radius:var(--radius); cursor:pointer; font-size:13px; color:var(--text-2); }
+    .arb-status .s.on { border-color:var(--primary); color:var(--primary); background:var(--primary-bg); font-weight:600; }
+    textarea.input { height:auto; padding:8px 11px; resize:vertical; min-height:70px; width:100%; font-family:var(--font); }
+    /* 窄屏（<1280px）：回放板与仲裁面板堆叠，牌桌获得全宽，避免牌河与东/西座位重叠 */
+    @media (max-width: 1280px) {
+      .rp-cols { flex-direction: column; }
+      .rp-side { width: 100% !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside class="sider">
+      <div class="sider-logo"><div class="tile">🀄</div><div class="txt">AC 麻将<small>管理后台</small></div></div>
+      <nav class="menu">
+        <div class="menu-group">查证</div>
+        <a class="menu-item" href="users.html"><span class="ico">👥</span> 用户管理</a>
+        <a class="menu-item" href="rooms.html"><span class="ico">🚪</span> 房间 / 对局</a>
+        <a class="menu-item active" href="replay.html"><span class="ico">▶️</span> 回放仲裁</a>
+        <div class="menu-group">系统 <span class="role-hint" style="color:rgba(255,255,255,.3);border-color:rgba(255,255,255,.2)">super</span></div>
+        <a class="menu-item" href="admins.html"><span class="ico">🛡️</span> 管理员管理 <span class="lock">🔒</span></a>
+        <a class="menu-item" href="audit.html"><span class="ico">📜</span> 审计日志 <span class="lock">🔒</span></a>
+      </nav>
+    </aside>
+
+    <div class="main">
+      <header class="header">
+        <div class="crumb"><a href="rooms.html">房间 / 对局</a> / R84213 / <b>第 2 局回放</b></div>
+        <div class="spacer"></div>
+        <div class="who"><span class="avatar">R</span> admin_root · <b>super</b> · <a href="login.html">登出</a></div>
+      </header>
+
+      <div class="content">
+        <div class="row" style="margin-bottom:16px">
+          <h1 class="page-title" style="margin:0">对局回放仲裁</h1>
+          <div class="grow"></div>
+          <span class="mono muted">game_id: R84213:2</span>
+        </div>
+
+        <!-- meta -->
+        <div class="card"><div class="card-body" style="padding:14px 20px">
+          <div class="rp-meta">
+            <span class="m">房间 <b>R84213</b></span>
+            <span class="m">局号 <b>2</b></span>
+            <span class="m">庄家 <b>seat2</b></span>
+            <span class="m">结束 <b><span class="tag tag-green">win</span></b></span>
+            <span class="m">赢家 <b>seat0</b> · <b>12 台</b></span>
+            <span class="m">动作数 <b>87</b></span>
+            <span class="m">仲裁 <b><span class="tag tag-gold">已受理</span></b></span>
+          </div>
+        </div></div>
+
+        <div class="row rp-cols" style="align-items:flex-start;gap:16px">
+          <!-- 左：回放板 + 控制 + 动作序列 -->
+          <div class="grow">
+            <div class="card" style="margin-bottom:16px"><div class="card-head">回放播放器 <span class="sub">服务端 replayRound 逐帧还原 · 全信息（含各家暗牌，无防透视）</span></div>
+              <div class="card-body" style="padding:16px">
+                <div class="board">
+                  <div class="seat seat-n">
+                    <div class="name">北 · seat3 <span class="badge">Bot</span></div>
+                    <div class="tiles">
+                      <span class="mtile">🀇</span><span class="mtile">🀈</span><span class="mtile">🀉</span><span class="mtile">🀙</span><span class="mtile">🀚</span>
+                      <span class="mtile">🀐</span><span class="mtile">🀑</span><span class="mtile">🀒</span><span class="mtile">🀄</span><span class="mtile">🀅</span>
+                    </div>
+                  </div>
+                  <div class="seat seat-w">
+                    <div class="name">西 · seat1</div>
+                    <div class="tiles" style="flex-direction:column">
+                      <span class="mtile">🀊</span><span class="mtile">🀋</span><span class="mtile">🀛</span><span class="mtile">🀜</span><span class="mtile">🀓</span>
+                    </div>
+                  </div>
+                  <div class="seat seat-e">
+                    <div class="name">东 · seat2 <span class="badge">庄</span></div>
+                    <div class="tiles" style="flex-direction:column;justify-content:flex-end">
+                      <span class="mtile">🀌</span><span class="mtile">🀍</span><span class="mtile">🀞</span><span class="mtile">🀔</span><span class="mtile">🀕</span>
+                    </div>
+                  </div>
+                  <div class="river">
+                    <div class="rt">
+                      <div class="cap">中央牌河（公开弃牌）· 剩牌墙 62</div>
+                      <div class="tiles" style="justify-content:center">
+                        <span class="mtile">🀆</span><span class="mtile">🀎</span><span class="mtile">🀟</span><span class="mtile">🀖</span>
+                        <span class="mtile hit">🀙</span><span class="mtile">🀁</span><span class="mtile">🀐</span><span class="mtile">🀇</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="seat seat-s">
+                    <div class="name" style="justify-content:center">南 · seat0（赢家）</div>
+                    <div class="tiles" style="justify-content:center">
+                      <span class="mtile">🀇</span><span class="mtile">🀇</span><span class="mtile">🀇</span><span class="mtile">🀈</span><span class="mtile">🀉</span>
+                      <span class="mtile">🀊</span><span class="mtile">🀋</span><span class="mtile">🀌</span><span class="mtile">🀙</span><span class="mtile">🀙</span>
+                      <span class="mtile hit">🀙</span><span class="mtile">🀀</span><span class="mtile">🀀</span><span class="mtile">🀀</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <!-- 控制条 -->
+              <div class="ctrl">
+                <button class="cb" title="跳到开头">⏮</button>
+                <button class="cb" title="上一帧">◀</button>
+                <button class="cb play" title="播放/暂停">▶</button>
+                <button class="cb" title="下一帧">▶|</button>
+                <button class="cb" title="跳到结尾">⏭</button>
+                <input type="range" min="0" max="87" value="52">
+                <span class="frame-no">帧 52 / 87</span>
+              </div>
+            </div>
+
+            <div class="card"><div class="card-head">动作序列 <span class="sub">game_actions · 点击定位到对应帧</span></div>
+              <div class="card-body flush">
+                <div class="acts">
+                  <div class="act"><span class="seq">49</span><span class="who">seat1</span><span>摸牌 <span class="mono">🀛</span></span></div>
+                  <div class="act"><span class="seq">50</span><span class="who">seat1</span><span>打牌 <span class="mono">🀜</span></span></div>
+                  <div class="act"><span class="seq">51</span><span class="who">seat0</span><span><span class="tag tag-blue">碰</span> <span class="mono">🀙</span></span></div>
+                  <div class="act cur"><span class="seq">52</span><span class="who">seat0</span><span><span class="tag tag-red">胡（自摸）</span> 12 台 · 清一色+对对胡</span></div>
+                  <div class="act"><span class="seq">53</span><span class="who">系统</span><span>结算：seat0 +36 / 其余各 −12</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 右：仲裁面板 -->
+          <div class="rp-side" style="width:360px;flex-shrink:0">
+            <div class="card">
+              <div class="card-head">仲裁结论 <span class="sub">operator+ 可写 · 纯记录留痕</span></div>
+              <div class="card-body">
+                <div class="alert alert-info" style="margin-bottom:16px">仲裁不回写游戏数据（D-32：积分随房间生命周期、无账户钱包）；结论仅记录留痕，供线下处理。</div>
+
+                <div class="form-item">
+                  <label>受理状态</label>
+                  <div class="arb-status">
+                    <span class="s">待处理</span><span class="s on">已受理</span><span class="s">已驳回</span><span class="s">已了结</span>
+                  </div>
+                </div>
+
+                <div class="form-item">
+                  <label>结论分类</label>
+                  <select class="select" style="width:100%">
+                    <option>判定有效（无误）</option><option selected>算分争议 · 线下核对</option><option>疑似异常 · 转风控</option><option>其它</option>
+                  </select>
+                </div>
+
+                <div class="form-item">
+                  <label>备注</label>
+                  <textarea class="input" placeholder="记录申诉内容、核查过程与线下处理结论…">玩家 seat1 申诉第 51 步「碰」后 seat0 手牌张数异常。回放逐帧核对：碰牌来源与手牌增减一致，算分 12 台（清一色+对对胡）无误。结论：判定有效，已电话回复申诉人。</textarea>
+                </div>
+
+                <div class="form-item">
+                  <label>关联对局</label>
+                  <input class="input" style="width:100%" value="R84213:2" disabled>
+                </div>
+
+                <div class="row" style="margin-top:8px">
+                  <button class="btn btn-primary grow">提交仲裁结论</button>
+                  <button class="btn">取消</button>
+                </div>
+                <div class="form-tip">提交后写入 <span class="mono">arbitrations</span> 表并记审计日志（who/when/before→after）。</div>
+              </div>
+            </div>
+
+            <div class="card"><div class="card-head">历史仲裁记录</div>
+              <div class="card-body flush">
+                <table class="table">
+                  <tbody>
+                    <tr><td class="nowrap">09-18 23:10</td><td>ops_zhang</td><td><span class="tag tag-gold">已受理</span></td></tr>
+                    <tr><td colspan="3" class="muted" style="padding-top:0">算分争议 · 线下核对：判定 12 台无误，已回复申诉人。</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

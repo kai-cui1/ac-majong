@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AC 麻将 · Admin — 审计日志</title>
+  <link rel="stylesheet" href="admin.css">
+  <style>
+    .json { background:#0d1117; color:#c9d1d9; border-radius:var(--radius); padding:10px 12px; font-family:var(--mono); font-size:12px; white-space:pre-wrap; margin:0; }
+    tr.detail-row td { background:#fafafa; padding:0 16px 14px; }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside class="sider">
+      <div class="sider-logo"><div class="tile">🀄</div><div class="txt">AC 麻将<small>管理后台</small></div></div>
+      <nav class="menu">
+        <div class="menu-group">查证</div>
+        <a class="menu-item" href="users.html"><span class="ico">👥</span> 用户管理</a>
+        <a class="menu-item" href="rooms.html"><span class="ico">🚪</span> 房间 / 对局</a>
+        <a class="menu-item" href="replay.html"><span class="ico">▶️</span> 回放仲裁</a>
+        <div class="menu-group">系统 <span class="role-hint" style="color:rgba(255,255,255,.3);border-color:rgba(255,255,255,.2)">super</span></div>
+        <a class="menu-item" href="admins.html"><span class="ico">🛡️</span> 管理员管理 <span class="lock">🔒</span></a>
+        <a class="menu-item active" href="audit.html"><span class="ico">📜</span> 审计日志 <span class="lock">🔒</span></a>
+      </nav>
+    </aside>
+
+    <div class="main">
+      <header class="header">
+        <div class="crumb">系统 / <b>审计日志</b></div>
+        <div class="spacer"></div>
+        <span class="role-hint">仅 super 可见</span>
+        <div class="who"><span class="avatar">R</span> admin_root · <b>super</b> · <a href="login.html">登出</a></div>
+      </header>
+
+      <div class="content">
+        <h1 class="page-title">审计日志</h1>
+        <p class="page-desc">记录所有管理员<b>写操作</b>（登录/登出、仲裁录入、管理员管理）；只读查询不记审计（一期）。</p>
+
+        <div class="card"><div class="card-body">
+          <div class="toolbar">
+            <div class="field"><label>管理员</label>
+              <select class="select"><option>全部</option><option>admin_root</option><option>ops_zhang</option><option>cs_li</option></select>
+            </div>
+            <div class="field"><label>动作</label>
+              <select class="select"><option>全部</option><option>login</option><option>logout</option><option>arbitration.create</option><option>arbitration.update</option><option>admin.create</option><option>admin.update</option></select>
+            </div>
+            <div class="field"><label>对象类型</label>
+              <select class="select"><option>全部</option><option>arbitration</option><option>admin</option><option>session</option></select>
+            </div>
+            <div class="field"><label>时间</label><input class="input" type="date" value="2026-09-18"> <span class="muted">~</span> <input class="input" type="date" value="2026-09-19"></div>
+            <button class="btn btn-primary">查询</button>
+            <button class="btn">重置</button>
+          </div>
+        </div></div>
+
+        <div class="card"><div class="card-body flush">
+          <table class="table">
+            <thead><tr><th>时间</th><th>管理员</th><th>动作</th><th>对象</th><th>IP</th><th>结果</th><th></th></tr></thead>
+            <tbody>
+              <tr>
+                <td class="nowrap">09-19 09:30:12</td><td class="strong">admin_root</td>
+                <td><span class="tag tag-blue">login</span></td><td class="muted">session</td><td class="num">10.0.3.21</td>
+                <td><span class="tag tag-green">success</span></td><td><button class="btn btn-link">详情</button></td>
+              </tr>
+              <tr>
+                <td class="nowrap">09-18 23:10:44</td><td class="strong">ops_zhang</td>
+                <td><span class="tag tag-gold">arbitration.create</span></td><td class="mono">R84213:2</td><td class="num">10.0.3.44</td>
+                <td><span class="tag tag-green">success</span></td><td><button class="btn btn-link">详情 ▾</button></td>
+              </tr>
+              <tr class="detail-row"><td colspan="7">
+                <div class="row" style="align-items:flex-start;gap:16px">
+                  <div class="grow"><div class="muted" style="font-size:12px;margin-bottom:4px">before_json</div>
+                    <pre class="json">null  // 新建记录，无变更前值</pre>
+                  </div>
+                  <div class="grow"><div class="muted" style="font-size:12px;margin-bottom:4px">after_json（提交内容）</div>
+                    <pre class="json">{
+  "game_id": "R84213:2",
+  "status": "accepted",
+  "verdict": "算分争议·线下核对",
+  "note": "逐帧核对碰牌来源与手牌增减一致，12 台无误，已回复申诉人"
+}</pre>
+                  </div>
+                </div>
+              </td></tr>
+              <tr>
+                <td class="nowrap">09-18 15:41:02</td><td class="strong">admin_root</td>
+                <td><span class="tag tag-purple">admin.create</span></td><td class="mono">ops_wang</td><td class="num">10.0.3.21</td>
+                <td><span class="tag tag-green">success</span></td><td><button class="btn btn-link">详情</button></td>
+              </tr>
+              <tr>
+                <td class="nowrap">09-18 15:39:50</td><td class="strong muted">—</td>
+                <td><span class="tag tag-blue">login</span></td><td class="muted">unknown</td><td class="num">10.0.9.7</td>
+                <td><span class="tag tag-red">fail</span></td><td><button class="btn btn-link">详情</button></td>
+              </tr>
+              <tr>
+                <td class="nowrap">09-18 11:22:31</td><td class="strong">admin_root</td>
+                <td><span class="tag tag-purple">admin.update</span></td><td class="mono">ops_zhang</td><td class="num">10.0.3.21</td>
+                <td><span class="tag tag-green">success</span></td><td><button class="btn btn-link">详情</button></td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="pager"><span class="total">共 214 条</span><span class="pg">‹</span><span class="pg active">1</span><span class="pg">2</span><span class="pg">3</span><span class="pg">…</span><span class="pg">22</span><span class="pg">›</span></div>
+        </div></div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

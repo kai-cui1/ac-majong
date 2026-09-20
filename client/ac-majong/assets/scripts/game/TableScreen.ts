@@ -1444,178 +1444,391 @@ export class TableScreen extends Screen {
     cancel.setPosition(70, -h / 2 + 30, 0);
   }
 
-  // ============ BL-017 开局仪式遮罩（还原 game.html seatingOverlay） ============
+  // ============ BL-017 开局仪式遮罩 v2（2026-09-19 重设计：经典骰面+罗盘布局+昵称主显+动效） ============
 
   private hideSeating(): void {
     this.seatingRoot.destroyAllChildren();
   }
 
-  /** 仪式/摸牌位骰遮罩：四骰槽 + 点数榜 + 选座行 + 定庄/摸牌位横幅 + 掷骰按钮；每次 seating 视图变化全量重建 */
+  /** 仪式遮罩 v2：三阶段（①掷骰选位 → ②选座 → ③定庄摸牌位）+ 局间摸牌位 */
   private renderSeating(sv: SeatingView | null, room: RoomView | null): void {
     this.hideSeating();
     if (!sv) return;
     const v = this.net.view;
     const me = v ? v.you.seat : (room?.seats.findIndex((s) => s?.userId === this.net.userId) ?? -1);
     const nameOf = (seat: number): string => {
-      if (v?.names?.[seat]) return seat === me ? '我' : v.names[seat]!;
+      const nick = v?.names?.[seat] || room?.seats[seat]?.nickname;
+      if (nick) return seat === me ? `${nick}（我）` : nick;
       const u = room?.seats[seat]?.userId;
       if (!u) return `座${seat}`;
-      return seat === me ? '我' : u.startsWith('bot-') ? '机器人' : u;
+      if (u.startsWith('bot-')) return '机器人';
+      return seat === me ? `${u}（我）` : u;
     };
+    const isCompass = sv.stage === 'dealerBreak' || sv.stage === 'roundBreak';
     const isRoundBreak = sv.stage === 'roundBreak';
-    const title = isRoundBreak ? `🎲 第 ${v?.round ?? 1} 局已结 · 庄家掷摸牌位骰` : '🎲 开局仪式 · 掷骰选位';
+    const title = isRoundBreak ? '🎲 局间定摸牌位' : '🎲 开局仪式';
+    const stageText = isCompass
+      ? (isRoundBreak ? '局间 · 庄家掷摸牌位骰' : '阶段 ③/3 · 定庄摸牌位')
+      : (sv.stage === 'roll' ? '阶段 ①/3 · 掷骰选位' : '阶段 ②/3 · 选座');
 
+    // 遮罩层
     const mask = new Node('SeatingOverlay');
     mask.addComponent(UITransform).setContentSize(W, H);
     const mg = mask.addComponent(Graphics);
     mg.fillColor = rgba(0, 0, 0, 0.6);
     mg.rect(LEFT, -TOP, W, H);
     mg.fill();
-    mask.addComponent(BlockInputEvents); // 阻隔下层牌桌交互
+    mask.addComponent(BlockInputEvents);
     mask.setParent(this.seatingRoot);
 
-    const PW = 560;
+    // 主面板
+    const PW = 640;
     const PH = 330;
     const panel = uiPanel(PW, PH, { variant: 'gold', radius: Theme.radius.xl });
     panel.setScale(0.94, 0.94, 1);
     tween(panel).to(0.2, { scale: new Vec3(1, 1, 1) }, { easing: 'backOut' }).start();
     panel.setParent(mask);
+
+    // 标题 + 阶段指示
     const tt = uiLabel(title, { size: 17, color: Theme.color.gold, bold: true });
     tt.setParent(panel);
-    tt.setPosition(0, PH / 2 - 26, 0);
+    tt.setPosition(0, PH / 2 - 24, 0);
+    const stg = uiLabel(stageText, { size: 10, color: Theme.color.textMuted });
+    stg.setParent(panel);
+    stg.setPosition(0, PH / 2 - 42, 0);
 
-    let y = PH / 2 - 52;
-    // 四骰槽（roll 结果/重掷徽章/最大者金框）
-    const hasDice = !isRoundBreak;
-    if (hasDice) {
-      const maxRoll = Math.max(...sv.rolls.map((x) => x ?? -1));
-      for (let seat = 0; seat < 4; seat++) {
-        const slotW = 124;
-        const slot = uiPanel(slotW, 72, { variant: 'panel', radius: Theme.radius.md });
-        slot.setParent(panel);
-        slot.setPosition(-PW / 2 + 24 + slotW / 2 + seat * (slotW + 8), y - 36, 0);
-        if (sv.rolls[seat] === maxRoll && maxRoll > 0 && (sv.stage === 'roll' || sv.stage === 'pick')) {
-          const hl = slot.addComponent(Graphics);
+    if (isCompass) {
+      this.renderCompass(panel, sv, me, nameOf, room, PW, PH);
+    } else {
+      this.renderRollPick(panel, sv, me, nameOf, PW, PH);
+    }
+  }
+
+  /** ①② 阶段：四家卡横排 + 经典骰面 + 选座按钮 */
+  private renderRollPick(panel: Node, sv: SeatingView, me: number, nameOf: (s: number) => string, PW: number, PH: number): void {
+    const cardW = 140;
+    const cardH = 96;
+    const gap = 12;
+    const startX = -(cardW * 4 + gap * 3) / 2 + cardW / 2;
+    const cardY = PH / 2 - 110;
+    const maxRoll = Math.max(...sv.rolls.map((x) => x ?? -1));
+
+    for (let seat = 0; seat < 4; seat++) {
+      const isMe = seat === me;
+      const cx = startX + seat * (cardW + gap);
+      const card = new Node(`PCard${seat}`);
+      card.setParent(panel);
+      card.setPosition(cx, cardY, 0);
+
+      // 卡片背景
+      const cg = card.addComponent(Graphics);
+      const bgAlpha = isMe ? 0.16 : 0.3;
+      cg.fillColor = isMe ? rgba(212, 165, 55, bgAlpha) : rgba(0, 0, 0, bgAlpha);
+      cg.roundRect(-cardW / 2, -cardH / 2, cardW, cardH, 12);
+      cg.fill();
+      cg.strokeColor = isMe ? Theme.color.gold : rgba(212, 165, 55, 0.2);
+      cg.lineWidth = isMe ? 2 : 1;
+      cg.roundRect(-cardW / 2, -cardH / 2, cardW, cardH, 12);
+      cg.stroke();
+
+      // 「我」角标
+      if (isMe) {
+        const badge = uiLabel('我', { size: 9, color: Theme.color.gold, bold: true });
+        badge.setParent(card);
+        badge.setPosition(-cardW / 2 + 14, cardH / 2 - 10, 0);
+      }
+
+      // 昵称
+      const nick = uiLabel(nameOf(seat), { size: 13, color: Theme.color.textPrimary, bold: true, width: cardW - 16 });
+      nick.setParent(card);
+      nick.setPosition(0, cardH / 2 - 22, 0);
+
+      // 骰子区
+      const roll = sv.rolls[seat];
+      const diceY = -2;
+      if (roll == null) {
+        const pending = uiLabel(sv.reroll[seat] ? '待重掷' : '待掷', { size: 10, color: Theme.color.textMuted });
+        pending.setParent(card);
+        pending.setPosition(0, diceY, 0);
+      } else {
+        // 经典骰面（双骰）
+        const [d1, d2] = dicePair(roll);
+        this.drawClassicDie(card, 28, d1, 0, diceY);
+        this.drawClassicDie(card, 28, d2, 34, diceY);
+        // 点数和
+        const sumLbl = uiLabel(`${roll}`, { size: 14, color: Theme.color.goldLight, bold: true });
+        sumLbl.setParent(card);
+        sumLbl.setPosition(0, diceY - 22, 0);
+        // 最大者金框高亮
+        if (roll === maxRoll && maxRoll > 0 && sv.order.length === 4) {
+          const hl = card.addComponent(Graphics);
           hl.strokeColor = Theme.color.gold;
           hl.lineWidth = 1.6;
-          hl.roundRect(-slotW / 2, -36, slotW, 72, Theme.radius.md);
+          hl.roundRect(-cardW / 2 - 2, -cardH / 2 - 2, cardW + 4, cardH + 4, 14);
           hl.stroke();
         }
-        const nm = uiLabel(nameOf(seat), { size: 11, color: Theme.color.textSecondary });
-        nm.setParent(slot);
-        nm.setPosition(0, 24, 0);
-        const roll = sv.rolls[seat];
-        const faces = uiLabel(roll == null ? '—' : diceFaces(roll), { size: 20, color: Theme.color.textPrimary });
-        faces.setParent(slot);
-        faces.setPosition(0, 2, 0);
-        const sum = uiLabel(roll == null ? '待掷' : `${roll}`, { size: roll == null ? 11 : 14, color: roll == null ? Theme.color.textMuted : Theme.color.goldLight, bold: roll != null });
-        sum.setParent(slot);
-        sum.setPosition(0, -22, 0);
-        if (sv.reroll[seat]) {
-          const badge = uiLabel('同点重掷', { size: 8, color: Theme.color.danger });
-          badge.setParent(slot);
-          badge.setPosition(slotW / 2 - 26, 34, 0);
-        }
       }
-      y -= 84;
+
+      // 同点重掷徽章
+      if (sv.reroll[seat]) {
+        const rb = uiLabel('同点重掷', { size: 8, color: Theme.color.danger, bold: true });
+        rb.setParent(card);
+        rb.setPosition(cardW / 2 - 28, cardH / 2 - 10, 0);
+      }
     }
 
-    // 选位顺序榜（roll 完成后）
+    // 选位顺序榜
+    let y = cardY - cardH / 2 - 20;
     if (sv.order.length === 4) {
-      const rank = uiLabel(`选位顺序：${sv.order.map((s) => nameOf(s)).join(' → ')}（依次坐下手位）`, { size: 10, color: Theme.color.textMuted, width: PW - 40 });
+      const rank = uiLabel(`选位顺序：${sv.order.map((s) => nameOf(s)).join(' → ')}`, { size: 10, color: Theme.color.textMuted, width: PW - 40 });
       rank.setParent(panel);
-      rank.setPosition(0, y - 8, 0);
-      y -= 26;
+      rank.setPosition(0, y, 0);
+      y -= 22;
     }
 
-    // 选座行（仅 pick 阶段；A 可点，其余置灰）
+    // ② 选座行
     if (sv.stage === 'pick') {
-      const label = uiLabel(`最大者（${nameOf(sv.picker!)}）选座`, { size: 12, color: Theme.color.textSecondary });
-      label.setParent(panel);
-      label.setPosition(-150, y - 14, 0);
-      const windNames = ['东', '南', '西', '北'];
       const isMePicker = me === sv.picker;
+      const hint = uiLabel(isMePicker ? '轮到你了！请选择座位' : `等待 ${nameOf(sv.picker!)} 选座（10s 超时保留原位）`, { size: 12, color: isMePicker ? Theme.color.goldLight : Theme.color.textSecondary, bold: isMePicker });
+      hint.setParent(panel);
+      hint.setPosition(0, y - 4, 0);
+      y -= 28;
+      const windNames = ['东', '南', '西', '北'];
       for (let seat = 0; seat < 4; seat++) {
         const btn = uiButton(windNames[seat]!, () => {
           if (isMePicker) this.net.pickSeat(seat);
         }, { variant: sv.picked === seat ? 'primary' : 'action', width: 52, height: 34, fontSize: 14, enabled: isMePicker });
         btn.setParent(panel);
-        btn.setPosition(6 + seat * 60, y - 14, 0);
+        btn.setPosition(-90 + seat * 60, y - 10, 0);
       }
-      if (!isMePicker) {
-        const wait = uiLabel(`等待 ${nameOf(sv.picker!)} 选座（10s 超时自动保留原位）`, { size: 10, color: Theme.color.textMuted });
-        wait.setParent(panel);
-        wait.setPosition(0, y - 42, 0);
-      }
-      y -= 62;
+      y -= 44;
     }
 
-    // 阶段提示/掷骰按钮
-    const myTurn =
-      (sv.stage === 'roll' && me >= 0 && (sv.rolls[me] == null || sv.reroll[me])) ||
-      (sv.stage === 'dealerDice' && me === sv.picker) ||
-      (sv.stage === 'breakDice' && me === sv.dealerSeat) ||
-      (sv.stage === 'roundBreak' && me === sv.roller);
-    const stageHint = (): string => {
-      switch (sv.stage) {
-        case 'roll': return '各家掷骰比大小：最大者先选座，其余按点数序依次坐下手；同点重掷';
-        case 'pick': return '选位最大者任选一座，其余按点数序依次坐下手位';
-        case 'dealerDice': return `最大者（${nameOf(sv.picker!)}）掷定庄骰：点数相对本人定位（7=对面、9=自己）`;
-        case 'breakDice': return `庄家（${nameOf(sv.dealerSeat!)}）掷摸牌位骰：定开牌点（右端起跳 N 组）`;
-        case 'roundBreak': return `庄家（${nameOf(sv.roller!)}）掷摸牌位骰：定下一局开牌点（相对庄家）`;
-      }
-    };
-    const hint = uiLabel(myTurn ? '轮到你了！' : stageHint(), { size: 12, color: myTurn ? Theme.color.goldLight : Theme.color.textSecondary, bold: myTurn });
-    hint.setParent(panel);
-    hint.setPosition(0, y - 10, 0);
-    y -= 32;
-    if (myTurn) {
-      const rollBtn = uiButton(isRoundBreak || sv.stage === 'breakDice' ? '🎲 掷摸牌位骰' : sv.stage === 'dealerDice' ? '🎲 掷定庄骰' : '🎲 掷骰', () => this.net.roll(), { variant: 'primary', width: 200, height: 42 });
+    // 掷骰按钮（roll 阶段轮到自己）
+    const myTurnRoll = sv.stage === 'roll' && me >= 0 && (sv.rolls[me] == null || sv.reroll[me]);
+    if (myTurnRoll) {
+      const rollBtn = uiButton('🎲 掷骰', () => this.net.roll(), { variant: 'primary', width: 180, height: 40 });
       rollBtn.setParent(panel);
-      rollBtn.setPosition(0, y - 18, 0);
-      y -= 52;
+      rollBtn.setPosition(0, -PH / 2 + 38, 0);
     }
 
-    // 定庄横幅
-    if (sv.dealerDice != null && sv.dealerSeat != null) {
-      const selfNote = sv.dealerSeat === sv.picker ? '（= 选位最大者本人）' : '';
-      const b = this.makeBanner(`定庄骰 ${sv.dealerDice} → (${sv.dealerDice}-1) mod 4 = ${(sv.dealerDice - 1) % 4} → 首庄 = ${nameOf(sv.dealerSeat)}${selfNote} · 最大者上 1 子 + 庄子 1`, false);
-      b.setParent(panel);
-      b.setPosition(0, y - 14, 0);
-      y -= 36;
-    }
-    // 摸牌位横幅（本局已定/局间待掷）
-    if (sv.breakN != null) {
-      const b = this.makeBanner(`摸牌位骰 ${sv.breakN} → 庄家排右端起跳 ${sv.breakN} 组 · 自第 ${sv.breakN + 1} 组开摸`, true);
-      b.setParent(panel);
-      b.setPosition(0, y - 14, 0);
-      y -= 36;
+    // 底部状态
+    const foot = uiButton(sv.stage === 'roll' ? '各家掷骰比大小…' : '选座进行中…', () => {}, { variant: 'primary', width: 240, height: 36, fontSize: 12, enabled: false });
+    foot.setParent(panel);
+    foot.setPosition(0, -PH / 2 + 38, 0);
+    if (myTurnRoll) foot.active = false;
+  }
+
+  /** ③ 定庄摸牌位 / 局间摸牌位：罗盘式落座布局 */
+  private renderCompass(panel: Node, sv: SeatingView, me: number, nameOf: (s: number) => string, room: RoomView | null, PW: number, PH: number): void {
+    const isRoundBreak = sv.stage === 'roundBreak';
+    const scardW = 118;
+    const scardH = 56;
+    // 罗盘中心偶移（相对 panel 中心）
+    const cY = 10;
+    const spreadY = 72; // N/S 距离中心
+    const spreadX = 160; // W/E 距离中心
+
+    // 四个座位卡（上北下南左西右东）
+    const positions: { seat: number; wind: string; x: number; y: number }[] = [
+      { seat: 0, wind: '东', x: spreadX, y: cY },
+      { seat: 1, wind: '南', x: 0, y: cY - spreadY },
+      { seat: 2, wind: '西', x: -spreadX, y: cY },
+      { seat: 3, wind: '北', x: 0, y: cY + spreadY },
+    ];
+
+    for (const pos of positions) {
+      const { seat, wind, x, y } = pos;
+      const isMe = seat === me;
+      const isDealer = sv.dealerSeat === seat && sv.dealerDice != null;
+      const card = new Node(`SCard${seat}`);
+      card.setParent(panel);
+      card.setPosition(x, y, 0);
+
+      const cg = card.addComponent(Graphics);
+      cg.fillColor = isMe ? rgba(212, 165, 55, 0.16) : rgba(0, 0, 0, 0.3);
+      cg.roundRect(-scardW / 2, -scardH / 2, scardW, scardH, 10);
+      cg.fill();
+      cg.strokeColor = isDealer ? rgba(200, 50, 50, 0.8) : isMe ? Theme.color.gold : rgba(212, 165, 55, 0.2);
+      cg.lineWidth = isDealer ? 2 : isMe ? 2 : 1;
+      cg.roundRect(-scardW / 2, -scardH / 2, scardW, scardH, 10);
+      cg.stroke();
+
+      // 风位角标
+      const windLbl = uiLabel(wind, { size: 9, color: Theme.color.textMuted });
+      windLbl.setParent(card);
+      windLbl.setPosition(-scardW / 2 + 14, scardH / 2 - 10, 0);
+
+      // 「我」角标
+      if (isMe) {
+        const meBadge = uiLabel('我', { size: 9, color: Theme.color.gold, bold: true });
+        meBadge.setParent(card);
+        meBadge.setPosition(-scardW / 2 + 14, scardH / 2 - 22, 0);
+      }
+
+      // 昵称
+      const nick = uiLabel(nameOf(seat), { size: 12, color: Theme.color.textPrimary, bold: true, width: scardW - 12 });
+      nick.setParent(card);
+      nick.setPosition(0, -2, 0);
+
+      // 子数（局间显示各家实际存子）
+      if (isRoundBreak && sv.ziCounts) {
+        const zi = sv.ziCounts[seat] ?? 0;
+        const isDlr = sv.dealerSeat === seat;
+        const ziText = isDlr ? `庄 1 · 子 ${zi}` : `子 ${zi}`;
+        const ziLbl = uiLabel(ziText, { size: 9, color: Theme.color.textMuted });
+        ziLbl.setParent(card);
+        ziLbl.setPosition(0, -scardH / 2 + 12, 0);
+      }
+
+      // 庄家徽章（定格后显示）
+      if (isDealer) {
+        const db = uiLabel('庄家', { size: 9, color: new Color(255, 255, 255, 255), bold: true });
+        db.setParent(card);
+        db.setPosition(scardW / 2 - 22, scardH / 2 - 10, 0);
+        // 红底背景
+        const dbg = card.addComponent(Graphics);
+        dbg.fillColor = rgba(200, 50, 50, 0.9);
+        dbg.roundRect(scardW / 2 - 38, scardH / 2 - 18, 32, 14, 4);
+        dbg.fill();
+      }
+
+      // A 上 1 子金标（仅开局仪式 dealerBreak 且是 picker）
+      if (!isRoundBreak && sv.picker === seat && sv.dealerDice != null) {
+        const chip = uiLabel('1 子', { size: 9, color: new Color(60, 40, 10, 255), bold: true });
+        chip.setParent(card);
+        chip.setPosition(0, -scardH / 2 - 6, 0);
+        const chipG = card.addComponent(Graphics);
+        chipG.fillColor = Theme.color.gold;
+        chipG.roundRect(-18, -scardH / 2 - 13, 36, 14, 7);
+        chipG.fill();
+      }
     }
 
-    // 底部状态按钮（仪式完成后服务端自动发牌，按钮为状态展示）
-    const done = !isRoundBreak && sv.stage !== 'roll' && sv.stage !== 'pick' && sv.dealerDice != null && (sv.breakN != null || !this.needsBreak(sv));
-    const foot = uiButton(isRoundBreak ? '掷骰后自动开下一局' : done ? `开始第 ${v?.round ?? 1} 局发牌 ▶` : '仪式进行中…', () => { /* 服务端自动推进 */ }, { variant: 'primary', width: 260, height: 40, fontSize: 14, enabled: false });
+    // 中央骰子区
+    const diceResult = isRoundBreak ? sv.breakN : sv.dealerDice;
+    const myTurn = (sv.stage === 'dealerBreak' && me === sv.picker) || (sv.stage === 'roundBreak' && me === sv.roller);
+    if (diceResult != null) {
+      // 定格：显示实际骰面
+      const [d1, d2] = dicePair(diceResult);
+      this.drawClassicDie(panel, 36, d1, -24, cY, true);
+      this.drawClassicDie(panel, 36, d2, 18, cY, true);
+      // 点数和（轴外悬挂）
+      const sumLbl = uiLabel(`${diceResult}`, { size: 22, color: Theme.color.goldLight, bold: true });
+      sumLbl.setParent(panel);
+      sumLbl.setPosition(52, cY, 0);
+    } else if (myTurn) {
+      // 轮到我掷：显示按钮
+      const rollBtn = uiButton('🎲 掷骰', () => this.net.roll(), { variant: 'primary', width: 120, height: 38 });
+      rollBtn.setParent(panel);
+      rollBtn.setPosition(0, cY, 0);
+    } else {
+      // 等待他人掷骰
+      const waitLbl = uiLabel('等待掷骰…', { size: 11, color: Theme.color.textMuted });
+      waitLbl.setParent(panel);
+      waitLbl.setPosition(0, cY, 0);
+    }
+
+    // 牌墙条示意（定庄后显示开牌点）
+    let hintY = cY - spreadY - scardH / 2 - 20;
+    if (diceResult != null && sv.dealerSeat != null) {
+      // 18 组牌墙条
+      const stripW = 18 * 14;
+      const stripX = -stripW / 2;
+      for (let i = 0; i < 18; i++) {
+        const gx = stripX + i * 14 + 5;
+        const ws = new Node(`WS${i}`);
+        ws.setParent(panel);
+        ws.setPosition(gx, hintY, 0);
+        const wg = ws.addComponent(Graphics);
+        const isSkip = i < diceResult; // 右端起跳 N 组（右侧=索引大）
+        const isPt = i === diceResult; // 第 N+1 组=开牌点
+        if (isSkip) {
+          wg.fillColor = rgba(20, 40, 77, 0.3);
+        } else if (isPt) {
+          wg.fillColor = rgba(212, 165, 55, 0.6);
+        } else {
+          wg.fillColor = rgba(29, 58, 107, 0.8);
+        }
+        wg.roundRect(-5, -8, 10, 16, 2);
+        wg.fill();
+        if (isPt) {
+          wg.strokeColor = Theme.color.gold;
+          wg.lineWidth = 1.5;
+          wg.roundRect(-5, -8, 10, 16, 2);
+          wg.stroke();
+        }
+      }
+      const wallLbl = uiLabel(`右端起跳 ${diceResult} 组 · 自第 ${diceResult + 1} 组开摸`, { size: 9, color: Theme.color.textMuted });
+      wallLbl.setParent(panel);
+      wallLbl.setPosition(0, hintY - 18, 0);
+      hintY -= 34;
+    }
+
+    // 提示行（去算法化，只报结果）
+    if (diceResult != null && sv.dealerSeat != null) {
+      const pickerName = nameOf(sv.picker ?? 0);
+      const dealerName = nameOf(sv.dealerSeat);
+      const hintText = isRoundBreak
+        ? `庄家（${dealerName}）掷出 ${diceResult} → 开牌点 = 右端起跳 ${diceResult} 组`
+        : `${pickerName} 掷出 ${diceResult} → 首庄 = ${dealerName} · ${pickerName} 上 1 子 + ${dealerName} 上庄`;
+      const hint = uiLabel(hintText, { size: 11, color: Theme.color.textSecondary, width: PW - 60 });
+      hint.setParent(panel);
+      hint.setPosition(0, hintY - 6, 0);
+    } else if (myTurn) {
+      const hint = uiLabel('轮到你了！', { size: 13, color: Theme.color.goldLight, bold: true });
+      hint.setParent(panel);
+      hint.setPosition(0, hintY - 6, 0);
+    }
+
+    // 底部状态按钮
+    const foot = uiButton(
+      isRoundBreak ? '掷骰后自动开下一局' : diceResult != null ? '开始发牌 ▶' : '仪式进行中…',
+      () => {},
+      { variant: 'primary', width: 240, height: 36, fontSize: 12, enabled: false },
+    );
     foot.setParent(panel);
     foot.setPosition(0, -PH / 2 + 30, 0);
   }
 
-  /** 本房间是否启用摸牌位骰（建房参数，随 roomView.settings 下发） */
-  private needsBreak(sv: SeatingView): boolean {
-    return this.lastRoom?.settings?.breakDice === true || sv.stage === 'breakDice' || sv.stage === 'roundBreak';
+  /** 经典骰面：象牙白圆角底 + 红/黑点（1/4 红点，其余黑） */
+  private drawClassicDie(parent: Node, size: number, value: number, offsetX: number, offsetY: number, big = false): void {
+    const die = new Node(`Die${value}`);
+    die.setParent(parent);
+    die.setPosition(offsetX, offsetY, 0);
+    const g = die.addComponent(Graphics);
+    const hs = size / 2;
+    const r = size * 0.18;
+    // 象牙白底 + 边框
+    g.fillColor = new Color(255, 254, 245, 255);
+    g.roundRect(-hs, -hs, size, size, r);
+    g.fill();
+    g.strokeColor = new Color(201, 189, 151, 255);
+    g.lineWidth = 1;
+    g.roundRect(-hs, -hs, size, size, r);
+    g.stroke();
+    // 点位布局（百分比坐标）
+    const PIPS: Record<number, [number, number, number? ][]> = {
+      1: [[50, 50, 1]],
+      2: [[28, 28], [72, 72]],
+      3: [[25, 25], [50, 50], [75, 75]],
+      4: [[28, 28, 1], [72, 28, 1], [28, 72, 1], [72, 72, 1]],
+      5: [[26, 26], [74, 26], [50, 50], [26, 74], [74, 74]],
+      6: [[28, 24], [72, 24], [28, 50], [72, 50], [28, 76], [72, 76]],
+    };
+    const pipR = size * 0.1;
+    for (const [px, py, isRed] of PIPS[value] ?? []) {
+      const x = -hs + (px / 100) * size;
+      const y = hs - (py / 100) * size; // 翻转 Y
+      g.fillColor = isRed ? new Color(176, 42, 42, 255) : new Color(38, 38, 38, 255);
+      g.circle(x, y, pipR);
+      g.fill();
+    }
   }
 
-  /** 仪式横幅（还原 .seating-banner / .seating-banner.gold） */
-  private makeBanner(text: string, gold: boolean): Node {
-    const bw = 500;
-    const b = uiPanel(bw, 26, { variant: 'panel', radius: Theme.radius.md });
-    const g = b.getComponent(Graphics)!;
-    g.strokeColor = gold ? rgba(212, 165, 55, 0.5) : Theme.color.goldFaint;
-    g.lineWidth = 1;
-    g.roundRect(-bw / 2, -13, bw, 26, Theme.radius.md);
-    g.stroke();
-    const l = uiLabel(text, { size: 11, color: gold ? Theme.color.goldLight : Theme.color.textPrimary, width: bw - 16 });
-    l.setParent(b);
-    return b;
+  /** 本房间是否启用摸牌位骰（建房参数，随 roomView.settings 下发） */
+  private needsBreak(sv: SeatingView): boolean {
+    return this.lastRoom?.settings?.breakDice === true || sv.stage === 'roundBreak';
   }
 
   // ============ BL-017 四边物理牌墙排（还原 game.html wall-board，physical 模式） ============
@@ -1819,6 +2032,12 @@ const DICE_GLYPHS = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
 function diceFaces(v: number): string {
   const d1 = Math.max(1, Math.min(6, v - 6));
   return `${DICE_GLYPHS[d1 - 1]} ${DICE_GLYPHS[v - d1 - 1]}`;
+}
+/** BL-017 v2：骰点和(2..12) → [d1, d2] 拆分（用于经典骰面绘制） */
+function dicePair(sum: number): [number, number] {
+  const d1 = Math.max(1, Math.min(6, Math.ceil(sum / 2)));
+  const d2 = Math.max(1, Math.min(6, sum - d1));
+  return [d1, d2];
 }
 /** 取相对方位 rel 对应的绝对座位 */
 function relSeat(v: ViewState, mySeat: number, rel: number): number {

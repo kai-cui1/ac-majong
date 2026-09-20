@@ -197,7 +197,7 @@ export class RoomScreen extends Screen {
     const isBot = !!occ.isBot;
     const isHostSeat = occ.userId === r.hostUserId;
     const isMe = occ.userId === me;
-    const name = isMe ? '你' : isBot ? '机器人' : this.displayName(occ.userId);
+    const name = isMe ? '你' : isBot ? '机器人' : (occ.nickname || this.displayName(occ.userId));
 
     const av = this.makeAvatar(name.slice(0, 1), isBot);
     av.setParent(node);
