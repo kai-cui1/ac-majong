@@ -1,12 +1,23 @@
 import type { TableState, Action, GameEvent, ActionKind, RoundSnapshot } from '@ac-majong/engine';
 import { createTable, applyAction, startNextRound, legalActions, snapshotRound, buildPhysicalLayout, wallInfo } from '@ac-majong/engine';
-import type { RoomView, RoomPhase, FinalStanding, RoundReview, RoomEndReason, RoomSettings, SeatingView, PublicRoomEntry } from '@ac-majong/protocol';
+import type { RoomView, RoomPhase, FinalStanding, RoundReview, RoomEndReason, RoomSettings, SeatingView, PublicRoomEntry, CeremonyPresentation, CeremonyDice, CeremonyToken } from '@ac-majong/protocol';
+import { randomUUID } from 'node:crypto';
 import type { Connection } from './connection';
 import { redact } from './redact';
 import { makeBotConnection, makeTrusteeConnection } from './devBots';
 import { createLogger } from './logger';
 
 const log = createLogger('room');
+
+/** 正式仪式时长（ms）；测试通过构造参数注入，不提供玩家倍速入口。 */
+export const CEREMONY_MS = Object.freeze({ input: 10_000, auto: 600, rolling: 1200, result: 2000, summary: 2000, seated: 1500, final: 3000 });
+export type CeremonyTimings = { [K in keyof typeof CEREMONY_MS]: number };
+export interface RoomTimings {
+  trusteeAfterMs?: number;
+  /** BL-022 停滞看门狗阈值(ms)；<=0 或省略=不启用（仅按需 inspect().stall.idleMs）。服务端经 STALL_WATCHDOG_MS 启用 */
+  stallWatchdogMs?: number;
+  ceremony?: Partial<CeremonyTimings>;
+}
 
 export interface OpResult {
   ok: boolean;
@@ -86,6 +97,8 @@ export class RoomActor {
   readonly maxRounds: number;
   phase: RoomPhase = 'waiting';
   private state: TableState | null = null;
+  /** BL-026：本局终局事件（win/exhaustive/zhahu）缓存：重连/晚进入客户端补发结算浮层用 */
+  private lastTerminal: GameEvent | null = null;
   private seatOf = new Map<string, number>();
   private userAtSeat: (string | null)[] = [null, null, null, null];
   /** 各家展示昵称（by seat），供 ViewState.names 显示真实昵称（还原度） */
@@ -111,21 +124,47 @@ export class RoomActor {
   readonly settings: RoomSettings;
   /** BL-017 开局仪式/摸牌位骰视图（null=不在仪式阶段） */
   private seating: SeatingView | null = null;
-  private seatingTimers: ReturnType<typeof setTimeout>[] = [];
+  private seatingInputTimer?: ReturnType<typeof setTimeout>;
+  private seatingDisplayTimer?: ReturnType<typeof setTimeout>;
+  private seatingAdvance?: () => void;
+  private ceremonyOrder: string[] = [];
+  private readonly ceremonyMs: CeremonyTimings;
   private seatingLog: unknown[] = [];
+  /** BL-017 定座位逐轮淘汰：有序槽位表（number=已定序座位 / number[]=待决并列组，块内待后续轮定序） */
+  private seatingSlots: (number | number[])[] = [];
+  /** 本轮参与掷骰（即判重范围）的座位；已定序者不在其中 */
+  private seatingRollers: number[] = [];
+  /** BL-022 停滞看门狗：最近一次成功动作时刻 + 巡检定时器 + 单次停滞是否已告警 */
+  private lastActionAt = 0;
+  private stallWatchdogMs: number;
+  private stallTimer?: ReturnType<typeof setInterval>;
+  private stallLogged = false;
 
-  constructor(id: string, hostUserId: string, maxRounds: number, seed: number, hooks?: GameHooks, timings?: { trusteeAfterMs?: number }, settings?: RoomSettings) {
+  constructor(id: string, hostUserId: string, maxRounds: number, seed: number, hooks?: GameHooks, timings?: RoomTimings, settings?: RoomSettings) {
     this.id = id;
     this.hostUserId = hostUserId;
     this.maxRounds = maxRounds;
     this.seed = seed;
     this.hooks = hooks;
     this.trusteeAfterMs = timings?.trusteeAfterMs ?? 60_000; // D-24：掉线保留 60 秒后托管
+    this.stallWatchdogMs = timings?.stallWatchdogMs ?? 0; // BL-022：默认关，服务端经 env 启用
     this.settings = { wallMode: 'random', breakDice: false, chiFirstView: true, isPublic: true, ...settings };
+    this.ceremonyMs = { ...CEREMONY_MS, ...timings?.ceremony };
   }
 
   getState(): TableState | null {
     return this.state;
+  }
+
+  /** 回收仪式与托管计时；不写散场日志，用于网关停服/移除房间。 */
+  dispose(): void {
+    this.phase = 'finished';
+    this.clearSeatingTimers();
+    this.stopStallWatchdog();
+    this.seating = null;
+    for (const timer of this.trusteeTimers.values()) clearTimeout(timer);
+    this.trusteeTimers.clear();
+    this.connOf.clear();
   }
 
   /**
@@ -166,8 +205,13 @@ export class RoomActor {
     return this.seatOf.size;
   }
 
+  /** BL-018：是否该房成员（列表 mine 标记用：自己的房对局中/满员仍可重入） */
+  isMember(userId: string): boolean {
+    return this.seatOf.has(userId);
+  }
+
   /** BL-018：大厅公开房间列表行——仅公开开关 ON 且未终局时返回；排序/上限由 RoomManager 聚合 */
-  listEntry(): PublicRoomEntry | null {
+  listEntry(): Omit<PublicRoomEntry, 'mine'> | null {
     if (this.settings.isPublic === false) return null;
     if (this.phase !== 'waiting' && this.phase !== 'seating' && this.phase !== 'playing') return null;
     const hostSeat = this.seatOf.get(this.hostUserId);
@@ -187,7 +231,7 @@ export class RoomActor {
       hostUserId: this.hostUserId,
       maxRounds: this.maxRounds,
       settings: this.settings,
-      seating: this.seating ?? undefined,
+      seating: this.seatingSnapshot(),
       seats: this.userAtSeat.map((u, seat) => (u ? {
         userId: u,
         seat,
@@ -205,7 +249,11 @@ export class RoomActor {
     if (existing != null) {
       log.debug(`玩家重连: room=${this.id} user=${userId} seat=${existing}`);
       this.cancelOffline(userId); // 重连接管：清离线计时/卸托管代打
+      // 重入先补权威房间资料：局间仪式需要各家身份与玩法设置，不能依赖旧缓存或占位房。
+      conn.send({ t: 'roomView', room: this.roomView() });
       this.broadcastAll(); // 重连
+      const term = this.resendSettlement(userId); // BL-026：结算相位重连补发终局事件，否则浮层缺失看似卡死
+      if (term) conn.send({ t: 'event', events: [term] });
       return { ok: true, seat: existing };
     }
     if (this.phase !== 'waiting') return { ok: false, reason: '房间已开始' };
@@ -221,6 +269,7 @@ export class RoomActor {
 
   removePlayer(userId: string): void {
     this.connOf.delete(userId); // 座位保留以支持重连
+    this.shortenSeatingInput(userId);
     this.broadcastAll();
   }
 
@@ -229,23 +278,33 @@ export class RoomActor {
    * 清连接 + 保留座位 + 标记离线 + 60 秒后转托管；等待期掉线仅清连接。
    */
   playerDisconnected(userId: string): void {
+    if (this.trusteeOf.has(userId)) return; // 重复掉线通知不能卸除已经接管的代打连接
     this.connOf.delete(userId);
-    if (this.phase === 'playing' && this.seatOf.has(userId) && !userId.startsWith('bot-') && !this.trusteeOf.has(userId)) {
+    if ((this.phase === 'seating' || this.phase === 'playing') && this.seatOf.has(userId) && !userId.startsWith('bot-') && !this.offlineSince.has(userId)) {
       this.offlineSince.set(userId, Date.now());
-      const t = setTimeout(() => this.enterTrustee(userId), this.trusteeAfterMs);
-      this.trusteeTimers.set(userId, t);
-      log.info(`玩家掉线: room=${this.id} user=${userId} ${this.trusteeAfterMs}ms 后转托管`);
     }
+    this.shortenSeatingInput(userId);
+    this.scheduleOfflineTrustee(userId);
     this.broadcastAll();
+  }
+
+  /** 仪式中只保留离线起点；进入对局后按原截止时间接续，重复通知不延期。 */
+  private scheduleOfflineTrustee(userId: string): void {
+    const since = this.offlineSince.get(userId);
+    if (this.phase !== 'playing' || since == null || !this.seatOf.has(userId) || userId.startsWith('bot-') || this.connOf.has(userId) || this.trusteeOf.has(userId) || this.trusteeTimers.has(userId)) return;
+    const remaining = Math.max(0, since + this.trusteeAfterMs - Date.now());
+    this.trusteeTimers.set(userId, setTimeout(() => this.enterTrustee(userId), remaining));
+    log.info(`玩家掉线: room=${this.id} user=${userId} ${remaining}ms 后转托管`);
   }
 
   /** 超时转托管（FR-断线-03）：挂保守代打连接，直至重连接管或本局结束 */
   private enterTrustee(userId: string): void {
     this.trusteeTimers.delete(userId);
-    if (!this.seatOf.has(userId) || this.connOf.has(userId)) return; // 已重连则不作动
+    if (this.phase === 'finished' || !this.seatOf.has(userId) || this.connOf.has(userId)) return; // 已重连则不作动
     this.offlineSince.delete(userId);
     this.trusteeOf.add(userId);
     this.connOf.set(userId, makeTrusteeConnection(this, userId));
+    this.shortenSeatingInput(userId);
     log.info(`转托管: room=${this.id} user=${userId} seat=${this.seatOf.get(userId)}`);
     this.broadcastAll();
     if (this.state) this.broadcastGame(); // 立即给托管连接当前局面，轮到其行动时即刻代打
@@ -269,119 +328,209 @@ export class RoomActor {
       stage: 'roll', rolls: [null, null, null, null], reroll: [false, false, false, false],
       order: [], picker: null, picked: null, dealerDice: null, dealerSeat: null, breakN: null, roller: null,
     };
+    this.seatingSlots = [];
+    this.seatingRollers = [0, 1, 2, 3];
     log.info(`开局仪式开始: room=${this.id} settings=${JSON.stringify(this.settings)}`);
-    this.scheduleSeatingAuto();
-    this.broadcastAll();
+    const hostSeat = this.seatOf.get(this.hostUserId)!;
+    this.ceremonyOrder = [0, 1, 2, 3].map((i) => this.userAtSeat[(hostSeat + i) % 4]!);
+    this.seatingLog = [];
+    this.seating.presentation = this.newPresentation(this.ceremonyOrder);
+    this.enterSeatingInput('roll', this.ceremonyOrder[0]!);
     return { ok: true };
   }
 
   // ============ BL-017 开局仪式 / 摸牌位骰 ============
 
-  private static roll2d6(): number {
-    return 2 + Math.floor(Math.random() * 6) + Math.floor(Math.random() * 6);
+  private static roll2d6(): CeremonyDice {
+    const d1 = 1 + Math.floor(Math.random() * 6);
+    const d2 = 1 + Math.floor(Math.random() * 6);
+    return { d1, d2, sum: d1 + d2 };
+  }
+
+  private newPresentation(pending: string[] = []): CeremonyPresentation {
+    return {
+      ceremonyId: randomUUID(), stepId: 0, startedAt: 0, deadline: 0, serverNow: 0,
+      phase: 'input', actor: null, rerollRound: 0, pendingRollUserIds: [...pending],
+      resultsByUserId: {}, ceremonyDice: null, summaryKind: null,
+    };
+  }
+
+  /** 每次采样独立复制，连接或测试保存的广播历史不会被后续步骤改写。 */
+  private seatingSnapshot(): SeatingView | undefined {
+    if (!this.seating) return undefined;
+    const s = structuredClone(this.seating);
+    if (s.presentation) s.presentation.serverNow = Date.now();
+    return s;
   }
 
   private clearSeatingTimers(): void {
-    for (const t of this.seatingTimers) clearTimeout(t);
-    this.seatingTimers = [];
+    clearTimeout(this.seatingInputTimer);
+    clearTimeout(this.seatingDisplayTimer);
+    this.seatingInputTimer = this.seatingDisplayTimer = undefined;
+    this.seatingAdvance = undefined;
   }
 
-  /** 手动掷+超时自动（10s）；Bot/托管 0.4~0.8s 内自动代掷（FR-对局-18） */
-  private scheduleSeatingAuto(): void {
+  private scheduleSeatingStep(advance: () => void): void {
+    const s = this.seating!;
+    const { ceremonyId, stepId, phase, deadline } = s.presentation!;
+    const stage = s.stage;
+    this.seatingAdvance = advance;
+    const timer = setTimeout(() => {
+      const cur = this.seating;
+      const p = cur?.presentation;
+      if (this.phase === 'finished' || cur !== s || cur.stage !== stage || p?.ceremonyId !== ceremonyId || p.stepId !== stepId || p.phase !== phase) return;
+      advance();
+    }, Math.max(0, deadline - Date.now()));
+    if (phase === 'input') this.seatingInputTimer = timer;
+    else this.seatingDisplayTimer = timer;
+  }
+
+  /** 每段在实际进入时独立起算；迟到回调不能压缩下一段。 */
+  private enterSeatingStep(stage: SeatingView['stage'], phase: CeremonyPresentation['phase'], userId: string | null, ms: number, advance: () => void, summaryKind: CeremonyPresentation['summaryKind'] = null): void {
     this.clearSeatingTimers();
-    const s = this.seating;
-    if (!s) return;
-    const pending: number[] = [];
-    if (s.stage === 'roll') {
-      for (let i = 0; i < 4; i++) if (s.rolls[i] == null) pending.push(i);
-    } else if (s.stage === 'pick' && s.picker != null) {
-      pending.push(s.picker);
-    } else if (s.stage === 'dealerBreak' && s.picker != null) {
-      pending.push(s.picker);
-    } else if (s.stage === 'roundBreak' && s.roller != null) {
-      pending.push(s.roller);
-    }
-    for (const seat of pending) {
-      const u = this.userAtSeat[seat];
-      if (!u) continue;
-      const delay = u.startsWith('bot-') ? 400 + Math.floor(Math.random() * 400) : 10_000;
-      this.seatingTimers.push(setTimeout(() => {
-        const cur = this.seating;
-        if (!cur) return;
-        if (cur.stage === 'pick') this.handlePickSeat(u, seat); // 超时自动 = 保留自己当前座位
-        else this.handleRoll(u);
-      }, delay));
-    }
+    const s = this.seating!;
+    const p = s.presentation!;
+    s.stage = stage;
+    p.stepId++;
+    p.phase = phase;
+    p.actor = userId == null ? null : { userId, seat: this.seatOf.get(userId)! };
+    p.summaryKind = summaryKind;
+    p.startedAt = p.serverNow = Date.now();
+    p.deadline = p.startedAt + ms;
+    this.scheduleSeatingStep(advance);
+    this.broadcastAll();
+  }
+
+  private enterSeatingInput(stage: SeatingView['stage'], userId: string): void {
+    const auto = userId.startsWith('bot-') || !this.connOf.has(userId) || this.offlineSince.has(userId) || this.trusteeOf.has(userId);
+    this.enterSeatingStep(stage, 'input', userId, auto ? this.ceremonyMs.auto : this.ceremonyMs.input, () => {
+      // 到期代操作走内部入口，不冒充已过期的玩家请求。
+      if (stage === 'pick') this.pickSeatingSeat(userId, this.seatOf.get(userId)!);
+      else this.rollSeatingDice(userId);
+    });
+  }
+
+  private shortenSeatingInput(userId: string): void {
+    const p = this.seating?.presentation;
+    if (p?.phase !== 'input' || p.actor?.userId !== userId || !this.seatingAdvance) return;
+    const deadline = Math.min(p.deadline, Date.now() + this.ceremonyMs.auto);
+    if (deadline === p.deadline) return;
+    p.deadline = deadline;
+    const advance = this.seatingAdvance;
+    clearTimeout(this.seatingInputTimer);
+    this.scheduleSeatingStep(advance);
+  }
+
+  private validateSeatingInput(userId: string, token?: CeremonyToken): OpResult {
+    if (this.phase === 'finished' || !this.seating?.presentation) return { ok: false, reason: '不在仪式阶段' };
+    if (!this.seatOf.has(userId)) return { ok: false, reason: '不在房间' };
+    const p = this.seating.presentation;
+    if (p.phase !== 'input') return { ok: false, reason: '等待展示结束' };
+    if (p.actor?.userId !== userId) return { ok: false, reason: '未轮到你操作' };
+    if (Date.now() >= p.deadline) return { ok: false, reason: '操作已过期' };
+    if (token !== undefined && (!token || token.ceremonyId !== p.ceremonyId || token.stepId !== p.stepId)) return { ok: false, reason: '仪式步骤已失效' };
+    return { ok: true };
   }
 
   /** 掷骰（语境由阶段决定：选位骰/定庄骰/摸牌位骰） */
-  handleRoll(userId: string): OpResult {
-    const s = this.seating;
-    if (!s) return { ok: false, reason: '不在仪式阶段' };
-    const seat = this.seatOf.get(userId);
-    if (seat == null) return { ok: false, reason: '不在房间' };
-    if (s.stage === 'roll') {
-      if (s.rolls[seat] != null && !s.reroll[seat]) return { ok: false, reason: '已掷过' };
-      const v = RoomActor.roll2d6();
-      s.rolls[seat] = v;
-      s.reroll[seat] = false;
-      this.seatingLog.push({ stage: 'roll', seat, v });
-      if (s.rolls.every((x) => x != null)) this.resolveSeatingRolls();
-      this.broadcastAll();
-      return { ok: true };
-    }
-    if (s.stage === 'dealerBreak') {
-      if (seat !== s.picker) return { ok: false, reason: '仅选位最大者掷定庄摸牌位骰' };
-      const v = RoomActor.roll2d6();
-      s.dealerDice = v;
-      s.dealerSeat = (seat + ((v - 1) % 4)) % 4; // 1=自己 2=下手 3=对面 4=上手
-      s.breakN = v; // 同一点数兼定开牌点（B 门前牌墙右端起跳 N 组）
-      this.seatingLog.push({ stage: 'dealerBreak', seat, v, dealerSeat: s.dealerSeat, breakN: v });
-      this.finalizeCeremony(v);
-      return { ok: true };
-    }
-    if (s.stage === 'roundBreak') {
-      if (seat !== s.roller) return { ok: false, reason: '仅庄家掷摸牌位骰' };
-      const v = RoomActor.roll2d6();
-      s.breakN = v;
-      this.seatingLog.push({ stage: 'roundBreak', seat, v, round: (this.state?.round ?? 0) + 1 });
-      this.beginNextRoundWithBreak(v);
-      return { ok: true };
-    }
-    return { ok: false, reason: '当前阶段不可掷骰' };
+  handleRoll(userId: string, token?: CeremonyToken): OpResult {
+    const valid = this.validateSeatingInput(userId, token);
+    if (!valid.ok) return valid;
+    if (this.seating!.stage === 'pick') return { ok: false, reason: '当前阶段不可掷骰' };
+    this.rollSeatingDice(userId);
+    return { ok: true };
   }
 
-  /** 选位骰齐后：同点者重掷（仅同点者）；否则按点数降序进入选座 */
+  private rollSeatingDice(userId: string): void {
+    const s = this.seating!;
+    const p = s.presentation!;
+    const stage = s.stage;
+    const seat = this.seatOf.get(userId)!;
+    const dice = RoomActor.roll2d6(); // 私存于闭包，滚动中不下发新终值
+    this.enterSeatingStep(stage, 'rolling', userId, this.ceremonyMs.rolling, () => {
+      if (stage === 'roll') {
+        p.resultsByUserId[userId] = { ...dice, rerollRound: p.rerollRound };
+        p.pendingRollUserIds = p.pendingRollUserIds.filter((u) => u !== userId);
+        s.rolls[seat] = dice.sum;
+        s.reroll[seat] = false;
+      } else {
+        p.ceremonyDice = dice;
+        s.breakN = dice.sum;
+        if (stage === 'dealerBreak') {
+          s.dealerDice = dice.sum;
+          s.dealerSeat = (seat + ((dice.sum - 1) % 4)) % 4;
+          s.ziCounts = this.ceremonyZi(s);
+        }
+      }
+      this.seatingLog.push({ stage, userId, seat, ...dice, v: dice.sum, dealerSeat: s.dealerSeat, breakN: s.breakN, rerollRound: p.rerollRound });
+      this.enterSeatingStep(stage, 'result', userId, stage === 'roll' ? this.ceremonyMs.result : this.ceremonyMs.final, () => {
+        if (stage === 'dealerBreak') this.finalizeCeremony(dice.sum);
+        else if (stage === 'roundBreak') this.beginNextRoundWithBreak(dice.sum);
+        else if (p.pendingRollUserIds.length) this.enterSeatingInput('roll', p.pendingRollUserIds[0]!);
+        else this.resolveSeatingRolls();
+      });
+    });
+  }
+
+  /** 选位骰逐轮定序：仅本轮掷骰者（未定序组）内判重；已定序者不再参与比较；并列组在其预留名次块内定序 */
   private resolveSeatingRolls(): void {
     const s = this.seating!;
-    const counts = new Map<number, number>();
-    for (const v of s.rolls) counts.set(v!, (counts.get(v!) ?? 0) + 1);
-    let tied = false;
-    for (let i = 0; i < 4; i++) {
-      if ((counts.get(s.rolls[i]!) ?? 0) > 1) {
-        s.reroll[i] = true;
-        s.rolls[i] = null;
-        tied = true;
+    const p = s.presentation!;
+    // 首轮槽位表为空 → 全体为一个待决组；后续轮在既有槽位表上细化待决组
+    const groups: (number | number[])[] = this.seatingSlots.length ? this.seatingSlots : [[...this.seatingRollers]];
+    const slots: (number | number[])[] = [];
+    for (const g of groups) {
+      if (typeof g === 'number') { slots.push(g); continue; }
+      const members = [...g].sort((a, b) => s.rolls[b]! - s.rolls[a]!);
+      for (let i = 0; i < members.length;) {
+        const v = s.rolls[members[i]!]!;
+        let j = i;
+        while (j < members.length && s.rolls[members[j]!] === v) j++;
+        const run = members.slice(i, j);
+        slots.push(run.length === 1 ? run[0]! : run);
+        i = j;
       }
     }
-    if (tied) {
-      log.info(`选位骰同点重掷: room=${this.id}`);
-      this.scheduleSeatingAuto();
-      return;
+    this.seatingSlots = slots;
+    const pendingSeats = slots.filter((g): g is number[] => Array.isArray(g)).flat();
+    s.reroll = [0, 1, 2, 3].map((seat) => pendingSeats.includes(seat));
+    const pending = this.ceremonyOrder.filter((u) => s.reroll[this.seatOf.get(u)!]);
+    if (pending.length) {
+      p.pendingRollUserIds = pending;
+      this.seatingRollers = pending.map((u) => this.seatOf.get(u)!);
+      this.enterSeatingStep('roll', 'summary', null, this.ceremonyMs.summary, () => {
+        p.rerollRound++;
+        this.enterSeatingInput('roll', pending[0]!);
+      }, 'reroll');
+    } else {
+      s.order = slots.filter((g): g is number => typeof g === 'number');
+      s.picker = s.order[0]!;
+      this.enterSeatingStep('roll', 'summary', null, this.ceremonyMs.summary, () => {
+        this.enterSeatingInput('pick', this.userAtSeat[s.picker!]!);
+      }, 'ranking');
     }
-    s.order = [0, 1, 2, 3].sort((a, b) => (s.rolls[b] ?? 0) - (s.rolls[a] ?? 0));
-    s.stage = 'pick';
-    s.picker = s.order[0]!;
-    this.scheduleSeatingAuto();
+  }
+
+  /** 结果预告与建局使用同一份计子函数，展示本身不修改引擎玩家。 */
+  private ceremonyZi(s: SeatingView): number[] {
+    const zi = [0, 0, 0, 0];
+    if (s.picker != null) zi[s.picker] = 1;
+    if (s.dealerSeat != null) zi[s.dealerSeat] = zi[s.dealerSeat]! + 1;
+    return zi;
   }
 
   /** 选位最大者选座：其余按点数序依次坐其下手；选座后重排座位并重索引仪式视图 */
-  handlePickSeat(userId: string, seat: number): OpResult {
-    const s = this.seating;
-    if (!s || s.stage !== 'pick') return { ok: false, reason: '不在选座阶段' };
-    const cur = this.seatOf.get(userId);
-    if (cur == null || cur !== s.picker) return { ok: false, reason: '仅选位最大者选座' };
-    if (seat < 0 || seat > 3) return { ok: false, reason: '座位无效' };
+  handlePickSeat(userId: string, seat: number, token?: CeremonyToken): OpResult {
+    const valid = this.validateSeatingInput(userId, token);
+    if (!valid.ok) return valid;
+    if (this.seating!.stage !== 'pick') return { ok: false, reason: '不在选座阶段' };
+    if (!Number.isInteger(seat) || seat < 0 || seat > 3) return { ok: false, reason: '座位无效' };
+    this.pickSeatingSeat(userId, seat);
+    return { ok: true };
+  }
+
+  private pickSeatingSeat(userId: string, seat: number): void {
+    const s = this.seating!;
     s.picked = seat;
     const newSeatOfOld = new Map<number, number>();
     s.order.forEach((os, i) => newSeatOfOld.set(os, (seat + i) % 4));
@@ -409,23 +558,22 @@ export class RoomActor {
     // 重排后 order[0] 即 A 的新座
     s.picker = s.order[0]!;
     this.seatingLog.push({ stage: 'pick', seat: s.picker, picked: seat });
-    s.stage = 'dealerBreak';
+    s.ziCounts = this.ceremonyZi(s);
     log.info(`选座完成: room=${this.id} A=seat${s.picker} → 座位重排 ${newUserAt.map((u) => u ?? '-').join(',')}`);
-    this.scheduleSeatingAuto();
-    this.broadcastAll();
-    return { ok: true };
+    this.enterSeatingStep('pick', 'summary', null, this.ceremonyMs.seated, () => {
+      this.enterSeatingInput('dealerBreak', userId);
+    }, 'seated');
   }
 
   /** 仪式收尾：A 上 1 子 + 首庄庄子，按玩法参数建墙发牌进入第 1 局 */
   private finalizeCeremony(breakN: number): void {
     const s = this.seating!;
-    const seatA = s.picker!;
     const dealer = s.dealerSeat!;
     const seed = this.seed++;
     const layout = this.settings.wallMode === 'physical' ? buildPhysicalLayout(seed) : undefined;
-    const initialZi: Record<number, number> = { [seatA]: 1 };
-    initialZi[dealer] = (initialZi[dealer] ?? 0) + 1;
+    const initialZi = this.ceremonyZi(s);
     this.state = createTable(dealer, seed, [0, 1, 2, 3], { layout, breakGroups: breakN, initialZi });
+    this.lastTerminal = null; // BL-026：新局清终局缓存
     // BL-016：重建降级 waiting 后开局——以积分账本为各家初始累计分（房间周期内积分不丢）
     if (this.ledgerScores) {
       for (const p of this.state.players) p.score = this.ledgerScores[p.seat] ?? 0;
@@ -437,8 +585,10 @@ export class RoomActor {
     this.hooks?.onSeating?.(this.id, { log: this.seatingLog, settings: this.settings });
     log.info(`开局仪式完成: room=${this.id} dealer=seat${dealer} break=${breakN} wallMode=${this.settings.wallMode}`);
     this.beginGame(seed);
+    for (const userId of this.offlineSince.keys()) this.scheduleOfflineTrustee(userId);
     this.broadcastRoom(); // 仪式结束：roomView(phase=playing、seating 已清) 先于 gameView，客户端关闭仪式 UI 并清 room.seating
     this.broadcastGame();
+    this.armStallWatchdog();
   }
 
   /** 局间摸牌位骰完成后开下一局（physical 模式新局新墙） */
@@ -447,12 +597,14 @@ export class RoomActor {
     const seed = this.seed++;
     const layout = this.settings.wallMode === 'physical' ? buildPhysicalLayout(seed) : undefined;
     this.state = startNextRound(this.state, seed, { layout, breakGroups: breakN }).state;
+    this.lastTerminal = null; // BL-026：新局清终局缓存
     this.clearSeatingTimers();
     this.seating = null;
     log.info(`开始下一局: room=${this.id} round=${this.state.round} break=${breakN}`);
     this.beginGame(seed);
     this.broadcastRoom(); // 摸牌位骰结束：roomView(seating 已清)，客户端关闭骰子横幅并清 room.seating
     this.broadcastGame();
+    this.armStallWatchdog();
   }
 
   /** 开新局：生成 gameId + 快照落库（hooks 弱依赖，RoomActor 保持同步） */
@@ -495,6 +647,49 @@ export class RoomActor {
     return { ok: true };
   }
 
+  /** BL-022 房间状态自检：一次性 dump 定位「服务端在等谁/卡在哪」所需的全部权威状态（dev/诊断用，不含令牌） */
+  inspect(): Record<string, unknown> {
+    const st = this.state;
+    return {
+      room: this.id, phase: this.phase, maxRounds: this.maxRounds, settings: this.settings, names: this.names,
+      seats: this.roomView().seats.map((s) => (s ? { userId: s.userId, isBot: s.isBot } : null)),
+      game: st
+        ? { round: st.round, phase: st.phase, currentSeat: st.currentSeat, wallLen: st.wall.length, legalBySeat: [0, 1, 2, 3].map((seat) => legalActions(st, seat)) }
+        : null,
+      seating: this.seating
+        ? {
+            stage: this.seating.stage, rolls: this.seating.rolls, reroll: this.seating.reroll, order: this.seating.order,
+            picker: this.seating.picker, dealerSeat: this.seating.dealerSeat, breakN: this.seating.breakN, roller: this.seating.roller,
+            slots: this.seatingSlots, rollers: this.seatingRollers,
+            presentation: this.seating.presentation
+              ? { stepId: this.seating.presentation.stepId, phase: this.seating.presentation.phase, actor: this.seating.presentation.actor, rerollRound: this.seating.presentation.rerollRound, pending: this.seating.presentation.pendingRollUserIds }
+              : null,
+          }
+        : null,
+      timers: { trusteePending: [...this.trusteeTimers.keys()], offlineSince: [...this.offlineSince.entries()], seatingInputActive: this.seatingInputTimer != null },
+      stall: { lastActionAt: this.lastActionAt, idleMs: st && this.phase === 'playing' ? Date.now() - this.lastActionAt : 0 },
+    };
+  }
+
+  /** BL-022 停滞看门狗：playing 相位若超 20s 无任何成功动作，warn 一次并给出「在等谁/其 legal」，避免「服务端沉默」无从定位 */
+  private armStallWatchdog(): void {
+    this.stopStallWatchdog();
+    this.lastActionAt = Date.now();
+    this.stallLogged = false;
+    if (this.stallWatchdogMs <= 0) return; // 未启用：仍可按需 inspect().stall.idleMs 诊断
+    this.stallTimer = setInterval(() => {
+      if (this.phase !== 'playing' || !this.state) { this.stopStallWatchdog(); return; }
+      if (this.stallLogged || Date.now() - this.lastActionAt < this.stallWatchdogMs) return;
+      this.stallLogged = true;
+      const st = this.state;
+      const expected = this.userAtSeat[st.currentSeat] ?? null;
+      log.warn(`停滞看门狗: room=${this.id} round=${st.round} phase=${st.phase} curSeat=${st.currentSeat} expected=${expected} legal=${JSON.stringify(legalActions(st, st.currentSeat))} wallLen=${st.wall.length} idleMs=${Date.now() - this.lastActionAt}`);
+    }, 5_000);
+  }
+  private stopStallWatchdog(): void {
+    if (this.stallTimer) { clearInterval(this.stallTimer); this.stallTimer = undefined; }
+  }
+
   handleAction(userId: string, action: Action): OpResult {
     if (this.seating) return { ok: false, reason: '仪式/摸牌位骰进行中' };
     if (this.phase !== 'playing' || !this.state) return { ok: false, reason: '未在对局中' };
@@ -508,10 +703,27 @@ export class RoomActor {
     }
     const { state, events } = applyAction(this.state, action);
     this.state = state;
+    this.lastActionAt = Date.now();
+    this.stallLogged = false;
     log.debug(`执行动作: room=${this.id} seat=${seat} type=${action.type}${events.length ? ` events=[${events.map(e => e.type).join(',')}]` : ''}`);
     this.recordAction(seat, action, events);
+    this.noteTerminal(events);
     this.broadcastGame(events);
     return { ok: true };
+  }
+
+  /** BL-026：缓存终局事件（win/exhaustive/zhahu），供重连/晚挂载客户端补发结算浮层 */
+  noteTerminal(events: GameEvent[]): void {
+    const t = events.find((e) => e.type === 'win' || e.type === 'exhaustive' || e.type === 'zhahu');
+    if (t) this.lastTerminal = t;
+  }
+
+  /** BL-026：结算相位且仍有缓存时返回本局终局事件（补发用）；仪式/局间骰进行中不补（避免浮层盖住仪式 UI） */
+  resendSettlement(userId: string): GameEvent | null {
+    if (!this.seatOf.has(userId)) return null;
+    if (this.seating) return null;
+    if (!this.state || (this.state.phase !== 'settled' && this.state.phase !== 'exhaustive')) return null;
+    return this.lastTerminal;
   }
 
   /** 局内动作落库 + 局末检测（hooks 弱依赖）：动作先缓冲 Redis，局末由网关 drain→MySQL+finishGame+积分账本 */
@@ -577,13 +789,14 @@ export class RoomActor {
         ziCounts,
       };
       log.info(`摸牌位骰: room=${this.id} 下一局=${this.state.round + 1} 掷骰者=seat${this.state.dealerSeat}`);
-      this.scheduleSeatingAuto();
-      this.broadcastGame();
+      this.seating.presentation = this.newPresentation();
+      this.enterSeatingInput('roundBreak', this.userAtSeat[this.state.dealerSeat]!);
       return { ok: true };
     }
     const seed = this.seed++;
     const layout = this.settings.wallMode === 'physical' ? buildPhysicalLayout(seed) : undefined;
     this.state = startNextRound(this.state, seed, { layout, breakGroups: 0 }).state;
+    this.lastTerminal = null; // BL-026：新局清终局缓存
     log.info(`开始下一局: room=${this.id} round=${this.state.round} seed=${seed}`);
     this.beginGame(seed);
     this.broadcastGame();
@@ -612,6 +825,8 @@ export class RoomActor {
     if (this.phase === 'finished') return;
     this.phase = 'finished';
     this.clearSeatingTimers(); // 散场清仪式计时
+    this.stopStallWatchdog(); // 散场停停滞看门狗
+    this.seating = null;
     for (const t of this.trusteeTimers.values()) clearTimeout(t); // 散场清离线计时
     this.trusteeTimers.clear();
     const standings: FinalStanding[] = [];
@@ -640,7 +855,7 @@ export class RoomActor {
       const seat = this.seatOf.get(userId);
       if (seat == null) continue;
       const view = redact(this.state, seat, this.id, this.maxRounds, names, this.settings);
-      if (this.seating) view.seating = this.seating; // 局间摸牌位骰阶段随 gameView 下发
+      if (this.seating) view.seating = this.seatingSnapshot(); // 局间摸牌位骰阶段随 gameView 下发
       if (wi) view.wallInfo = wi;
       conn.send({ t: 'gameView', view });
     }

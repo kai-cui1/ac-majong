@@ -6,7 +6,8 @@ import { replayRound } from '@ac-majong/engine';
 import type { Connection } from './connection';
 import type { IdentityProvider } from './identity';
 import { RoomManager } from './roomManager';
-import type { GameHooks, RoomRestore } from './roomActor';
+import { buildReplayBundle } from '@ac-majong/persistence';
+import type { GameHooks, RoomRestore, RoomTimings } from './roomActor';
 import type { GameStore, RealtimeStore, MemberEventRow, ScoreMap } from '@ac-majong/persistence';
 import { toRoundSnapshot } from '@ac-majong/persistence';
 import { MemoryGameStore, MemoryRealtime } from '@ac-majong/persistence';
@@ -37,6 +38,8 @@ export interface GatewayOptions {
   persistence?: { store: GameStore; realtime: RealtimeStore };
   /** H5 账号路线（IDENTITY=account）：auth 走账号密码/会话令牌，而非 IdentityProvider */
   accountMode?: boolean;
+  /** 集成测试可注入时长；未提供时严格使用正式仪式节奏。 */
+  roomTimings?: RoomTimings;
 }
 
 export interface Gateway {
@@ -123,7 +126,7 @@ export function startGateway(opts: GatewayOptions): Gateway {
       })();
     },
   };
-  const rooms = new RoomManager(undefined, gameHooks, persistence.store);
+  const rooms = new RoomManager(undefined, gameHooks, persistence.store, opts.roomTimings);
 
   const send = (s: Session, msg: ServerMsg) => {
     if (s.ws.readyState === WebSocket.OPEN) s.ws.send(JSON.stringify(msg));
@@ -184,6 +187,8 @@ export function startGateway(opts: GatewayOptions): Gateway {
     rooms,
     close: () => {
       clearInterval(hb);
+      rooms.dispose();
+      for (const session of sessions) session.ws.close(1001, '服务器关闭');
       wss.close();
     },
   };
@@ -340,7 +345,7 @@ async function handleMsg(
         const room = rooms.get(session.roomId);
         const seat = room?.roomView().seats.findIndex((s) => s?.userId === session.userId) ?? -1;
         // 对局中退出按断线/托管处理（PRD08 FR-设置-02）；等待期退出仅清连接
-        if (room?.phase === 'playing') room.playerDisconnected(session.userId);
+        if (room?.phase === 'seating' || room?.phase === 'playing') room.playerDisconnected(session.userId);
         else room?.removePlayer(session.userId);
         // 退出 → room_member_events:leave（弱依赖；Bot 不记流水）
         if (seat >= 0 && !session.userId.startsWith('bot-')) {
@@ -357,17 +362,17 @@ async function handleMsg(
     }
     case 'roll': {
       if (!session.roomId || !session.userId) return send(session, { t: 'error', reason: '无房间' });
-      const r = rooms.get(session.roomId)?.handleRoll(session.userId) ?? { ok: false, reason: '无房间' };
+      const r = rooms.get(session.roomId)?.handleRoll(session.userId, msg.ceremonyToken) ?? { ok: false, reason: '无房间' };
       return send(session, { t: 'ack', seq: msg.seq, ok: r.ok, reason: r.reason });
     }
     case 'pickSeat': {
       if (!session.roomId || !session.userId) return send(session, { t: 'error', reason: '无房间' });
-      const r = rooms.get(session.roomId)?.handlePickSeat(session.userId, msg.seat) ?? { ok: false, reason: '无房间' };
+      const r = rooms.get(session.roomId)?.handlePickSeat(session.userId, msg.seat, msg.ceremonyToken) ?? { ok: false, reason: '无房间' };
       return send(session, { t: 'ack', seq: msg.seq, ok: r.ok, reason: r.reason });
     }
     case 'roomList': { // BL-018：大厅公开房间列表（仅登录态可拉）
       if (!session.userId) return send(session, { t: 'error', reason: '未鉴权' });
-      send(session, { t: 'roomList', rooms: rooms.publicRooms() });
+      send(session, { t: 'roomList', rooms: rooms.publicRooms(session.userId ?? undefined) });
       return send(session, { t: 'ack', seq: msg.seq, ok: true });
     }
     case 'addBot': {
@@ -409,6 +414,13 @@ async function handleMsg(
       if (!session.roomId || !session.userId) return send(session, { t: 'error', reason: '无房间' });
       const r = rooms.get(session.roomId)?.handleAction(session.userId, msg.action) ?? { ok: false, reason: '无房间' };
       return send(session, { t: 'ack', seq: msg.seq, ok: r.ok, reason: r.reason });
+    }
+    case 'resendSettlement': { // BL-026：结算相位晚进入/晚挂载补发终局事件（重建结算浮层）
+      if (!session.roomId || !session.userId) return send(session, { t: 'ack', seq: msg.seq, ok: false, reason: '无房间' });
+      const ev = rooms.get(session.roomId)?.resendSettlement(session.userId) ?? null;
+      if (!ev) return send(session, { t: 'ack', seq: msg.seq, ok: false, reason: '无终局事件' });
+      send(session, { t: 'event', events: [ev] });
+      return send(session, { t: 'ack', seq: msg.seq, ok: true });
     }
     // BL-012：战绩/回放列表（房间→局两级，仅本人参赛房间）
     case 'replayList': {
@@ -487,6 +499,25 @@ async function handleMsg(
       } catch (err) {
         log.error('回放加载失败', err);
         return send(session, { t: 'ack', seq: msg.seq, ok: false, reason: '回放加载失败' });
+      }
+    }
+    case 'exportReplay': {
+      // BL-024：导出单局回放包（参赛四方可导，申诉/复现用）；成员校验同 replayLoad（D-29）
+      if (!session.userId) return send(session, { t: 'error', reason: '未鉴权' });
+      try {
+        const game = await persistence.store.getGame(msg.gameId);
+        if (!game) return send(session, { t: 'ack', seq: msg.seq, ok: false, reason: '对局不存在' });
+        const room = await persistence.store.getRoom(game.roomId);
+        const memEv = await persistence.store.listMemberEvents(game.roomId);
+        const participants = new Set<string>(memEv.map((m) => m.openid));
+        if (room?.hostOpenid) participants.add(room.hostOpenid);
+        if (!participants.has(session.userId)) return send(session, { t: 'ack', seq: msg.seq, ok: false, reason: '无权导出该对局' });
+        const bundle = await buildReplayBundle(persistence.store, msg.gameId);
+        if (!bundle) return send(session, { t: 'ack', seq: msg.seq, ok: false, reason: '回放数据缺失' });
+        return send(session, { t: 'replayBundle', bundle });
+      } catch (err) {
+        log.error('回放导出失败', err);
+        return send(session, { t: 'ack', seq: msg.seq, ok: false, reason: '回放导出失败' });
       }
     }
     case 'ping':

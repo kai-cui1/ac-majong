@@ -10,7 +10,7 @@
  *
  * 用法：pnpm sync:client
  */
-import { cpSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync, existsSync } from 'node:fs';
+import { cpSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync, existsSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -38,7 +38,7 @@ function rewriteImports(code, fileDir) {
 
 function syncPkg({ name, src }) {
   const dst = join(VENDOR, name);
-  rmSync(dst, { recursive: true, force: true });
+  // 原位更新生成源码，保留 Cocos .meta UUID；整目录重建会破坏已有资源引用。
   mkdirSync(dst, { recursive: true });
   let count = 0;
   for (const f of readdirSync(src)) {

@@ -83,20 +83,27 @@ export class RoomScreen extends Screen {
     status.setPosition(145, -172, 0);
 
     NetService.instance.onRoom((r) => {
+      if (this.router.currentName !== this.name) return;
       // BL-017：房主开始后进入仪式阶段 → 切牌桌页展示仪式遮罩（掷骰/选座在牌桌上进行）
-      if (r.phase === 'seating') {
+      if (r.seating || r.phase === 'seating') {
         this.router.show('table');
         return;
       }
       this.render(r);
     });
     // 开局后服务端下发 gameView → 切牌桌（M-E）
-    NetService.instance.onView(() => this.router.show('table'));
+    NetService.instance.onView(() => {
+      if (this.router.currentName === this.name) this.router.show('table');
+    });
     return root;
   }
 
   onEnter(): void {
     const r = NetService.instance.room;
+    if (r?.seating || r?.phase === 'seating' || (r?.phase === 'playing' && NetService.instance.view?.room === r.room)) {
+      this.router.show('table');
+      return;
+    }
     if (r) this.render(r);
   }
 

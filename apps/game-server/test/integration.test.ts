@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
+import { FAST_CEREMONY_MS } from './ceremonyHelper';
 import type { AddressInfo } from 'node:net';
 import { startGateway, type Gateway } from '../src/wsGateway';
 import { MockIdentity } from '../src/identity';
@@ -12,7 +13,7 @@ afterEach(() => {
 });
 
 async function startPort(): Promise<number> {
-  gw = startGateway({ port: 0, identity: new MockIdentity(), heartbeatMs: 5000 });
+  gw = startGateway({ port: 0, identity: new MockIdentity(), heartbeatMs: 5000, roomTimings: { ceremony: FAST_CEREMONY_MS } });
   await new Promise<void>((res) => {
     if (gw!.wss.address()) return res();
     gw!.wss.once('listening', () => res());
@@ -28,8 +29,25 @@ describe('全链路集成 · 4 机器人打完整一局（真实 WS）', () => {
     const url = `ws://127.0.0.1:${port}`;
 
     const clients: GameClient[] = [];
+    const rejected: ServerMsg[] = [];
+    const requests = new Set<string>();
     for (let i = 0; i < 4; i++) {
-      const c: GameClient = new GameClient(new WebTransport(url), { onGameView: () => botStep(c) });
+      const c: GameClient = new GameClient(new WebTransport(url), {
+        onGameView: () => botStep(c),
+        onRoomView: (room) => {
+          const sv = room.seating;
+          const p = sv?.presentation;
+          if (p?.phase !== 'input' || p.actor?.userId !== c.userId) return;
+          const key = `${p.ceremonyId}:${p.stepId}`;
+          if (requests.has(key)) return;
+          requests.add(key);
+          const ceremonyToken = { ceremonyId: p.ceremonyId, stepId: p.stepId };
+          if (sv!.stage === 'pick') c.pickSeat((p.actor.seat + 1) % 4, ceremonyToken);
+          else c.roll(ceremonyToken);
+        },
+        // 本批只约束仪式请求；普通Bot响应期并发过牌仍走既有策略与守卫。
+        onAck: (ack) => { if (!ack.ok && !c.view) rejected.push(ack); },
+      });
       clients.push(c);
     }
     await Promise.all(clients.map((c) => c.connect()));
@@ -49,38 +67,9 @@ describe('全链路集成 · 4 机器人打完整一局（真实 WS）', () => {
 
     clients[0]!.start();
     // BL-017 开局仪式：各客户端按 roomView(seating) 自动掷骰/选座，直至 gameView 发牌
-    const USERS = ['u0', 'u1', 'u2', 'u3'];
-    for (let step = 0; step < 80; step++) {
-      if (clients[0]!.view) break; // 已发牌
-      const rv = clients[0]!.room;
-      const sv = rv?.seating;
-      if (!sv) {
-        // seating 广播尚未到达（start 与广播异步）→ 等待下一轮
-        await new Promise((r) => setTimeout(r, 40));
-        continue;
-      }
-      const seatOfUser = new Map<string, number>();
-      rv!.seats.forEach((st) => {
-        if (st) seatOfUser.set(st.userId, st.seat);
-      });
-      const idxOfSeat = (seat: number) => USERS.findIndex((u) => seatOfUser.get(u) === seat);
-      if (sv.stage === 'roll') {
-        USERS.forEach((u, i) => {
-          const seat = seatOfUser.get(u);
-          // 同点重掷：rolls 非空但 reroll 标记的座位也需再掷
-          if (seat != null && (sv.rolls[seat] == null || sv.reroll[seat])) clients[i]!.roll();
-        });
-      } else if (sv.stage === 'pick') {
-        const i = idxOfSeat(sv.picker!);
-        if (i >= 0) clients[i]!.pickSeat(sv.picker!);
-      } else {
-        const roller = sv.stage === 'dealerBreak' ? sv.picker : sv.roller;
-        const i = roller == null ? -1 : idxOfSeat(roller);
-        if (i >= 0) clients[i]!.roll();
-      }
-      await new Promise((r) => setTimeout(r, 40));
-    }
-    await Promise.all(clients.map((c) => c.waitFor((m) => m.t === 'gameView')));
+    await Promise.all(clients.map((c) => c.waitFor((m) => m.t === 'gameView', 10000)));
+    expect(requests.size).toBeGreaterThanOrEqual(6);
+    expect(rejected).toEqual([]);
 
     // 机器人自动对局，等待本局结束事件
     const endMsg = await clients[0]!.waitFor(
@@ -95,6 +84,7 @@ describe('全链路集成 · 4 机器人打完整一局（真实 WS）', () => {
       expect(c.view!.others.every((o) => (o as Record<string, unknown>).concealed === undefined)).toBe(true);
     }
 
+    expect(rejected).toEqual([]);
     clients.forEach((c) => c.close());
   }, 25000);
 });

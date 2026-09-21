@@ -1,7 +1,7 @@
 import { sys } from 'cc';
 import { GameClient, WebTransport } from '../vendor/client-core/index';
 import type { Transport } from '../vendor/client-core/index';
-import type { ViewState, RoomView, ServerMsg, UserProfile, ReplayRoomSummary, ReplaySnapshot, ReplayActionRow, RoomSettings, PublicRoomEntry } from '../vendor/protocol/index';
+import type { ViewState, RoomView, ServerMsg, UserProfile, ReplayRoomSummary, ReplaySnapshot, ReplayActionRow, ReplayBundle, RoomSettings, PublicRoomEntry, CeremonyToken, CeremonyPresentation } from '../vendor/protocol/index';
 
 export type ViewListener = (v: ViewState) => void;
 export type RoomListener = (r: RoomView) => void;
@@ -42,6 +42,33 @@ export class NetService {
   lastGameViewAt = 0;
   /** BL-017：最近一次建房的玩法设置（「再来一局」沿用） */
   private lastSettings: RoomSettings | undefined = undefined;
+  /** 在消息到达时采样，页面晚订阅或同一步重复广播不会重启仪式时钟。 */
+  private ceremonyClock: { ceremonyId: string; stepId: number; server: number; local: number } | null = null;
+
+  private monotonicNow(): number {
+    return typeof performance !== 'undefined' ? performance.now() : Date.now();
+  }
+
+  private sampleCeremony(p?: CeremonyPresentation): void {
+    if (!p) return;
+    const local = this.monotonicNow();
+    const old = this.ceremonyClock;
+    if (old?.ceremonyId === p.ceremonyId && old.stepId > p.stepId) return;
+    const estimated = old?.ceremonyId === p.ceremonyId ? old.server + Math.max(0, local - old.local) : p.serverNow;
+    this.ceremonyClock = { ceremonyId: p.ceremonyId, stepId: p.stepId, server: Math.max(estimated, p.serverNow), local };
+  }
+
+  ceremonyNow(p: CeremonyPresentation): number {
+    const clock = this.ceremonyClock;
+    return clock?.ceremonyId === p.ceremonyId
+      ? clock.server + Math.max(0, this.monotonicNow() - clock.local)
+      : p.serverNow;
+  }
+
+  /** 回前台请求当前权威快照，不补播后台错过的步骤。 */
+  refreshRoom(): void {
+    if (this.lastRoom && !this.reconnecting) this.client?.join(this.lastRoom);
+  }
 
   onView(cb: ViewListener): void {
     this.viewListeners.push(cb);
@@ -189,10 +216,17 @@ export class NetService {
         }
       },
       onGameView: (v) => {
+        this.sampleCeremony(v.seating?.presentation);
         this.lastGameViewAt = Date.now();
+        // BL-016 缺陷修复（2026-09-20）：对局中重进无 roomView→此处补记记忆房（变更时才写，避免每视图广播写 localStorage）
+        if (this.lastRoom !== v.room) {
+          this.lastRoom = v.room;
+          this.rememberLastRoom(v.room);
+        }
         this.viewListeners.forEach((f) => f(v));
       },
       onRoomView: (r) => {
+        this.sampleCeremony(r.seating?.presentation);
         this.lastRoom = r.room;
         this.rememberLastRoom(r.room);
         this.roomListeners.forEach((f) => f(r));
@@ -249,6 +283,7 @@ export class NetService {
     this.client = null;
     this._profile = null;
     this.lastRoom = null;
+    this.ceremonyClock = null;
     this.clearSession();
   }
 
@@ -287,12 +322,12 @@ export class NetService {
     this.client?.start();
   }
   /** BL-017：开局仪式掷骰（选位/定庄/摸牌位，语境由服务端阶段决定） */
-  roll(): void {
-    this.client?.roll();
+  roll(ceremonyToken?: CeremonyToken): void {
+    this.client?.roll(ceremonyToken);
   }
   /** BL-017：选位最大者选座 */
-  pickSeat(seat: number): void {
-    this.client?.pickSeat(seat);
+  pickSeat(seat: number, ceremonyToken?: CeremonyToken): void {
+    this.client?.pickSeat(seat, ceremonyToken);
   }
   /** 房主为空位放入 Bot 陪玩（FR-房间-08）；等待房间视图刷新后返回 */
   async addBot(count = 1): Promise<RoomView> {
@@ -307,6 +342,7 @@ export class NetService {
   }
   /** 离开当前房间（回大厅）；保留连接与会话 */
   leave(): void {
+    this.ceremonyClock = null;
     this.client?.leave();
     if (this.client) { this.client.view = null; this.client.room = null; } // 清陈旧视图缓存（BL-016：防重进切页误判）
   }
@@ -314,13 +350,18 @@ export class NetService {
   nextRound(): void {
     this.client?.nextRound();
   }
+
+  /** BL-026：结算相位晚进入/晚挂载时请求补发终局事件（重建结算浮层） */
+  resendSettlement(): void {
+    this.client?.resendSettlement();
+  }
   /** 房主主动解散牌局（不限局数时的散场入口）；服务端下发 roomEnd 驱动切散场页 */
   dissolve(): void {
     this.client?.dissolve();
   }
   /** 对局结束后“再来一局”：离开旧房并重新建房（服务端会重新补 Bot 并开局）；BL-017：沿用上次玩法设置 */
   restart(maxRounds = 8): void {
-    this.client?.leave();
+    this.leave(); // 清旧局缓存，避免等待页按旧 playing 状态跳回已结束的牌桌
     this.client?.create(maxRounds, this.lastSettings);
   }
 
@@ -361,5 +402,13 @@ export class NetService {
     if (m.t === 'ack') throw new Error((m as Extract<ServerMsg, { t: 'ack' }>).reason ?? '回放加载失败');
     const d = m as Extract<ServerMsg, { t: 'replayData' }>;
     return { snapshot: d.snapshot, actions: d.actions, names: d.names, viewSeat: d.viewSeat };
+  }
+  /** BL-024：导出单局回放包（参赛四方可导；申诉/复现用，离线可确定性重演） */
+  async exportReplayBundle(gameId: string): Promise<ReplayBundle> {
+    if (!this.client) throw new Error('未连接');
+    this.client.exportReplay(gameId);
+    const m = await this.client.waitForNext((x) => x.t === 'replayBundle' || (x.t === 'ack' && x.ok === false));
+    if (m.t === 'ack') throw new Error((m as Extract<ServerMsg, { t: 'ack' }>).reason ?? '回放导出失败');
+    return (m as Extract<ServerMsg, { t: 'replayBundle' }>).bundle;
   }
 }

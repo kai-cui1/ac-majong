@@ -1,5 +1,5 @@
 import type { Action } from '@ac-majong/engine';
-import type { ClientMsg, ServerMsg, ViewState, RoomView, UserProfile, RoomSettings } from '@ac-majong/protocol';
+import type { ClientMsg, ServerMsg, ViewState, RoomView, UserProfile, RoomSettings, CeremonyToken } from '@ac-majong/protocol';
 import type { Transport } from './transport';
 
 export interface GameClientHandlers {
@@ -46,6 +46,9 @@ export class GameClient {
         break;
       case 'gameView':
         this.view = m.view;
+        // BL-016 缺陷修复（2026-09-20）：对局中重进服务端只发 gameView（无 roomView），
+        // 新会话（刷新后）this.room 会恒为 null 致 joinRoom 返回 null → 合成占位 room（等待页不展示，仅供路由/房号用）
+        if (!this.room) this.room = { room: m.view.room, phase: 'playing', hostUserId: '', maxRounds: 0, seats: [null, null, null, null] };
         this.handlers.onGameView?.(m.view);
         break;
       case 'event':
@@ -125,12 +128,12 @@ export class GameClient {
     this.send({ t: 'start', seq: this.nextSeq() });
   }
   /** BL-017：掷骰（选位/定庄/摸牌位，语境由服务端阶段决定） */
-  roll(): void {
-    this.send({ t: 'roll', seq: this.nextSeq() });
+  roll(ceremonyToken?: CeremonyToken): void {
+    this.send({ t: 'roll', seq: this.nextSeq(), ceremonyToken });
   }
   /** BL-017：选位最大者选座 */
-  pickSeat(seat: number): void {
-    this.send({ t: 'pickSeat', seq: this.nextSeq(), seat });
+  pickSeat(seat: number, ceremonyToken?: CeremonyToken): void {
+    this.send({ t: 'pickSeat', seq: this.nextSeq(), seat, ceremonyToken });
   }
   /** 房主为空位放入 Bot 陪玩（FR-房间-08） */
   addBot(count = 1): void {
@@ -153,9 +156,18 @@ export class GameClient {
   replayList(): void {
     this.send({ t: 'replayList', seq: this.nextSeq() });
   }
-  /** BL-012：加载单局回放（响应 t:'replayData'；失败为 ack.ok=false 含原因） */
+  /** BL-012：加载单局回放（响应 t:'replayData'；失败为 ack.ok=false 含原因 ） */
   replayLoad(gameId: string): void {
     this.send({ t: 'replayLoad', seq: this.nextSeq(), gameId });
+  }
+  /** BL-024：导出单局回放包（响应 t:'replayBundle'；失败为 ack.ok=false 含原因） */
+  exportReplay(gameId: string): void {
+    this.send({ t: 'exportReplay', seq: this.nextSeq(), gameId });
+  }
+
+  /** BL-026：结算相位晚进入/晚挂载时请求补发本局终局事件（服务端以 event 消息回投） */
+  resendSettlement(): void {
+    this.send({ t: 'resendSettlement', seq: this.nextSeq() });
   }
 
   ping(): void {

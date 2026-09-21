@@ -57,6 +57,8 @@
           <button class="st-btn">退出</button>
         </div>
         <button class="st-btn action">返回登录</button>
+        <!-- BL-023：玩家侧诊断包出口（报错/卡顿时复制上下文+消息环）；点击后短暂回显「已复制诊断包 ✓」 -->
+        <button class="st-btn action" onclick="this.textContent='已复制诊断包 ✓';setTimeout(()=>this.textContent='复制诊断包',2000)">复制诊断包</button>
         <div class="st-foot">
           <button class="st-agree">协议/隐私</button>
           <span class="st-ver">AC Mahjong Club v0.1.0</span>

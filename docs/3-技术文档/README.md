@@ -17,7 +17,8 @@
 | 06 | [AC麻将-登录鉴权.md](./AC麻将-登录鉴权.md) | `identity` 可插拔 / auth 流程 / `UserProfile` / `users` 落库 / Redis 会话 | ✅ 已补（M-B） |
 | 07 | [AC麻将-客户端网络层.md](./AC麻将-客户端网络层.md) | client-core `GameClient` / `Transport` / `NetService` / vendor 预编译同步 | ✅ 已补 |
 | 08 | [AC麻将-目录结构重构与Admin系统架构.md](./AC麻将-目录结构重构与Admin系统架构.md) | monorepo 三分法（apps/packages/client）/ persistence 抽包 / Admin 独立服务蓝图与技术栈选型 / P0-P2 迁移 | ✅ P0/P1 已执行（P2 Admin 立项中）|
-| 09 | [AC麻将-Admin后台技术方案.md](./AC麻将-Admin后台技术方案.md) | Admin 一期落地：Drizzle P2-a 数据层 / admin 自有表 schema / Session+RBAC / REST API 契约 / 回放帧服务 / 审计切面 | ✅ 已定稿（待编码）|
+| 09 | [AC麻将-Admin后台技术方案.md](./AC麻将-Admin后台技术方案.md) | Admin  一期落地：Drizzle P2-a 数据层 / admin 自有表 schema / Session+RBAC / REST API 契约 / 回放帧服务 / 审计切面 | ✅ 已定稿（待编码）|
+| 10 | [AC麻将-可维护性与诊断.md](./AC麻将-可维护性与诊断.md) | BL-022 房间自检 inspect+停滞看门狗+dev HTTP / BL-023 客户端错误遥测诊断包 / BL-024 单局回放包导出（离线可重演） | ✅ 已补（2026-09-21，P0；玩家侧 UI 待补）|
 
 > **说明**：02–07 为「文档先行」规范下补充的模块技术方案，覆盖当前已开发模块（对局引擎 / 网关房间 / 持久化 / 前端基座 / 登录 / 网络层），均已产出。架构方案（00）§11 为存储**概览**，落地细节以 [04 数据持久化与事件溯源](./AC麻将-数据持久化与事件溯源.md) 为准。
 

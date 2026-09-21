@@ -27,6 +27,35 @@ export interface PublicRoomEntry {
   seats: number;
   maxRounds: number;
   status: 'waiting' | 'playing';
+  /** BL-018 缺陷修复（2026-09-20）：当前拉列表者是否该房成员——自己的房即使对局中/满员也可「重入」 */
+  mine: boolean;
+}
+
+/** 仪式操作绑定用户当前看到的输入步骤；旧端可省略。 */
+export interface CeremonyToken {
+  ceremonyId: string;
+  stepId: number;
+}
+
+/** 最终两枚骰面由服务端独立生成，客户端不得按总和反推。 */
+export interface CeremonyDice {
+  d1: number;
+  d2: number;
+  sum: number;
+}
+
+/** 仪式完整展示快照；时间戳与时长单位均为毫秒。 */
+export interface CeremonyPresentation extends CeremonyToken {
+  startedAt: number;
+  deadline: number;
+  serverNow: number;
+  phase: 'input' | 'rolling' | 'result' | 'summary';
+  actor: { userId: string; seat: number } | null;
+  rerollRound: number;
+  pendingRollUserIds: string[];
+  resultsByUserId: Record<string, CeremonyDice & { rerollRound: number }>;
+  ceremonyDice: CeremonyDice | null;
+  summaryKind: 'ranking' | 'reroll' | 'seated' | null;
 }
 
 /** BL-017 开局仪式/摸牌位骰视图（roomView 与 gameView 共用下发）；2026-09-19 流程合并：dealerDice+breakDice → dealerBreak（A 一掷同时定庄+定开牌点） */
@@ -48,6 +77,8 @@ export interface SeatingView {
   roller: number | null;
   /** 各家当前子数（局间罗盘卡展示用，下标=座位） */
   ziCounts?: number[];
+  /** 新版仪式完整下发；缺失时客户端静态兼容旧业务字段。 */
+  presentation?: CeremonyPresentation;
 }
 
 /**
@@ -177,6 +208,17 @@ export interface ReplayActionRow {
   action: unknown;
 }
 
+/** BL-024 可维护性/申诉：单局回放包（离线可确定性重演）。snapshot 自带整副洗好的墙，故无需 seed 即可重放 */
+export interface ReplayBundle {
+  v: 1;
+  exportedAt: number;
+  room: { id: string; maxRounds: number; settings: RoomSettings | null; seating: unknown };
+  game: { gameId: string; roundNo: number; dealerSeat: number };
+  snapshot: ReplaySnapshot;
+  actions: ReplayActionRow[];
+  names: Record<number, string>;
+}
+
 /** 客户端 → 服务端 */
 export type ClientMsg =
   | { t: 'auth'; seq: number; token?: string; account?: { username: string; password: string }; profile?: UserProfile }
@@ -185,8 +227,8 @@ export type ClientMsg =
   | { t: 'join'; seq: number; room: string }
   | { t: 'leave'; seq: number }
   | { t: 'start'; seq: number }
-  | { t: 'roll'; seq: number }              // BL-017：掷骰（选位/定庄/摸牌位，语境由服务端阶段决定）
-  | { t: 'pickSeat'; seq: number; seat: number } // BL-017：选位最大者选座
+  | { t: 'roll'; seq: number; ceremonyToken?: CeremonyToken }              // BL-017：掷骰（选位/定庄/摸牌位，语境由服务端阶段决定）
+  | { t: 'pickSeat'; seq: number; seat: number; ceremonyToken?: CeremonyToken } // BL-017：选位最大者选座
   | { t: 'addBot'; seq: number; count?: number }
   | { t: 'removeBot'; seq: number; seat: number }
   | { t: 'nextRound'; seq: number }
@@ -194,6 +236,8 @@ export type ClientMsg =
   | { t: 'action'; seq: number; action: Action }
   | { t: 'replayList'; seq: number }                // BL-012：战绩/回放列表（房间→局）
   | { t: 'replayLoad'; seq: number; gameId: string } // BL-012：加载单局回放（参赛四方可看，D-29）
+  | { t: 'exportReplay'; seq: number; gameId: string } // BL-024：导出单局回放包（参赛四方可导，申诉/复现用）
+  | { t: 'resendSettlement'; seq: number } // BL-026：结算相位晚进入/晚挂载时请求补发本局终局事件（重建结算浮层）
   | { t: 'ping'; seq: number };
 
 /** 服务端 → 客户端 */
@@ -210,5 +254,6 @@ export type ServerMsg =
   | { t: 'replayList'; rooms: ReplayRoomSummary[] }
   /** BL-012：单局回放数据（起始快照+动作序列；names=座号→昵称；客户端 rehydrate+applyAction 确定性重演） */
   | { t: 'replayData'; gameId: string; snapshot: ReplaySnapshot; actions: ReplayActionRow[]; names: Record<number, string>; viewSeat: number }
+  | { t: 'replayBundle'; bundle: ReplayBundle }                      // BL-024：单局回放包（exportReplay 的响应）
   | { t: 'pong' }
   | { t: 'error'; reason: string };

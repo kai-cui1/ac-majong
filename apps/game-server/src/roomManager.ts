@@ -1,4 +1,4 @@
-import { RoomActor, type GameHooks, type RoomRestore } from './roomActor';
+import { RoomActor, type GameHooks, type RoomRestore, type RoomTimings } from './roomActor';
 import type { Connection } from './connection';
 import type { GameStore } from '@ac-majong/persistence';
 import type { RoomSettings, PublicRoomEntry } from '@ac-majong/protocol';
@@ -10,18 +10,18 @@ export class RoomManager {
   private hooks?: GameHooks;
   private store?: GameStore;
 
-  /** BL-018：聚合公开且未关闭房（等待先于对局中，同组按创建时间倒序，上限 20 行，FR-房间-11） */
-  publicRooms(): PublicRoomEntry[] {
+  /** BL-018：聚合公开且未关闭房（等待先于对局中，同组按创建时间倒序，上限 20 行，FR-房间-11）；viewer 用于标记 mine（自己的房可重入） */
+  publicRooms(viewer?: string): PublicRoomEntry[] {
     const list: { e: PublicRoomEntry; created: number }[] = [];
     for (const r of this.rooms.values()) {
       const e = r.listEntry();
-      if (e) list.push({ e, created: r.createdAt });
+      if (e) list.push({ e: { ...e, mine: viewer ? r.isMember(viewer) : false }, created: r.createdAt });
     }
     list.sort((a, b) => (a.e.status === b.e.status ? b.created - a.created : a.e.status === 'waiting' ? -1 : 1));
     return list.slice(0, 20).map((x) => x.e);
   }
 
-  constructor(seedBase = Date.now() % 1_000_000, hooks?: GameHooks, store?: GameStore) {
+  constructor(seedBase = Date.now() % 1_000_000, hooks?: GameHooks, store?: GameStore, private readonly defaultTimings?: RoomTimings) {
     this.seedBase = seedBase;
     this.hooks = hooks;
     this.store = store;
@@ -39,9 +39,9 @@ export class RoomManager {
     }
   }
 
-  create(hostUserId: string, conn: Connection, maxRounds = 8, nickname?: string, timings?: { trusteeAfterMs?: number }, id?: string, settings?: RoomSettings): RoomActor {
+  create(hostUserId: string, conn: Connection, maxRounds = 8, nickname?: string, timings?: RoomTimings, id?: string, settings?: RoomSettings): RoomActor {
     const roomId = id ?? this.genId();
-    const room = new RoomActor(roomId, hostUserId, maxRounds, this.seedBase++, this.hooks, timings, settings);
+    const room = new RoomActor(roomId, hostUserId, maxRounds, this.seedBase++, this.hooks, timings ?? this.defaultTimings, settings);
     this.rooms.set(roomId, room);
     room.addPlayer(hostUserId, conn, nickname);
     return room;
@@ -53,11 +53,16 @@ export class RoomManager {
   }
 
   /** BL-016：用恢复快照新建并注册重建房间（不走 addPlayer，座位由 restore 注入） */
-  createRestored(roomId: string, hostUserId: string, maxRounds: number, restore: RoomRestore, timings?: { trusteeAfterMs?: number }, settings?: RoomSettings): RoomActor {
-    const room = new RoomActor(roomId, hostUserId, maxRounds, this.seedBase++, this.hooks, timings, settings);
+  createRestored(roomId: string, hostUserId: string, maxRounds: number, restore: RoomRestore, timings?: RoomTimings, settings?: RoomSettings): RoomActor {
+    const room = new RoomActor(roomId, hostUserId, maxRounds, this.seedBase++, this.hooks, timings ?? this.defaultTimings, settings);
     room.restore(restore);
     this.rooms.set(roomId, room);
     return room;
+  }
+
+  /** BL-022 dev 自检：活跃房间列表（仅 diag HTTP /dev/rooms 用） */
+  list(): RoomActor[] {
+    return [...this.rooms.values()];
   }
 
   get(id: string): RoomActor | undefined {
@@ -65,7 +70,14 @@ export class RoomManager {
   }
 
   remove(id: string): void {
+    this.rooms.get(id)?.dispose();
     this.rooms.delete(id);
+  }
+
+  /** 网关停服仅回收内存资源，不生成散场结算或覆盖持久化房间状态。 */
+  dispose(): void {
+    for (const room of this.rooms.values()) room.dispose();
+    this.rooms.clear();
   }
 
   size(): number {

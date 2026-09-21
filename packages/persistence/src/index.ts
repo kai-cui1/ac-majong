@@ -25,6 +25,8 @@ export async function createPersistence(env: NodeJS.ProcessEnv = process.env): P
 }
 
 export * from './entities';
+export * from './replayBundle';
 export * from './memory';
 export * from './mysql';
 export * from './redis';
+export * from './admin/index';

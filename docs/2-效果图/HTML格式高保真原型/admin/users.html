@@ -54,36 +54,31 @@
         <div class="card"><div class="card-body flush">
           <table class="table">
             <thead><tr>
-              <th>用户</th><th>openid</th><th>注册时间</th><th>最后登录</th>
-              <th class="right">房间数</th><th class="right">对局数</th><th class="right">累计台数</th><th>操作</th>
+              <th>用户</th><th>openid</th><th>注册时间</th><th>最后登录</th><th>操作</th>
             </tr></thead>
             <tbody>
               <tr>
                 <td class="strong">牌友3021</td>
                 <td class="num">o8xK…3fA2</td>
                 <td>2026-09-03 14:22</td><td>2026-09-19 09:41</td>
-                <td class="right num">17</td><td class="right num">96</td><td class="right num">+214</td>
                 <td class="table-actions"><button class="btn btn-link" onclick="document.getElementById('drawerMask').style.display='block';document.getElementById('drawer').style.display='flex'">详情</button></td>
               </tr>
               <tr>
                 <td class="strong">老张</td>
                 <td class="num">h5:zhangsan</td>
                 <td>2026-09-05 20:10</td><td>2026-09-18 22:03</td>
-                <td class="right num">9</td><td class="right num">52</td><td class="right num">+66</td>
                 <td class="table-actions"><button class="btn btn-link">详情</button></td>
               </tr>
               <tr>
                 <td class="strong">牌友7788</td>
                 <td class="num">oQ2m…9bC1</td>
                 <td>2026-09-11 08:55</td><td>2026-09-17 19:30</td>
-                <td class="right num">4</td><td class="right num">21</td><td class="right num">−18</td>
                 <td class="table-actions"><button class="btn btn-link">详情</button></td>
               </tr>
               <tr>
                 <td class="strong">阿珍</td>
                 <td class="num">h5:azhen</td>
                 <td>2026-09-14 12:01</td><td>2026-09-16 21:14</td>
-                <td class="right num">2</td><td class="right num">8</td><td class="right num">+5</td>
                 <td class="table-actions"><button class="btn btn-link">详情</button></td>
               </tr>
             </tbody>
@@ -110,20 +105,33 @@
         <div class="k">最后登录</div><div class="v">2026-09-19 09:41</div>
       </div>
 
-      <div class="stat-grid" style="grid-template-columns:repeat(3,1fr)">
+      <div class="stat-grid" style="grid-template-columns:repeat(2,1fr)">
         <div class="stat"><div class="label">参赛房间</div><div class="value">17</div></div>
         <div class="stat"><div class="label">对局数</div><div class="value">96</div></div>
-        <div class="stat"><div class="label">累计台数</div><div class="value">+214</div></div>
+        <!-- 累计台数（+214）等战绩聚合归 P2-b（只读镜像暂不算聚合），见技术方案维护记录 -->
       </div>
 
-      <div class="card" style="box-shadow:none;border:1px solid var(--split)"><div class="card-head">近期房间 <span class="sub">listRoomsByPlayer</span></div>
+      <div class="card" style="box-shadow:none;border:1px solid var(--split)"><div class="card-head">近期房间 <span class="sub">getUserDetail.rooms</span></div>
         <div class="card-body flush">
           <table class="table">
-            <thead><tr><th>房间号</th><th>身份</th><th>局数上限</th><th>状态</th><th>最终分</th><th>操作</th></tr></thead>
+            <thead><tr><th>房间号</th><th>身份</th><th>局数上限</th><th>状态</th></tr></thead>
             <tbody>
-              <tr><td class="num strong">R84213</td><td><span class="tag tag-gold">房主</span></td><td>不限</td><td><span class="tag tag-gray">closed</span></td><td class="num">+86</td><td><a href="rooms.html">查看</a></td></tr>
-              <tr><td class="num strong">R77120</td><td><span class="tag tag-blue">成员</span></td><td>8</td><td><span class="tag tag-gray">closed</span></td><td class="num">−12</td><td><a href="rooms.html">查看</a></td></tr>
-              <tr><td class="num strong">R90011</td><td><span class="tag tag-blue">成员</span></td><td>16</td><td><span class="tag tag-green">playing</span></td><td class="muted">—</td><td><a href="rooms.html">查看</a></td></tr>
+              <tr><td class="num strong">R84213</td><td><span class="tag tag-gold">房主</span></td><td>不限</td><td><span class="tag tag-gray">closed</span></td></tr>
+              <tr><td class="num strong">R77120</td><td><span class="tag tag-blue">成员</span></td><td>8</td><td><span class="tag tag-gray">closed</span></td></tr>
+              <tr><td class="num strong">R90011</td><td><span class="tag tag-blue">成员</span></td><td>16</td><td><span class="tag tag-green">playing</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card" style="box-shadow:none;border:1px solid var(--split);margin-top:16px"><div class="card-head">近期对局 <span class="sub">getUserDetail.games</span></div>
+        <div class="card-body flush">
+          <table class="table">
+            <thead><tr><th>对局</th><th>庄家位</th><th>结束</th><th>开始</th></tr></thead>
+            <tbody>
+              <tr><td class="num strong">R84213:1</td><td>seat0</td><td><span class="tag tag-green">win</span></td><td>2026-09-18 20:15</td></tr>
+              <tr><td class="num strong">R84213:2</td><td>seat2</td><td><span class="tag tag-green">win</span></td><td>2026-09-18 20:48</td></tr>
+              <tr><td class="num strong">R77120:5</td><td>seat1</td><td><span class="tag tag-gray">exhaustive</span></td><td>2026-09-17 20:30</td></tr>
             </tbody>
           </table>
         </div>

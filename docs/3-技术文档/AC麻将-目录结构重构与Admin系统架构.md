@@ -55,7 +55,8 @@ ac-majong-new/
 |---|---|---|
 | `apps/game-server` → `packages/*` | ✅ | protocol / engine / client-core(dev) / persistence |
 | `apps/admin-server` → `packages/persistence`、`packages/protocol`、`packages/engine` | ✅ | 读游戏数据只经 persistence；算分/还原可复用 engine |
-| `apps/admin-server` → `apps/game-server` 内部 | ❌ | 严禁跨系统内部依赖 |
+| `apps/admin-server` → `apps/game-server` 内部 | ❌ | 严禁跨系统**代码**依赖（不 import 对方源码）|
+| `apps/admin-server` ⇢ `apps/game-server` 内网鉴权只读 inspect 端点 | ⚠️ 受控例外（二期 BL-022）| **运行时 HTTP 调用**（非代码依赖）：仅只读实时房间态、仅内网可达、独立鉴权（共享密钥/mTLS）、调用记审计；admin 仍不持有 WS/RoomManager、不写实时态。详见 Admin 技术方案 §10.3 |
 | `apps/admin-web` → `apps/admin-server`(REST) | ✅ | 唯一数据通道 |
 | `apps/admin-web` → `packages/*` / game-server | ❌ | 控制台不直连游戏链路 |
 | `packages/persistence` → `packages/engine`、`packages/protocol` | ✅ | 现状依赖方向保持 |
@@ -154,3 +155,4 @@ ac-majong-new/
 | 2026-09-18 | **P0/P1 执行完成**：persistence 抽为共享包 `@ac-majong/persistence`（源码+测试随包迁移）；`server`→`apps/game-server`（包名 `@ac-majong/game-server`）；workspace 改 `apps/*` 并清除空壳 miniwxapp；同步 Dockerfile/compose.prod/start-server/.gitignore 与 03/04/06 文档路径。门禁：typecheck/test(64+172+6)/build、compose config(dev+prod)、8082 起服冒烟 全绿 |
 | 2026-09-18 | **Admin 技术栈选型定稿**（§6 写实）：后端 Fastify 5 + zod、Session+RBAC（会话存 Redis + @fastify/csrf-protection）；前端 Vite+React 18+TS+AntD 5(自建布局)+TanStack Query+React Router 6+Zustand，ECharts 二期；部署三容器 + nginx 同源反代 + 网络隔离。数据层目标**全面 Drizzle 化**但**分 P2-a/P2-b 两阶段**（一期只为 admin 引入 Drizzle、不碰已 e2e 验证的对局写链路；二期将 persistence 整体迁 Drizzle 并退役 raw mysql2/schema.sql）；persistence 最终为 Drizzle-based 共享层、仍为唯一数据入口。同步更新 §7 P2 步骤与门禁 |
 | 2026-09-19 | Admin 一期细化拆出独立文档：新增 [`AC麻将-Admin后台技术方案.md`](./AC麻将-Admin后台技术方案.md)（schema + API 契约 + Drizzle P2-a + Session-RBAC + 回放帧 + 审计）；本文 §6 降为架构蓝图并链接至细化文档；同步产出 PRD [10-Admin后台](../1-prd/10-Admin后台.md) |
+| 2026-09-21 | §4 依赖规则修订：新增「admin-server ⇢ game-server 内网鉴权只读 inspect 端点」为**受控运行时例外**（二期 BL-022 实时房间监控）——区别于代码依赖禁令，仅只读/内网/独立鉴权/记审计；另 BL-024 `buildReplayBundle` 下沉 persistence 供 game/admin 共用（一期），BL-023 诊断包受理列二期。详见 Admin 技术方案 §10 |

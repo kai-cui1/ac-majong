@@ -146,6 +146,7 @@ abstract class Screen {
 
 - **TS 配置**：Cocos 工程用其自带编译（`strict:false`），与 monorepo 服务端/包的 `strict:true` 分离；基座代码仍按严格习惯书写（显式类型、可空判断）。
 - **核心包依赖**：`ui`/`app`/`screens` 不直接 `import '@ac-majong/*'`；如需引擎/协议类型，经 `vendor/` 预编译产物引入（同步机制见[客户端网络层 §8](./AC麻将-客户端网络层.md)）。
+- **同步保留资源身份（2026-09-20）**：`scripts/sync-to-cocos.mjs` 已改为在既有 vendor 目录原位更新生成 `.ts`、保留已有 `.meta`/UUID，不再整目录删建，避免破坏 Cocos 资源引用。仍经 `pnpm sync:client` 同步、禁止手改生成副本；此变更不承诺恢复此前已变化的 UUID，也不替代运行时验证。
 - **无预制体**：新增屏幕/组件一律代码构建，评审以 `.ts` diff 为准。
 - **CLI 构建必须显式指定 startScene**：工程含多场景（scene/App/Table），`CocosCreator --build "platform=web-mobile"` 不传 startScene 时 launchScene 会退化为空的 `scene.scene`（Canvas 无 App 组件，页面黑屏且无任何报错）；正确命令：`--build "platform=web-mobile;startScene=01c1425f-8926-40e9-8f67-e149f5238405"`（App.scene 的 uuid）。
 
@@ -167,6 +168,97 @@ abstract class Screen {
 - **手牌选中**：按**位置索引** `selectedIdx`（非牌 ID），一对牌点选仅抬被点的那张；视图刷新（`render`）时清除选中，出牌按索引从排序手牌取牌 ID。
 - **摸牌显示**：`you.drawn` 下发的刚摸牌在排序手牌**原位抬高 10px**（抽出态，取最右一张同牌），选中抬高 18px 以区分；`drawn=null` 时回退连排。
 - **竞态守卫**：异步回调可能晚于节点销毁到达（对局中每次 `gameView` 重渲染 `destroyAllChildren`），此时 `sp.node` 为 null，再赋 `spriteFrame` 会触发 Cocos `Sprite` 读 `null._uiProps` 崩溃；回调内必须 `if (!sp.isValid || !sp.node || !sp.node.isValid) return;`。
+
+### 11.3 开局/局间仪式展示基线（BL-017，2026-09-20：已修补当前发现缺项，浏览器视觉验收受阻）
+
+**唯一视觉基线**：[`game.html`](../2-效果图/HTML格式高保真原型/game.html) 仪式区域；仅替换仪式与其评审控制，不改牌河、手牌、结算、四边实际墙排等无关布局。首局仍是①逐家选位骰→②最大者选座→③A**一次掷骰同时定庄与开牌点**；局间仅当前庄家定摸牌位。
+
+**当前实现**：Spec审计列出的legacy总点数、长名Tooltip、可见禁用按钮、步骤闭包/跨步手势、徽章与动效明确缺项已修补，原型末次重掷排名门控与庄徽分带已修正。整体为**已修补当前发现缺项，浏览器视觉验收受阻**，非全Spec完成。`CeremonyPanel` 位于 `game/TableScreen.ts` 内，由牌桌管理创建、增量更新与清理；本节契约和自动化结果**不表示Cocos实机、真实双端或截图通过**（§11.3.4）。其他窗口的结算相关变更保留，不归为本任务实现成果。
+
+#### 11.3.1 布局预算与视觉规则
+
+以下为844×390视口、640×330面板的CSS定位值（面板外框左上为102,30；内容绝对定位相对边框内侧）。Cocos转换仍以画布中心为原点、Y向上，不能把CSS的top当作Cocos的正Y。面板金色主题、红木底色、边框/圆角/阴影沿用既有样式。
+
+| 原型节点/区域 | 布局与视觉约束 |
+|---|---|
+| `.ceremony-panel` | 640×330，居中；padding 12px 20px，box-sizing:border-box；不靠增加面板高度容纳说明 |
+| `.ceremony-title` / `.ceremony-stage` | 标题17px、行高23；阶段10px、行高14；标题带约top12..49 |
+| `.ceremony-body` | left/right20、top58、height158；四横卡与罗盘共用同一主体带，互斥显示 |
+| `.ceremony-seats` / `.pcard` | 4个等宽minmax列、gap12、高158，绝不改2×2；卡片以userId持续存在，已揭晓结果不随下一家消失；昵称13px单行省略，身份9px，结果13px、状态10px |
+| `.dice-zone` / `.die` | 主双骰32×32、间距6；象牙白底，1/4红点、其余黑点；两骰与总和一起读成「4＋3＝7点」；落定卡片90ms达1.03峰值、200ms回1，分段CSS ease，包含在结果期内 |
+| `.sum.pending` / `Sum` | 10px、textMuted弱色、普通字重；已揭晓总和恢复13px金色粗体，不把待掷/掷骰中文字加粗 |
+| 昵称 `title` / `NameTooltip` | 原型保留完整名title；Cocos悬停/点击昵称显示完整原文Tooltip，560×34位于面板局部(0,119)，2秒自动关闭，移开/点击提示或切step也关闭；不扩卡、不暂停倒计时 |
+| `.ceremony-old` | 卡内19px独立旧结果行，旧双骰16×16+旧总和；待重掷/滚动期间标「上次」，到本人落定才消失 |
+| `.compass` / `.scard` | 上北下南左西右东；卡118×46；北居中top0、南居中bottom0、西left64/top56、东right64/top56；昵称11px、身份与子数8px；位置取最新座位映射 |
+| `.scard .wind` / `WindBadge` | 20×20圆徽，CSS top:-8px/right:-6px；Cocos相对卡中心(x55,y21)，圆半径10，风字10px |
+| 罗盘庄徽 / `DealerBadge` | 高14px，CSS top:auto/bottom:0/right:-35px；Cocos相对卡中心(x76,y-16)、宽34，红底金边；与风徽上下分带 |
+| `.scard.dealer-hit` / `Glow` | 结果期内1000ms外发光，半径14→24→14（0/500/1000ms，分段CSS ease），不以细描边透明度代替 |
+| `.compass-dice` | left50%居中、top54、双骰40×40、间距8；总和/算式置双骰下方top42，11px、宽122，不再悬挂到右侧卡片 |
+| `.ceremony-info` | left/right20、top220、height38；四横卡显示排名/落座两行，罗盘显示墙条/说明，均不挤入按钮区 |
+| `.wall-strip` / `.ws` | 18组，每组12×16、gap3；从视觉左至右的组号为18..1，右端N组带skip语义但仍常色牌背，第N+1组pt金框；N=7时右端7组跳过、第8组开摸；random不渲染该条 |
+| `.ceremony-hint` | top262、height16、11px；单行省略并保留完整title，直接说明谁操作/坐庄/上子，不展示mod公式；自己的输入提示goldLight金色粗体，1秒ease-in-out脉冲，其他提示次级色普通字重 |
+| `.ceremony-cd` / `.ceremony-foot` / `CeremonyClock` | 进度条top282、左右60、高3；按钮行top291、高27、左右20；时钟宽74px，Cocos y-139.5，掷骰时x89、选座时x150；按钮与时钟左右分离 |
+| 主钮 / `CeremonyRoll` | 非pick阶段始终可见；本人有效input可用「掷骰」，他人input禁用「等待当前玩家」、rolling禁用「掷骰中…」、选位result禁用「查看结果」、定庄/局间result禁用「即将自动发牌」、summary禁用「仪式进行中…」 |
+| `.seat-pick.selected` / `CeremonyPick0..3` | pick/input与pick/summary-seated都保留四座；他人/汇总期全部禁用，已选座保留金色selected（描边、文字、淡金底，原型含光晕），不以隐藏替代禁用 |
+| `.ceremony-demo-tools` | 视口底部3px、22px高；仅原型场景选择/重新演示/关闭，与正式面板分离，不作为客户端玩家入口 |
+
+- 「我」独立金框/淡金底/角标（`.me`），不依靠昵称后缀才能识别；长昵称省略但可查看完整名。机器人身份与座位行一直保留；提示、排名与定庄结果中的名字追加「我」或同名玩家的当前风位，不能仅在卡片身份行区分同名机器人。
+- `.die.rolling`每500ms循环，0/125/250/375/500ms时的CSS角度为−24/10/26/−8/−24度，缩放为1/1.08/1/0.94/1，段内线性插值；Cocos的Y向上坐标系使用相反旋转角，两枚骰子同节奏，不用额外相位偏移。
+- 长昵称卡片保留完整原文，截断仅用于常态排版；悬停或点击昵称时在面板上方暂显完整名，移开/点击提示或2秒后关闭，不增加推进确认。
+- 非本人输入也保留禁用主钮，文字随input/rolling/result/summary变化；pick的input与落座summary均展示四座钮，非本人或summary禁用，已选座金底。倒计时槽固定74px，按钮与时钟左右分离。
+- `.sum.pending`为10px弱色普通字重；“轮到你”提示为金色粗体并按1秒ease-in-out脉冲。落定90ms（45%）达缩放1.03峰值、200ms终点回1，分段CSS ease；庄家1秒金光以外发光半径14→24→14变化表达，不仅改变细描边透明度。风位圆徽位置x55/y21，庄徽改为x76/y−16，互不遮挡。
+- 当前操作者以`.is-actor`金色外描边+「当前操作」文字标明；最终最大者`.max-roll`+排名文字；同点者红徽/`.is-reroll`+「待重掷」文字，不能只用颜色。
+- 定庄/局间已揭晓后`.dealer-hit`播放1000ms金光，红底金边庄家徽章与风位徽章错开；首局A普通子及B庄子在卡内子数行显示，A=B为2；局间显示实际存子数、不得为摸牌位骰再加子。
+
+#### 11.3.2 原型状态类 → 客户端对齐
+
+| 层级 / 原型状态类 | 快照映射与行为 |
+|---|---|
+| `stage-roll` / `stage-pick` | 对应业务stage；四横卡，选座时仍保留真实骰面/排名 |
+| `stage-dealerBreak` / `stage-roundBreak` | 对应业务stage；罗盘；首局合并骰/局间当前庄家，不增加两掷步骤 |
+| `phase-input` | presentation.phase=input；仅自身为actor且期限内可操作；真人10000ms，Bot/离线/托管600ms |
+| `phase-rolling` / `.die.rolling` | 完整1200ms；每90ms仅更新当前一家的两枚中间骰面，旧重掷结果独立保留；终值尚未揭晓 |
+| `phase-result` / `.pcard.reveal` | 选位结果2000ms（含200ms缩放）；定庄/局间3000ms（含1000ms庄光）；等待服务端转步 |
+| `phase-summary.summary-ranking` | 仅全体无同点的最终汇总才显示排名/最大者，展示2000ms后开放选座；原型重掷input/rolling/末次result不因旧order或队列清空提前宣布最终名次 |
+| `phase-summary.summary-reroll` | 同点者与旧结果展示2000ms，然后按开始时的原轮转序仅同点者重掷，可连续多轮 |
+| `phase-summary.summary-seated` | 最新落座归属展示1500ms，四个选座按钮可见且全禁用、金色selected保留；之后进入定庄输入，不立即发牌 |
+| `.is-actor` / `.is-reroll` / `.max-roll` / `.me` | 相互独立的卡片状态；不能用当前数组索引替代userId来匹配 |
+| `.seat-pick.selected` / `disabled` | 选中座位金色；仅A在input可点，提交后锁定；其他玩家与所有展示阶段禁用 |
+
+面板还输出 `data-ceremony-id/data-step-id/data-phase/data-actor`；四卡输出 `data-user-id`，墙组输出 `data-from-right`。这些是原型对账标识，不是新协议字段。布局、状态、文案、颜色、字号须一起还原，不只复用函数结构。
+
+#### 11.3.3 快照驱动、时钟与生命周期
+
+- 使用网络层 §5.2 的 **optional `presentation`**：`ceremonyId/stepId/startedAt/deadline/serverNow/phase/actor/rerollRound/pendingRollUserIds/resultsByUserId/ceremonyDice/summaryKind`，所有时间为毫秒；保留业务stage不变。
+- 面板与卡片节点持续存在，按仪式ID/步骤/用户ID增量更新；仅新仪式首个input开始250ms内按原型opacity ease淡入，以服务端步骤时间为锚，中途重入或后续步骤直接显示，**不得每次roomView/gameView销毁所有仪式子节点再弹出**。相同步骤重复广播不重置动画/倒计时，已揭晓终值只能取权威两骰，禁止从和拼造。
+- 服务端时间样本+本地单调计时估算当前进度；弱网/重连/后台返回恢复当前步骤与剩余时间，不补播错过历史。旧步骤/旧仪式回调失效；退出/结束取消本页Tween、schedule与定时器。具体token/兼容/超时语义见网络层 §5.2与网关 §13。
+- `RoomScreen.onEnter`已接入缓存仪式检查并切牌桌，覆盖首次广播早于订阅；playing 快捷路由须确认当前房间与缓存对局房号匹配。首局身份优先最新RoomView，局间庄家/子数取当前ViewState、身份/玩法取权威RoomView；重排后历史结果仍按userId匹配。
+- **刷新局间的资料来源**：新版服务端 `addPlayer` 既有成员重入先向本人发完整 roomView（各家 userId/nickname/isBot、settings 玩法/墙模式、seating 仪式），再 broadcastAll；playing 时后续给 gameView。无需 placeholder 猜真人/Bot/墙模式；仅旧服务端 gameView-only 路径保留房号/路由占位兼容，不视为完整身份资料。
+- **restart 缓存隔离**：一次 CodeReview 指出旧 playing 缓存被新增路由误用，已将 `NetService.restart` 改为先 `this.leave()` 清 client.view/client.room/ceremonyClock，再沿用 lastSettings create；保留连接，断连时只清理、不创建。3 个回归覆盖默认/指定局数与无连接情形，包含在最终client-core/UI 100项内，不重复加总。
+- **首局离线托管接续**：服务端在发牌进入 playing 后按最初 offlineSince+trusteeAfterMs 的剩余时间接续托管，重复 disconnect 不延后；不是重置或改动正式 60s 规则，也不压缩仪式展示时长（网关 §13.4）。
+- `roll/pickSeat`透传 **optional `ceremonyToken:{ceremonyId,stepId}`**；每个新step以Node.off/on重绑掷骰/四座按钮，闭包捕获当步token，相同步骤不重绑。TOUCH_START记录起始step，TOUCH_END跨步拒绝、TOUCH_CANCEL清手势；submit复核token/actor/input/期限/重复提交，disposed后旧提交与update/tick无效。旧端无token只基本守卫；旧服无presentation时已改为仅显示总点数，不拼造两骰。完整结果期前不发牌、不启动新局Bot；无跳过、倍速或全员确认。
+
+#### 11.3.4 原型演示与验收边界
+
+- `?ceremony=full`：1真人3Bot完整流程；`reroll`：连续三轮重掷，包含与未重掷者旧结果再撞点；`pick-mine/pick-wait`：我/他人选座起播，继续落座→定庄→发牌门控；`dealer/roundbreak`：定庄/局间从input起播。
+- `roundbreak-off`直接续局；`random`完整随机墙流程；`long`长昵称/同名机器人；`offline`真人输入2000ms后离线，剩余缩为600ms。旧`rolling/reveal`入口兼容映射到`full/reroll`。均可从面板外原型工具栏选择，不改变正式玩家权限。
+- 原型最终骰面为明确的双骰夹具，本地随机只用于中间帧；仅模拟权威时序，不连接真实房间、不改示例牌桌和其他业务区域。结果期结束自动关闭仪式并提示「进入发牌」，不是已实现真实发牌或服务端同步。
+- **原型记录边界**：原型专项agent完成 **10 scenario / 131状态 + 6门控** 的JS/节点替身验证，非Browser视觉，不等于真实DOM布局/GPU或截图验收，也不与下述393项重复加总；历史文档先行记录原样保留。
+- **最终主助手实际执行的自动化（2026-09-20）**：
+
+| 项目 | 可核实结果 | 边界 |
+|---|---|---|
+| `pnpm test` · engine | 179 pass | 引擎自动化 |
+| `pnpm test` · persistence | 6 pass + 3 integration skipped | 跳过项不算通过 |
+| `pnpm test` · client-core/UI | 100 pass（含既有restart等回归） | AST真实生产类 + 严格mock，验证生命周期、节点状态与绘制指令；非GPU/真实字体/截图 |
+| `pnpm test` · game-server | 108 pass | 服务端/WS自动化，不是真实双端浏览器e2e |
+| `pnpm test` · 合计 | **393 pass / 3 integration skipped** | 主助手最终实跑；跳过项不计通过 |
+| `pnpm typecheck` | 通过 | 包类型检查 |
+| `npx tsc --noEmit -p client/ac-majong/temp/tsconfig.check.json` | 通过 | Cocos CLI 静态检查，不是实机初始化 |
+| H5 CLI：`startScene=01c1425f-8926-40e9-8f67-e149f5238405` | **13:39 Finished**（构建日志已核实） | 显式App起始场景构建成功，不代表场景已运行 |
+
+- **必要验收证据外部阻塞**：浏览器连续三轮目标turn均 `NATIVE_BROWSER_VIEWPORT_UNAVAILABLE`、hidden/attached=false，用户打开后仍不可用；`window.open`返回false，rAF暂停导致Cocos无scene（scene=null、无__AC__）。**Cocos实机、1真人3Bot/2真人2Bot真实双端顺序/骰面/时长联验及截图对照未完成**；不得宣称全Spec完成或100%视觉通过。
+- **环境隔离**：用户原8080未重启；历史8093独立内存服务浏览器未连成功，不计e2e。整体为「已修补当前发现缺项，浏览器视觉验收受阻」，未验收、不归档；本次仅回填文档，不操作Browser、启停服务、同步、测试或构建。完整修补与验证见 [BL-017详表](../5-backlog/README.md#bl-017-开局仪式与摸牌位骰实现与验证流水)。
 
 ## 12. 音频子系统 `AudioManager`（`ui/AudioManager.ts`）
 
@@ -209,7 +301,7 @@ abstract class Screen {
 | 登录（H5 账号表单/微信一键/mock 三态） | `2-效果图/HTML格式高保真原型/login.html` | 2026-09-17 回补 |
 | 大厅（战绩/回放入口+规则条+⚙设置） | `…/home.html` | 2026-09-17 回补 |
 | 房间等待 | `…/room.html` | 既有 |
-| 牌桌（庄徽章/连N/离线托管/响应框/按钮簇/重连遮罩/结算浮层/摊牌2×2/听牌浮层） | `…/game.html` | 2026-09-17 回补 |
+| 牌桌（庄徽章/连N/离线托管/响应框/按钮簇/重连遮罩/结算浮层/摊牌2×2/听牌浮层；BL-017逐家仪式） | `…/game.html` | 2026-09-20 已修补当前发现缺项，浏览器视觉验收受阻；本轮仅指仪式 |
 | 散场战绩 | `…/result.html` | 既有（无变更） |
 | 规则（弹层形态注记+D-25 算账） | `…/rules.html` | 2026-09-17 回补 |
 | 设置弹层 | `…/settings.html` | 2026-09-17 新建 |
@@ -220,8 +312,17 @@ abstract class Screen {
 
 ## 维护记录
 
+历史流水按发生时点保留；文档先行的待实现状态、先前版本高保真审核与截图记录不作为本轮逐家仪式验收结论。
+
 | 日期 | 概要 |
 |---|---|
+| 2026-09-20 | **BL-017 当前缺项修补与最终验证回填**：样式表对齐Wind/Dealer分带、74px时钟、pending弱字/自己金粗脉冲、2秒Tooltip、可见禁用按钮/落座selected、90ms峰值/200ms终点CSS ease与14→24→14庄光；legacy与每step闭包守卫已修补。最终393 pass/3 skip（UI100）、包/Cocos类型检查通过，H5指定App场景13:39 Finished（日志已核实）；非GPU或Browser视觉验收，详见 [BL-017详表](../5-backlog/README.md#bl-017-开局仪式与摸牌位骰实现与验证流水)。其他窗口结算变更保留，不计本任务成果 |
+| 2026-09-20 | **BL-017 开局仪式与摸牌位骰·契约缺项补齐**：复核发现旧兼容仍拼造双骰、长名无完整读取、按钮隐藏/选中态缺失、旧点击未绑定步骤，以及罗盘风徽/提示脉冲/待掷字重/落定与庄光偏差；先更新原型与正文，再同批实现和追加回归。整体维持未完整验收，不概括为只差截图 |
+| 2026-09-20 | **BL-017 开局仪式与摸牌位骰·逐项复核**：补齐首步250ms淡入不重播、同名玩家在提示/排名中的风位指代、骰子500ms线性关键帧与Y轴旋转转换；新增3项精确关键帧、首步重入及同名指代测试；本次全量engine179/client-core40/server104/persistence6通过、3项集成跳过，包与Cocos类型检查通过，12:54指定App场景重建Finished。浏览器仍hidden/attached=false，画布读出全黑；测试页渲染替代调用未获执行，未生成有效截图，视觉联验继续待完成 |
+| 2026-09-20 | **BL-017 本轮实现收口（文档先行之后）**：TableScreen 内 CeremonyPanel 已完成逐家真实双骰、重掷旧结果、四横卡/罗盘、墙条、快照增量更新及生命周期清理；protocol/server/NetService/RoomScreen 接线完成，原型已更新。新版重入先给本人权威 roomView（身份/玩法/仪式）再 broadcastAll，局间不靠 placeholder 猜身份/墙模式；首局仪式掉线在 playing 按原 offlineSince+trusteeAfterMs 接续托管、重复 disconnect 不延期，60s 不变 |
+| 2026-09-20 | **BL-017 审查修复与资源同步维护**：一次 CodeReview 发现 restart 旧 playing 缓存被新增路由误用，NetService.restart 改 `this.leave()` 后 create，3 个回归纳入自动化；sync-to-cocos 原位更新生成源码并保留已有 .meta/UUID，避免整目录重建破坏资源引用；§10/§11.3 与附录 A 同步 |
+| 2026-09-20 | **BL-017 本轮验证收口**：最终主助手 `pnpm test`：engine 179 pass、persistence 6 pass + 3 integration skipped、client-core 37 pass（AST 真实 Cocos 类/成员 + 严格 mock，非 GPU）、game-server 104 pass；`pnpm typecheck`、Cocos tsc 通过；H5 CLI 显式 startScene=01c1425f-8926-40e9-8f67-e149f5238405 构建 Finished（12:28）。浏览器反复 NATIVE_BROWSER_VIEWPORT_UNAVAILABLE、hidden/attached=false，用户打开后仍失败；JS 导航成功但 scene=null/无 __AC__，实机/双端浏览器/截图未完成。8080 未重启，8093 浏览器未连通，不计 e2e；状态为「实现完成，视觉联验受阻/待完成」，详见 §11.3.4。本次仅文档回填，未重跑验证 |
+| 2026-09-20 | **BL-017 文档先行**：§11.3与game.html同步640×330四横卡/罗盘分带、逐家1200+2000ms、汇总2000ms/落座1500ms、定庄与局间1200+3000ms；输出stage/phase/summary及卡片状态类、用户身份映射、右端墙条、optional presentation/token与恢复规范；10场景原型假时钟/DOM核对通过，截图受浏览器不可见限制，业务编码/双端验收待进行 |
 | 2026-09-16 | 首次产出（补记 M-A 前端基座）：目录结构、设计令牌 `Theme`（移植 `style.css :root`，844×390 横屏）、`UiKit` 组件工厂（背景/文本/按钮 4 变体/面板/徽章/弹层，运行时 `Graphics`+`Label` 无预制体）、`Screen` 抽象与 `SceneRouter` 单 Canvas 多屏路由、`App` 根控制器、屏幕清单、`Config`、视觉近似与构建约束 |
 | 2026-09-17 | 补记牌桌渲染与牌面资源（§11）：TableScreen 布局预算（状态栏单行/西东成组垂直居中/牌背压缩）、TileNode 牌面 `SpriteFrame` 缓存 + `_uiProps` 异步竞态守卫 |
 | 2026-09-17 | §11 补摸牌显示：`you.drawn` 刚摸牌原位抬高 10px（抽出态），选中 18px 区分 |
@@ -274,3 +375,6 @@ abstract class Screen {
 | 2026-09-19 | **BL-021 保底台数展示**：TableScreen 徽章两态（未听牌 `💡 保底 N台 ▴` 宽 96@x216 / 听牌预览台数）；`toggleScorePop` 重构=保底区块常显（块题+明细+小计，无则「暂无锁定番种」）+状态行（未听牌灰态文案）+听牌明细+合计；数据来自 vendor engine `previewTai.secured/securedDetail` |
 | 2026-09-19 | **BL-021 保底口径 v2**：客户端无改动（数据来自 vendor engine `previewTai.secured`）；engine 侧改 recognize 全量口径后徽章/浮层自动生效 |
 | 2026-09-19 | **BL-017 开局仪式 v2 落地（用户确认流程合并+高保真审核通过）**：协议 `SeatingView.stage` 合并 `dealerDice`+`breakDice`→`dealerBreak` + 新增 `ziCounts`；`RoomView.seats` 增 `nickname`；服务端 `handleRoll` 合并为一掷定庄+定开牌点（breakN=N），删除 breakDice 独立阶段；客户端 `TableScreen.renderSeating` 全重写：①② 四家卡横排（经典骰面 Graphics 红/黑点+昵称主显+「我」金框角标+同点重掷徽章+选座倒计时）；③/局间 罗盘式落座布局（上北下南左西右东 scard+中央骰子+庄家金光徽章+牌墙条 18 组示意跳区/开牌点+去算法化文案）；新增 `drawClassicDie`/`dicePair` 工具；`RoomScreen.displayName` 优先取 `seats[].nickname`；vendor/protocol 同步；测试 252 绿 |
+| 2026-09-20 | **结算浮层 v3 还原度对齐（用户报障：积分变动信息不全/面板过小按钮贴底，proto-imp 流程）**：`showSettlement` 全重写对齐 result.html v3——面板固定 620×370（原 560×动态高至 404 溢屏致按钮贴底；屏上下各留 10px 边距）、遮罩 0.55、标题 19 goldLight、横幅 420×22 胶囊三态（Graphics 填+描）、双列边界锚定（`uiLabel` 新增 `anchorX` 选项：左列名 anchorX=0/值 anchorX=1 贴列缘，子注/我累计右对齐贴右列缘，修复原子注溢出面板）、积分变动三色（正 #9fe9b0/负 #f3b1b1/零灰）、付方子注恒列胡方子/自身子含 0、合计行上分隔线、左列行距自适应压缩防溢出、各家手牌标题与牌行拉开（标题 -ph/2+74+分隔线+牌行 48/25）+牌距 15+胡/炮角色后缀、主钮 200×34 底距 12（双钮 -73/+108）；新增 `?settleDemo=win` 演示态（App 直开 table + mock 视图/摊牌/win 事件对齐原型演示数据）供 CDP 截图自检；原型 result.html 牌面改 res/tiles 素材图+增标题、game.html result-overlay 移植 v3；PRD05 §4.1/game-design v2.7 同批 |
+| 2026-09-21 | **BL-026 客户端自愈**：`NetService.resendSettlement()`（client-core `GameClient.resendSettlement` → `ClientMsg.resendSettlement`）；`TableScreen` 增 `settleRound` 占位：render 遇 settled/exhaustive 且 `!v.seating` 且浮层缺失且本轮未请求过 → 请求补发终局事件重建结算浮层（含摊牌/下一局钮）；showSettlement 标记已建；服务端网关§15 同批 |
+| 2026-09-21 | **BL-023 玩家出口 + 牌桌/设置弹层还原度对齐（用户浏览器批注：设置弹层无「复制诊断包」+右上簇/弹层布局与高保真不符，proto-imp 流程）**：①`SettingsModal` 增「复制诊断包」行（`Diag.copy()`+回显 2s，FR-设置-05）；②右上簇对齐 game.html `.top-cluster`：四钮 28×28 圆钮（黑.5 填+淡金.2 描边+字号13）左→右 🔊/✕/📋/⚙ 于 x=296/330/364/398、y=175（原为镜像序+40 宽矩形「规则」+30 静音钮）；`UiKit.uiButton` 增 `fill/stroke` 覆盖、`uiMuteToggle(size,style)`；③设置弹层全量对齐 settings.html：面板 320×292/252（含/不含退出行）、行宽 284、`.st-btn` 金调 pill（金.12 填+金.35 描）与 `.st-btn.action` 黑.25 pill（240×27）、退出房间改「标签+副注左/退出 pill 右」行式、页脚改 gap10 居中组（协议/隐私+版本号）；CDP 实测四钮坐标与原型 getBoundingClientRect 逐点一致；对比图 cmp_table/cmp_settings3 |

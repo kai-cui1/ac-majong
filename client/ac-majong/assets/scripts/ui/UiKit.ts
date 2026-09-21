@@ -41,6 +41,8 @@ export interface LabelOpts {
   bold?: boolean;
   width?: number; // 给定宽度则自动换行（RESIZE_HEIGHT）
   align?: 'left' | 'center' | 'right';
+  /** 锚点 X 覆盖（align 只管框内对齐；左/右缘定位必须显式 anchorX，否则中心锚溢出容器） */
+  anchorX?: number;
 }
 
 export function uiLabel(text: string, opts: LabelOpts = {}): Node {
@@ -59,6 +61,7 @@ export function uiLabel(text: string, opts: LabelOpts = {}): Node {
     tf.setContentSize(opts.width, lb.lineHeight);
     lb.overflow = Label.Overflow.RESIZE_HEIGHT;
   }
+  if (opts.anchorX != null) tf.anchorX = opts.anchorX;
   return node;
 }
 
@@ -73,6 +76,9 @@ export interface ButtonOpts {
   enabled?: boolean;
   /** 圆角覆盖（默认随 variant；原型 .lb-back/.lb-mute 需 pill/圆） */
   radius?: number;
+  /** 填充/描边色覆盖（原型 .btn-exit 等需黑.5+淡金.2 圆钮时逐点对齐） */
+  fill?: Color;
+  stroke?: Color;
 }
 
 const disabledMap = new WeakMap<Node, boolean>();
@@ -107,6 +113,8 @@ export function uiButton(text: string, onClick: () => void, opts: ButtonOpts = {
     case 'dark': // 原型 .lb-subbtn/.lb-back/.lb-mute：黑半透填 + 淡金描边（rgba 的 a∈[0,1]）
       fill = rgba(0, 0, 0, 0.25); stroke = rgba(212, 165, 55, 0.12); textColor = Theme.color.textSecondary; fontSize = opts.fontSize ?? 14; lw = 1; break;
   }
+  if (opts.fill) fill = opts.fill;
+  if (opts.stroke) stroke = opts.stroke;
   if (opts.radius != null) radius = opts.radius;
 
   const node = new Node(`Btn_${text}`);
@@ -238,14 +246,14 @@ export function uiSwitch(initial: boolean, onChange: (on: boolean) => void, opts
   return { node, set: (v: boolean) => { on = v; draw(); } };
 }
 
-export function uiMuteToggle(size = 34): Node {
+export function uiMuteToggle(size = 34, style?: { fill?: Color; stroke?: Color; fontSize?: number }): Node {
   const am = AudioManager.instance;
   const icon = (): string => (am.muted ? '🔇' : '🔊');
   const btn = uiButton(icon(), () => {
     am.toggleMuted();
     const lb = btn.getChildByName('Label')?.getComponent(Label);
     if (lb) lb.string = icon();
-  }, { variant: 'dark', width: size, height: size, fontSize: Math.round(size * 0.5), radius: size / 2 });
+  }, { variant: 'dark', width: size, height: size, fontSize: style?.fontSize ?? Math.round(size * 0.5), radius: size / 2, fill: style?.fill, stroke: style?.stroke });
   return btn;
 }
 

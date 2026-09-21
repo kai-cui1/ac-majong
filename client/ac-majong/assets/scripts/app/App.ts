@@ -12,6 +12,7 @@ import { IS_WEB } from './Config';
 import { Theme } from '../ui/Theme';
 import { uiLabel } from '../ui/UiKit';
 import { NetService } from '../game/NetService';
+import { Diag } from './Diag';
 
 const { ccclass } = _decorator;
 
@@ -31,9 +32,10 @@ export class App extends Component {
     this.router.register(new LoginScreen()).register(new LobbyScreen()).register(new RoomScreen()).register(new TableScreen()).register(new ResultScreen())
       .register(new ReplayListScreen())
       .register(new ReplayPlayerScreen());
-    this.router.show('login');
-    // 调试/自动化钩子（e2e/CDP 驱动：节点树定位点击 + 网络状态断言）
-    (globalThis as Record<string, unknown>).__AC__ = { router: this.router, net: NetService.instance, cc };
+    this.router.show(IS_WEB && typeof location !== 'undefined' && location.search.includes('settleDemo') ? 'table' : 'login'); // ?settleDemo=win 直开牌桌结算演示态（还原度截图自检用）
+    // 调试/自动化钩子（e2e/CDP 驱动：节点树定位点击 + 网络状态断言）+ BL-023 诊断包
+    Diag.install();
+    (globalThis as Record<string, unknown>).__AC__ = { router: this.router, net: NetService.instance, cc, diag: Diag };
     if (IS_WEB) {
       this.updateRotateHint();
       (globalThis as { window: Window }).window.addEventListener('resize', () => this.updateRotateHint());

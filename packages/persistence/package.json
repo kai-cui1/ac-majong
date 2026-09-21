@@ -12,16 +12,20 @@
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "build": "tsc -p tsconfig.json"
+    "build": "tsc -p tsconfig.json",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate"
   },
   "dependencies": {
     "@ac-majong/engine": "workspace:*",
     "@ac-majong/protocol": "workspace:*",
+    "drizzle-orm": "^0.36.4",
     "ioredis": "^5.4.1",
     "mysql2": "^3.11.3"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
+    "drizzle-kit": "^0.28.1",
     "typescript": "^5.6.3",
     "vitest": "^2.1.8"
   }

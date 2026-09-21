@@ -324,8 +324,8 @@ export class LobbyScreen extends Screen {
       rounds.setPosition(90, 0, 0);
       const playing = r.status === 'playing';
       const full = r.seats >= 4;
-      // 记忆房间（本人曾入座，刷新后服务端保留座位）→ 对局中/满员也允许「重进」
-      const mine = r.room === NetService.instance.storedLastRoom();
+      // 记忆房间（本人曾入座，服务端保留座位）→ 对局中/满员也允许「重进」；mine 双源：服务端权威标记（跨设备）+ 本地记忆房（兼容旧服务端）
+      const mine = r.mine || r.room === NetService.instance.storedLastRoom();
       // 状态徽标胶囊（还原原型 .rr-badge：pill 描边+淡底，等待=金绿/对局中=灰）
       const pill = new Node('BadgePill');
       pill.addComponent(UITransform).setContentSize(42, 16);

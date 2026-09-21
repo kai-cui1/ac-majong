@@ -305,32 +305,40 @@
       padding: 16px 20px; box-shadow: 0 16px 48px rgba(0,0,0,0.6), 0 0 30px rgba(212,165,55,0.12);
       display: flex; flex-direction: column;
     }
-    .result-panel-title { text-align: center; font-size: 20px; font-weight: 900; color: var(--color-gold); letter-spacing: 3px; }
-    .result-panel-sub { text-align: center; font-size: 11px; color: var(--color-text-muted); margin: 4px 0 12px; }
-    .result-panel-body { display: flex; gap: 14px; min-height: 0; }
-    .result-col { flex: 1; background: rgba(0,0,0,0.25); border: 1px solid rgba(212,165,55,0.12); border-radius: var(--radius-md); padding: 10px 12px; }
-    .result-col-title { font-size: 11px; color: var(--color-gold); font-weight: 700; padding-bottom: 6px; margin-bottom: 6px; border-bottom: 1px solid rgba(212,165,55,0.15); text-align: center; }
-    .result-row { display: flex; justify-content: space-between; font-size: 11px; padding: 2px 0; color: var(--color-text-secondary); }
-    .result-row span:last-child { font-family: var(--font-mono); color: var(--color-gold-light); font-weight: 700; }
-    .result-row .win { color: var(--color-gold); }
-    .result-row .lose { color: var(--color-danger); }
-    .result-row.total { border-top: 1px solid rgba(212,165,55,0.15); margin-top: 4px; padding-top: 5px; font-weight: 700; }
-    .result-row.total span:last-child { font-size: 14px; }
-    /* 角色个性化横幅（2026-09-18 v2）：胡方金 / 付方红 / 无关灰 */
-    .result-banner { text-align: center; font-size: 12px; font-weight: 700; margin: -4px 0 8px; }
-    .result-banner.win { color: var(--color-gold); }
-    .result-banner.pay { color: var(--color-danger); }
-    .result-banner.none { color: var(--color-text-muted); font-weight: 400; }
-    /* 子/庄明细子注（付方=底台+胡方子+自身子+连庄；胡方=收付构成） */
-    .result-subrow { font-size: 9px; color: var(--color-text-muted); text-align: right; padding: 0 0 3px; }
-    .result-next-btn {
-      margin-top: 12px; align-self: center;
-      padding: 10px 44px; border-radius: var(--radius-full);
+    /* ====== 局末结算弹层（P7，横屏 v3 2026-09-20 对齐 result.html 单一基准）====== */
+    #resultOverlay .result-panel { width: 620px; height: 370px; box-sizing: border-box; padding: 10px 18px 12px; }
+    .rs-title { text-align: center; font-size: 19px; font-weight: 900; color: var(--color-gold-light); letter-spacing: 2px; text-shadow: 0 2px 10px rgba(212,165,55,0.35); }
+    .rs-sub { text-align: center; font-size: 9.5px; color: var(--color-text-muted); margin-top: 1px; }
+    .rs-banner { margin: 6px auto 0; width: 420px; height: 22px; border-radius: var(--radius-full); display: flex; align-items: center; justify-content: center; font-size: 10.5px; font-weight: 700; }
+    .rs-banner.win { background: linear-gradient(135deg, rgba(212,165,55,0.28), rgba(212,165,55,0.12)); border: 1px solid var(--color-gold); color: var(--color-gold-light); }
+    .rs-banner.pay { background: rgba(220,80,80,0.16); border: 1px solid rgba(220,80,80,0.55); color: #f3b1b1; }
+    .rs-banner.none { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); color: var(--color-text-muted); }
+    .rs-cols { flex: 1; min-height: 0; display: flex; gap: 18px; margin-top: 7px; }
+    .rs-col { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+    .rs-col-title { font-size: 11px; font-weight: 700; color: var(--color-gold); letter-spacing: 1px; text-align: center; margin-bottom: 4px; }
+    .rs-rows { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 1px; }
+    .rs-row { display: flex; align-items: baseline; font-size: 10.5px; line-height: 14px; color: var(--color-text-secondary); }
+    .rs-row .n { flex: 1; }
+    .rs-row .v { color: var(--color-gold-light); font-weight: 700; font-family: var(--font-mono); }
+    .rs-row.total { border-top: 1px solid rgba(212,165,55,0.2); margin-top: 2px; padding-top: 2px; font-size: 11.5px; line-height: 16px; color: var(--color-text-primary); }
+    .rs-seat { display: flex; align-items: baseline; gap: 6px; font-size: 10.5px; line-height: 14px; color: var(--color-text-secondary); margin-bottom: 2px; flex-wrap: wrap; }
+    .rs-seat .n { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .rs-seat .d { font-weight: 700; font-family: var(--font-mono); }
+    .rs-seat .d.up { color: #9fe9b0; } .rs-seat .d.dn { color: #f3b1b1; } .rs-seat .d.z { color: var(--color-text-muted); }
+    .rs-seat .subnote { display: block; flex-basis: 100%; font-size: 8.5px; line-height: 11px; color: var(--color-text-muted); text-align: right; margin-top: -1px; }
+    .rs-cum { margin-top: auto; text-align: right; font-size: 11px; line-height: 14px; font-weight: 700; color: var(--color-gold-light); }
+    .rs-note { font-size: 8.5px; line-height: 11px; color: var(--color-text-muted); text-align: center; margin-top: 2px; }
+    .rs-hands-title { margin-top: 6px; border-top: 1px solid rgba(212,165,55,0.15); padding-top: 5px; text-align: center; font-size: 11px; font-weight: 700; color: var(--color-gold); letter-spacing: 1px; }
+    .rs-hands { margin-top: 4px; padding-top: 2px; display: grid; grid-template-columns: 1fr 1fr; gap: 2px 16px; }
+    .rs-hand { display: flex; align-items: center; gap: 6px; }
+    .rs-hand-name { width: 60px; flex: none; font-size: 8.5px; color: var(--color-text-muted); text-align: right; white-space: nowrap; overflow: hidden; }
+    .rs-tiles { display: flex; gap: 2px; }
+    .rs-tiles img { width: 14px; height: 20px; border-radius: 3px; object-fit: cover; display: block; }
+    .rs-next { margin: 7px auto 0; width: 200px; height: 34px; border-radius: var(--radius-full); cursor: pointer;
       background: linear-gradient(135deg, var(--color-gold), var(--color-gold-dark));
       color: var(--color-bg-wood-dark); border: 1px solid var(--color-gold-light);
-      font-size: 15px; font-weight: 800; letter-spacing: 2px; cursor: pointer;
-      font-family: var(--font-cn); box-shadow: 0 4px 14px rgba(212,165,55,0.3);
-    }
+      font-size: 14px; font-weight: 700; letter-spacing: 2px; font-family: var(--font-cn);
+      display: flex; align-items: center; justify-content: center; box-shadow: 0 3px 12px rgba(212,165,55,0.3); }
     .result-panel.small { width: 380px; }
     .huang-desc { text-align: center; font-size: 12px; color: var(--color-text-secondary); padding: 8px 0 4px; line-height: 1.8; }
 
@@ -381,12 +389,7 @@
     }
     .reconnect-mask.show { display: flex; }
     .reconnect-mask .rc-sub { font-size: 10px; color: var(--color-text-muted); letter-spacing: 1px; }
-    /* 终局摊牌 2×2（结算弹层内） */
-    .reveal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 10px; }
-    .reveal-cell { background: rgba(0,0,0,0.3); border: 1px solid rgba(212,165,55,0.12); border-radius: 8px; padding: 5px 8px; }
-    .reveal-name { font-size: 9px; color: var(--color-gold); margin-bottom: 2px; }
-    .reveal-tiles { font-size: 10px; color: var(--color-text-secondary); letter-spacing: 1px; }
-    .result-note { margin-top: 6px; font-size: 9px; color: var(--color-text-muted); text-align: center; }
+    /* 终局摊牌 2×2 已并入 .rs-hands（v3 对齐 result.html） */
 
     /* ====== 台数详情浮层（徽章点击展开）====== */
     .score-popover {
@@ -475,8 +478,8 @@
     .wstack.breakpt { box-shadow: 0 0 6px rgba(212,165,55,0.9); border-color: var(--color-gold); }
     .wall-legend { position: absolute; top: 201px; left: 50%; transform: translateX(-50%); font-size: 9px; color: var(--color-gold); background: rgba(0,0,0,0.45); padding: 2px 10px; border-radius: 8px; border: 1px solid rgba(212,165,55,0.35); white-space: nowrap; transition: opacity 0.3s; } /* 对齐 Cocos y=-16：风盘与南弃牌首行之间空带 */
 
-    /* ====== 开局仪式遮罩 v2（BL-017 重设计 2026-09-19：昵称主显/「我」强提示/骰子 2s 旋转+1s 高亮）====== */
-    .result-panel.ceremony-panel { width: 640px; } /* 等优先级且晚于 .result-panel.small(380px) 定义，覆盖生效 */
+    /* ====== 开局仪式（BL-017 2026-09-20 文档先行：逐家1200ms+2000ms，定庄/局间1200ms+3000ms）====== */
+    .result-panel.ceremony-panel { width: 640px; height: 330px; box-sizing: border-box; position: relative; padding: 12px 20px; } /* 等优先级且晚于 .result-panel.small(380px) 定义，覆盖生效 */
     .ceremony-title { font-size: 17px; font-weight: 700; color: var(--color-gold); letter-spacing: 2px; text-align: center; }
     .ceremony-stage { text-align: center; font-size: 10px; color: var(--color-text-muted); margin-top: 3px; }
     .ceremony-stage b { color: var(--color-gold-light); }
@@ -490,13 +493,14 @@
     .die { width: 32px; height: 32px; position: relative; background: linear-gradient(145deg, #fffef5, #eae2c6); border: 1px solid #c9bd97; border-radius: 7px; box-shadow: 0 2px 4px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.7); }
     .die .pip { position: absolute; width: 21%; height: 21%; border-radius: 50%; background: #262626; box-shadow: inset 0 -1px 1px rgba(0,0,0,0.4); }
     .die .pip.red { background: #b02a2a; }
+    /* Cocos 与原型共用0/125/250/375/500ms线性关键帧；坐标系Y轴相反时旋转角取反。 */
     .die.rolling { animation: die-spin 0.5s linear infinite; }
     @keyframes die-spin { 0% { transform: rotate(-24deg) scale(1); } 25% { transform: rotate(10deg) scale(1.08); } 50% { transform: rotate(26deg) scale(1); } 75% { transform: rotate(-8deg) scale(0.94); } 100% { transform: rotate(-24deg) scale(1); } }
     .pcard .sum { font-size: 17px; font-weight: 700; color: var(--color-gold-light); min-height: 20px; }
     .pcard .sum.pending { font-size: 10px; color: var(--color-text-muted); font-weight: 400; }
-    /* 落定高亮（pop + 金光，1s） */
-    .pcard.reveal { border-color: var(--color-gold); box-shadow: 0 0 14px rgba(212,165,55,0.55); animation: card-pop 0.5s ease; }
-    @keyframes card-pop { 0% { transform: scale(1); } 45% { transform: scale(1.16); } 100% { transform: scale(1); } }
+    /* 落定缩放200ms包含在2000ms结果期内，不挤占相邻卡片 */
+    .pcard.reveal { border-color: var(--color-gold); box-shadow: 0 0 14px rgba(212,165,55,0.55); animation: card-pop 200ms ease; }
+    @keyframes card-pop { 0% { transform: scale(1); } 45% { transform: scale(1.03); } 100% { transform: scale(1); } }
     .pcard.max-roll { border-color: var(--color-gold); box-shadow: 0 0 12px rgba(212,165,55,0.45); }
     .pcard .reroll { position: absolute; top: -8px; right: -4px; font-size: 8px; color: #ff8a8a; background: rgba(0,0,0,0.75); border: 1px solid rgba(220,80,80,0.6); border-radius: 6px; padding: 1px 6px; animation: reroll-blink 0.6s step-start infinite; }
     @keyframes reroll-blink { 50% { opacity: 0.25; } }
@@ -533,16 +537,60 @@
     .scard .zi { font-size: 9px; color: var(--color-gold-light); margin-top: 2px; } /* 局间展示各家实际子数 */
     .scard.me { border: 2px solid var(--color-gold); background: linear-gradient(160deg, rgba(212,165,55,0.16), rgba(212,165,55,0.06)); box-shadow: 0 0 10px rgba(212,165,55,0.3); }
     .scard.me::before { content: '我'; position: absolute; top: -9px; left: 6px; z-index: 1; font-size: 9px; font-weight: 700; color: var(--color-bg-wood-dark); background: linear-gradient(135deg, var(--color-gold), var(--color-gold-dark)); border-radius: 7px; padding: 1px 6px; }
-    .scard.dealer-hit { border: 2px solid var(--color-gold); box-shadow: 0 0 14px rgba(212,165,55,0.6); animation: card-pop 0.5s ease; }
+    .scard.dealer-hit { border: 2px solid var(--color-gold); box-shadow: 0 0 14px rgba(212,165,55,0.6); animation: dealer-glow 1000ms ease; }
+    @keyframes dealer-glow { 50% { box-shadow: 0 0 24px rgba(212,165,55,0.95); } }
     .scard .dealer-badge { position: absolute; top: -10px; right: -8px; font-size: 11px; font-weight: 700; color: #fff; background: #b03030; border: 1px solid var(--color-gold-light); border-radius: 6px; padding: 1px 6px; box-shadow: 0 0 8px rgba(212,165,55,0.5); }
     .die.big { width: 40px; height: 40px; font-size: 31px; border-radius: 9px; }
     /* 定庄摸牌位：A 上子标识 + B 门前牌墙跳组示意（右端起跳 N 组） */
     .zi-chip { position: absolute; bottom: -9px; left: 50%; transform: translateX(-50%); font-size: 9px; font-weight: 700; color: var(--color-bg-wood-dark); background: linear-gradient(135deg, var(--color-gold), var(--color-gold-dark)); border-radius: 7px; padding: 1px 7px; white-space: nowrap; }
     .wall-strip { display: flex; gap: 3px; justify-content: center; margin: 6px 0 3px; }
     .wall-strip .ws { width: 12px; height: 17px; border-radius: 2px; background: linear-gradient(180deg, #1d3a6b, #14294d); border: 1px solid rgba(120,160,220,0.35); }
-    .wall-strip .ws.skip { opacity: 0.3; }
+    .wall-strip .ws.skip { opacity: 1; } /* 跳区仍是未摸常色牌背，仅用文字与右端组号解释 */
     .wall-strip .ws.pt { border-color: var(--color-gold); box-shadow: 0 0 6px rgba(212,165,55,0.9); }
     .wall-strip-label { text-align: center; font-size: 9px; color: var(--color-text-muted); }
+    /* 仪式专属布局预算：标题12..48 / 主体58..216 / 说明220..258 / 输入264..318；不影响牌桌其他区域 */
+    .ceremony-panel [hidden] { display: none !important; }
+    .ceremony-panel .ceremony-title { line-height: 23px; }
+    .ceremony-panel .ceremony-stage { line-height: 14px; margin: 0; }
+    .ceremony-body { position: absolute; left: 20px; right: 20px; top: 58px; height: 158px; }
+    .ceremony-panel .ceremony-seats { height: 158px; margin: 0; gap: 12px; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .ceremony-panel .pcard { min-width: 0; padding: 9px 6px 6px; }
+    .ceremony-panel .nick { line-height: 18px; }
+    .ceremony-identity { font-size: 9px; line-height: 15px; color: var(--color-text-muted); white-space: nowrap; }
+    .ceremony-panel .sum { font-size: 13px; line-height: 20px; }
+    .ceremony-panel .sum.pending { font-size: 10px; }
+    .ceremony-card-status { font-size: 10px; color: var(--color-gold-light); line-height: 16px; }
+    .ceremony-old { height: 19px; display: flex; align-items: center; justify-content: center; gap: 3px; font-size: 9px; color: var(--color-text-secondary); }
+    .ceremony-old .die { width: 16px; height: 16px; border-radius: 4px; }
+    .pcard.is-actor, .scard.is-actor { outline: 2px solid var(--color-gold-light); outline-offset: 2px; }
+    .pcard.is-reroll { border-color: #dc5050; }
+    .ceremony-panel .compass { position: relative; display: block; height: 158px; margin: 0; }
+    .ceremony-panel .scard { position: absolute; width: 118px; height: 46px; box-sizing: border-box; padding: 2px 6px; }
+    .ceremony-panel .scard .nick { font-size: 11px; line-height: 15px; }
+    .ceremony-panel .scard .ceremony-identity { font-size: 8px; line-height: 12px; }
+    .ceremony-panel .scard .zi { font-size: 8px; line-height: 11px; margin: 0; }
+    .ceremony-panel .seat-n { left: calc(50% - 59px); top: 0; }
+    .ceremony-panel .seat-s { left: calc(50% - 59px); bottom: 0; }
+    .ceremony-panel .seat-w { left: 64px; top: 56px; margin: 0; }
+    .ceremony-panel .seat-e { right: 64px; top: 56px; margin: 0; }
+    .ceremony-panel .compass-dice { position: absolute; left: 50%; top: 54px; transform: translateX(-50%); display: flex; gap: 8px; height: 40px; }
+    .ceremony-panel .compass-dice .sum { top: 42px; left: 50%; transform: translateX(-50%); width: 122px; text-align: center; line-height: 14px; font-size: 11px; }
+    .ceremony-panel .scard .dealer-badge { top: auto; bottom: 0; right: -35px; height: 14px; box-sizing: border-box; line-height: 10px; font-size: 9px; padding: 1px 3px; }
+    .ceremony-info { position: absolute; left: 20px; right: 20px; top: 220px; height: 38px; }
+    .ceremony-panel .ceremony-rank { margin: 0; font-size: 11px; line-height: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ceremony-panel .wall-strip { margin: 0 0 2px; gap: 3px; }
+    .ceremony-panel .wall-strip .ws { flex: 0 0 12px; height: 16px; }
+    .ceremony-panel .wall-strip-label { line-height: 16px; }
+    .ceremony-panel .ceremony-hint { position: absolute; left: 20px; right: 20px; top: 262px; line-height: 16px; height: 16px; margin: 0; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ceremony-panel .ceremony-cd { position: absolute; left: 60px; right: 60px; top: 282px; margin: 0; }
+    .ceremony-panel .ceremony-foot { position: absolute; left: 20px; right: 20px; top: 291px; height: 27px; align-items: center; gap: 8px; }
+    .ceremony-panel .result-next-btn { margin: 0; height: 27px; padding: 2px 28px; font-size: 12px; line-height: 20px; }
+    .ceremony-panel .ceremony-pick { margin: 0; gap: 8px; }
+    .ceremony-panel .seat-pick { height: 27px; padding: 2px 18px; }
+    .ceremony-panel .ceremony-clock { min-width: 74px; font-size: 10px; color: var(--color-text-secondary); text-align: center; font-variant-numeric: tabular-nums; }
+    .ceremony-demo-tools { position: absolute; bottom: 3px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; font-size: 10px; color: var(--color-text-secondary); white-space: nowrap; }
+    .ceremony-demo-tools select, .ceremony-demo-tools button { font: inherit; height: 22px; background: #291b10; color: var(--color-gold-light); border: 1px solid var(--color-gold-dark); border-radius: 4px; }
+    .ceremony-demo-tools select { width: 176px; }
   </style>
 </head>
 <body>
@@ -588,11 +636,11 @@
         <button data-demo="zhahu">诈胡提示</button>
         <button data-demo="offline">西家离线状态</button>
         <button data-demo="reconnect">重连遮罩</button>
-        <button data-demo="ceremony-rolling">仪式·掷骰中</button>
-        <button data-demo="ceremony-reveal">仪式·落定同点</button>
-        <button data-demo="ceremony-pick-mine">仪式·我选座</button>
-        <button data-demo="ceremony-pick-wait">仪式·他人选座</button>
-        <button data-demo="ceremony-dealer">仪式·定庄摸牌位</button>
+        <button data-demo="ceremony-full">仪式·完整逐家流程</button>
+        <button data-demo="ceremony-reroll">仪式·连续同点重掷</button>
+        <button data-demo="ceremony-pick-mine">仪式·我选座起播</button>
+        <button data-demo="ceremony-pick-wait">仪式·他人选座起播</button>
+        <button data-demo="ceremony-dealer">仪式·定庄起播</button>
         <button data-demo="ceremony-roundbreak">局间·摸牌位骰</button>
       </div>
     </div>
@@ -807,53 +855,80 @@
       </div>
     </div>
 
-    <!-- ====== 局末结算弹层（默认隐藏，P7）====== -->
+    <!-- ====== 局末结算弹层（默认隐藏，P7，v3 2026-09-20 对齐 result.html）====== -->
     <div class="result-overlay" id="resultOverlay">
       <div class="result-panel">
-        <div class="result-panel-title">🎉 你胡 26台！</div>
-        <div class="result-panel-sub">第 2/8 局 · 1 台 = 1 积分</div>
+        <div class="rs-title">🎉 你胡 18台！</div>
+        <div class="rs-sub">第 1/8 局 · 1 台 = 1 积分</div>
         <!-- 角色横幅三态：win=本局你为胡方 / pay=你点炮·对方自摸你付 N 分 / none=本局与你无关 -->
-        <div class="result-banner win">🎉 本局你为胡方 · 共收 +105 分</div>
-        <div class="result-panel-body">
-          <div class="result-col">
-            <div class="result-col-title">台数明细（必然包含叠加）</div>
-            <div class="result-row"><span>见花 ×2</span><span>+2</span></div>
-            <div class="result-row"><span>无字</span><span>+1</span></div>
-            <div class="result-row"><span>门清自摸（一摸三）</span><span>+3</span></div>
-            <div class="result-row"><span>独独</span><span>+2</span></div>
-            <div class="result-row"><span>缺一门</span><span>+4</span></div>
-            <div class="result-row"><span>一条龙</span><span>+8</span></div>
-            <div class="result-row total"><span>合计</span><span>26 台</span></div>
-            <div class="result-subrow" style="text-align:center;">子/连庄加成按付方逐家计入（右列子注）</div>
+        <div class="rs-banner win">🎉 本局你为胡方 · 共收 +18 分</div>
+        <div class="rs-cols">
+          <div class="rs-col">
+            <div class="rs-col-title">台数明细</div>
+            <div class="rs-rows">
+              <div class="rs-row"><span class="n">见花 ×3</span><span class="v">+3</span></div>
+              <div class="rs-row"><span class="n" style="font-size:8.5px;color:var(--color-text-muted);">春、夏、秋</span></div>
+              <div class="rs-row"><span class="n">无字</span><span class="v">+1</span></div>
+              <div class="rs-row"><span class="n">门清自摸</span><span class="v">+3</span></div>
+              <div class="rs-row"><span class="n">胡九筒</span><span class="v">+5</span></div>
+              <div class="rs-row"><span class="n">3九筒</span><span class="v">+5</span></div>
+              <div class="rs-row"><span class="n">对碰</span><span class="v">+1</span></div>
+              <div class="rs-row total"><span class="n">合计</span><span class="v">18 台</span></div>
+              <div class="rs-note">子/连庄加成按付方逐家计入（右列子注）</div>
+            </div>
           </div>
-          <div class="result-col">
-            <div class="result-col-title">积分变动</div>
-            <div class="result-row"><span>我（庄家）</span><span class="win">+105</span></div>
-            <div class="result-subrow">胡 26 台 · 自摸收 3 家</div>
-            <div class="result-row"><span>令狐冲</span><span class="lose">-38</span></div>
-            <div class="result-subrow">庄家·底 26·胡方子 2(+6)·自身子 1(+3)·连庄 2(+3)</div>
-            <div class="result-row"><span>黄蓉</span><span class="lose">-35</span></div>
-            <div class="result-subrow">底 26·胡方子 2(+6)·连庄 2(+3)</div>
-            <div class="result-row"><span>杨过</span><span class="lose">-35</span></div>
-            <div class="result-subrow">底 26·胡方子 2(+6)·连庄 2(+3)</div>
-            <div class="result-row total"><span>我当前累计</span><span class="win">+105</span></div>
+          <div class="rs-col">
+            <div class="rs-col-title">积分变动</div>
+            <div class="rs-rows">
+              <div class="rs-seat"><span class="n">凯叔（我）</span><span class="d up">+18</span>
+                <span class="subnote">胡 18 台 · 收点炮方 1 家</span></div>
+              <div class="rs-seat"><span class="n">机器人1</span><span class="d z">+0</span></div>
+              <div class="rs-seat"><span class="n">机器人2</span><span class="d z">+0</span></div>
+              <div class="rs-seat"><span class="n">机器人3</span><span class="d dn">-18</span>
+                <span class="subnote">底 18 · 胡方子 0 · 自身子 0</span></div>
+              <div class="rs-cum">我累计 +18</div>
+            </div>
           </div>
         </div>
-        <div class="result-note">付方子注列明：底台 + 胡方子(每只+3) + 自身子(每只+3) + 连庄(2n−1，庄家涉及时)；庄家几庄几子、各加多少一目瞭然</div>
-        <div class="reveal-grid">
-          <div class="reveal-cell"><div class="reveal-name">我（胡）</div><div class="reveal-tiles">🀄 123万 456万 789万 22筒 55筒</div></div>
-          <div class="reveal-cell"><div class="reveal-name">令狐冲</div><div class="reveal-tiles">🀄 111万 234筒 567条 88条 99条</div></div>
-          <div class="reveal-cell"><div class="reveal-name">黄蓉</div><div class="reveal-tiles">🀄 123条 456条 789条 11筒 22筒</div></div>
-          <div class="reveal-cell"><div class="reveal-name">杨过</div><div class="reveal-tiles">🀄 东东东 南南南 西西西 北北北 中中</div></div>
+        <div class="rs-hands-title">各家手牌</div>
+        <div class="rs-hands">
+          <div class="rs-hand"><span class="rs-hand-name">凯叔（胡）</span>
+            <span class="rs-tiles"><img src="res/tiles/wan_6.png" alt="六萬"/><img src="res/tiles/wan_6.png" alt="六萬"/><img src="res/tiles/wan_6.png" alt="六萬"/><img src="res/tiles/tong_blue_9.png" alt="9筒"/><img src="res/tiles/tong_blue_9.png" alt="9筒"/><img src="res/tiles/tong_blue_9.png" alt="9筒"/><img src="res/tiles/tiao_green_4.png" alt="4条"/><img src="res/tiles/tiao_green_4.png" alt="4条"/><img src="res/tiles/tiao_green_4.png" alt="4条"/><img src="res/tiles/tong_blue_8.png" alt="8筒"/><img src="res/tiles/tong_blue_8.png" alt="8筒"/><img src="res/tiles/tong_blue_8.png" alt="8筒"/><img src="res/tiles/tiao_green_1.png" alt="1条"/><img src="res/tiles/tiao_green_1.png" alt="1条"/></span></div>
+          <div class="rs-hand"><span class="rs-hand-name">机器人1</span>
+            <span class="rs-tiles"><img src="res/tiles/wan_2.png" alt="二萬"/><img src="res/tiles/wan_3.png" alt="三萬"/><img src="res/tiles/wan_5.png" alt="五萬"/><img src="res/tiles/tiao_green_2.png" alt="2条"/><img src="res/tiles/tiao_green_3.png" alt="3条"/><img src="res/tiles/tiao_green_6.png" alt="6条"/><img src="res/tiles/tiao_green_7.png" alt="7条"/><img src="res/tiles/wind_east.png" alt="東"/><img src="res/tiles/wind_north.png" alt="北"/><img src="res/tiles/dragon_zhong.png" alt="中"/><img src="res/tiles/dragon_fa.png" alt="發"/></span></div>
+          <div class="rs-hand"><span class="rs-hand-name">机器人3（炮）</span>
+            <span class="rs-tiles"><img src="res/tiles/wan_7.png" alt="七萬"/><img src="res/tiles/wan_7.png" alt="七萬"/><img src="res/tiles/tiao_green_3.png" alt="3条"/><img src="res/tiles/tiao_green_4.png" alt="4条"/><img src="res/tiles/tiao_green_5.png" alt="5条"/><img src="res/tiles/tiao_green_6.png" alt="6条"/><img src="res/tiles/wind_south.png" alt="南"/><img src="res/tiles/wind_south.png" alt="南"/><img src="res/tiles/dragon_bai.png" alt="白"/><img src="res/tiles/dragon_zhong.png" alt="中"/></span></div>
+          <div class="rs-hand"><span class="rs-hand-name">机器人2</span>
+            <span class="rs-tiles"><img src="res/tiles/wan_6.png" alt="六萬"/><img src="res/tiles/wan_8.png" alt="八萬"/><img src="res/tiles/tiao_green_2.png" alt="2条"/><img src="res/tiles/tiao_green_4.png" alt="4条"/><img src="res/tiles/tiao_green_5.png" alt="5条"/><img src="res/tiles/wind_west.png" alt="西"/><img src="res/tiles/wind_north.png" alt="北"/><img src="res/tiles/dragon_fa.png" alt="發"/></span></div>
         </div>
-        <button class="result-next-btn" onclick="document.getElementById('resultOverlay').classList.remove('show')">下一局 ▶</button>
+        <div class="rs-next" onclick="document.getElementById('resultOverlay').classList.remove('show')">下一局 ▶</div>
       </div>
     </div>
 
-    <!-- ====== 开局仪式遮罩 v2（BL-017 重设计 2026-09-19；默认隐藏；演示抽屉 6 态或 ?ceremony=rolling|reveal|pick-mine|pick-wait|dealer|roundbreak）====== -->
+    <!-- BL-017 维护记录 2026-09-20：保留四横卡/罗盘与640×330金色面板；连续逐家、重掷、选座、定庄/局间；仅文档原型，业务实现待验收。
+         ?ceremony=full|reroll|pick-mine|pick-wait|dealer|roundbreak|roundbreak-off|random|long|offline
+         旧 rolling/reveal 入口分别转完整流程/连续重掷；底栏只供评审选场景、重新演示和关闭，不是玩家跳过/倍速/确认。 -->
     <div class="result-overlay" id="seatingOverlay">
-      <div class="result-panel ceremony-panel" id="ceremonyPanel"></div>
+      <div class="result-panel ceremony-panel" id="ceremonyPanel" role="dialog" aria-label="掷骰仪式">
+        <div class="ceremony-title"></div><div class="ceremony-stage"></div>
+        <div class="ceremony-body"><div class="ceremony-seats"></div><div class="compass" hidden></div></div>
+        <div class="ceremony-info"></div><div class="ceremony-hint"></div>
+        <div class="ceremony-cd"><i></i></div>
+        <div class="ceremony-foot"><div class="ceremony-pick"></div><button class="result-next-btn" data-cer-roll>掷骰</button><span class="ceremony-clock"></span></div>
+      </div>
+      <div class="ceremony-demo-tools">
+        <label for="ceremonyScenario">仅原型演示</label>
+        <select id="ceremonyScenario">
+          <option value="full">完整流程 · 1真人3Bot</option><option value="reroll">连续重掷 · 含与旧结果撞点</option>
+          <option value="pick-mine">我选座起播</option><option value="pick-wait">他人选座起播</option>
+          <option value="dealer">首局定庄起播</option><option value="roundbreak">局间摸牌位骰</option>
+          <option value="roundbreak-off">局间开关关闭 · 直接续局</option><option value="random">随机墙 · 完整流程</option>
+          <option value="long">长昵称 / 同名机器人</option><option value="offline">输入2秒后离线 · 600ms代操作</option>
+        </select>
+        <button id="ceremonyRestart">重新演示</button><button id="ceremonyClose">关闭演示</button>
+      </div>
     </div>
+    <div class="toast-tip" id="ceremonyToast" role="status"></div>
 
     <!-- ====== 荒庄弹层（默认隐藏）====== -->
     <div class="result-overlay" id="huangOverlay">
@@ -1009,17 +1084,16 @@
       if (!e.target.closest('.demo-controls')) demoMenu.classList.remove('show');
     });
 
-    /* ====== 开局仪式 v2 状态机（原型演示；昵称主显/「我」金框角标/骰子 2s 旋转+落定 pop 高亮；?ceremony=state 直开）====== */
+    /* ====== BL-017 连续原型：本地模拟服务端步骤，不连接真实房间；最终骰面为明确双骰夹具，不从和拆分 ====== */
     const CER_PLAYERS = [
-      { nick: '凯叔' },
-      { nick: '令狐冲' },
-      { nick: '黄蓉' },
-      { nick: '杨过' },
+      { userId: 'u0', nick: '凯叔', seat: 0, isBot: true },
+      { userId: 'u1', nick: '令狐冲', seat: 1, isBot: false },
+      { userId: 'u2', nick: '黄蓉', seat: 2, isBot: true },
+      { userId: 'u3', nick: '杨过', seat: 3, isBot: true },
     ];
-    const CER_ME = 1; // 演示：我=令狐冲（非首卡，展示「我」强提示）
-    const DICE_GLYPHS = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
-    const dface = (v) => DICE_GLYPHS[(v - 1) % 6];
-    const dpair = (sum, hi) => { const a = hi ?? Math.min(6, Math.ceil(sum / 2)); return [Math.min(6, Math.max(1, a)), Math.min(6, Math.max(1, sum - a))]; };
+    const CER_ME = 'u1', CER_ROTATION = ['u1', 'u2', 'u3', 'u0']; // 房主=我，从开始时南座沿下手轮转
+    const CER_MS = Object.freeze({ input: 10000, auto: 600, rolling: 1200, result: 2000, summary: 2000, seated: 1500, final: 3000, pip: 90 });
+    const CER_WIND = ['东', '南', '西', '北'], CER_POS = ['e', 's', 'w', 'n'];
     /* 经典骰面：1/4 红点、其余黑点（3×3 点位布局） */
     const PIP_LAYOUT = {
       1: [[50, 50, 1]],
@@ -1030,93 +1104,278 @@
       6: [[28, 24], [72, 24], [28, 50], [72, 50], [28, 76], [72, 76]],
     };
     const pipsHTML = (v) => (PIP_LAYOUT[v] ?? []).map(([x, y, r]) => `<span class="pip${r ? ' red' : ''}" style="left:${x}%;top:${y}%;transform:translate(-50%,-50%)"></span>`).join('');
-    const dieHTML = (v, big) => `<div class="die${big ? ' big' : ''}">${pipsHTML(v)}</div>`;
-    let cerTimer = null;
-
-    function pcardHTML(i, opt) {
-      const p = CER_PLAYERS[i];
-      const me = i === CER_ME;
-      let cls = 'pcard' + (me ? ' me' : '') + (opt.reveal ? ' reveal' : '') + (opt.max ? ' max-roll' : '');
-      const dice = opt.rolling
-        ? '<div class="die rolling" data-rolling="1"></div><div class="die rolling" data-rolling="1"></div>'
-        : opt.sum != null
-          ? dpair(opt.sum, opt.hi).map((v) => dieHTML(v)).join('')
-          : '<div class="die" style="opacity:.35"></div><div class="die" style="opacity:.35"></div>';
-      const sum = opt.sum != null ? `<div class="sum">${opt.sum}</div>` : `<div class="sum pending">${opt.rolling ? '掷骰中…' : '待掷'}</div>`;
-      const reroll = opt.reroll ? '<div class="reroll">同点重掷</div>' : '';
-      return `<div class="${cls}"${opt.revealDelay ? ` style="animation-delay:${opt.revealDelay}s"` : ''}>${reroll}<div class="nick">${p.nick}${me ? '（我）' : ''}</div><div class="dice-zone">${dice}</div>${sum}</div>`;
-    }
-    const rankLine = (t) => `<div class="ceremony-rank">选位顺序：<b>${t}</b>（依次坐下手位）</div>`;
-    const pickRow = (label, disabled) => `<div class="ceremony-pick"><span class="label">${label}</span>${['东', '南', '西', '北'].map((w) => `<button class="seat-pick"${disabled ? ' disabled' : ''}>${w}</button>`).join('')}</div>`;
-    const cdBar = (pct) => `<div class="ceremony-cd"><i style="width:${pct}%"></i></div>`;
-    const footBtn = (t, active) => `<button class="result-next-btn"${active ? '' : ' disabled'}>${t}</button>`;
-    const scardHTML = (i, wind, me, dealerHit, zi) => {
-      const p = CER_PLAYERS[i];
-      return `<div class="scard seat-${wind === '北' ? 'n' : wind === '南' ? 's' : wind === '西' ? 'w' : 'e'}${me ? ' me' : ''}${dealerHit ? ' dealer-hit' : ''}"><div class="wind">${wind}</div>${dealerHit ? '<div class="dealer-badge">庄家</div>' : ''}<div class="nick">${p.nick}${me ? '（我）' : ''}</div>${zi != null ? `<div class="zi">${zi}</div>` : ''}</div>`;
+    const dieHTML = (v, big, rolling) => `<div class="die${big ? ' big' : ''}${rolling ? ' rolling' : ''}"${rolling ? ' data-rolling="1"' : ''} aria-label="${v ? v + '点' : '待掷'}">${pipsHTML(v)}</div>`;
+    const cerPanel = document.getElementById('ceremonyPanel'), cerOverlay = document.getElementById('seatingOverlay');
+    const cerFind = (s) => cerPanel.querySelector(s);
+    const cerEscape = (s) => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const cerPair = (r, big, rolling) => [r?.d1, r?.d2].map(v => dieHTML(rolling ? null : v, big, rolling)).join('');
+    const cerEquation = (r) => `${r.d1}＋${r.d2}＝${r.sum}点`;
+    let cer = null, cerTimer = null, cerTickTimer = null, cerOfflineTimer = null, cerEpoch = 0;
+    const cerPlayer = (id) => cer.players.find(p => p.userId === id);
+    const cerName = (id) => {
+      const p = cerPlayer(id);
+      const same = cer.players.filter(q => q.nick === p.nick).length > 1;
+      return p.nick + (id === CER_ME ? '（我）' : same ? `（${CER_WIND[p.seat]}）` : '');
     };
-
-    function __ceremony(state) {
-      const ov = document.getElementById('seatingOverlay');
-      const panel = document.getElementById('ceremonyPanel');
-      if (!state) { ov.classList.remove('show'); return; }
-      ov.classList.add('show');
-      if (cerTimer) { clearInterval(cerTimer); cerTimer = null; }
-      let stage = '', seats = '', extra = '', hint = '', foot = '';
-      if (state === 'rolling') {
-        stage = '阶段 ①/3 · 掷骰选位';
-        seats = pcardHTML(0, { sum: 7, hi: 4 }) + pcardHTML(1, { rolling: true }) + pcardHTML(2, {}) + pcardHTML(3, {});
-        hint = '<div class="ceremony-hint mine">我已掷骰 · 等待其他三家…</div>';
-        foot = footBtn('仪式进行中…');
-      } else if (state === 'reveal') {
-        stage = '阶段 ①/3 · 掷骰选位';
-        seats = pcardHTML(0, { sum: 9, hi: 5, reveal: true }) + pcardHTML(1, { sum: 7, hi: 4, reveal: true, revealDelay: 0.35, reroll: true }) + pcardHTML(2, { sum: 7, hi: 5, reveal: true, revealDelay: 0.7, reroll: true }) + pcardHTML(3, { sum: 4, hi: 2, reveal: true, revealDelay: 1.05 });
-        hint = '<div class="ceremony-hint">我与黄蓉 同点 7 · 两家重掷决胜</div>';
-        foot = footBtn('仪式进行中…');
-      } else if (state === 'pick-mine') {
-        stage = '阶段 ②/3 · 选座';
-        seats = pcardHTML(0, { sum: 9, hi: 5 }) + pcardHTML(1, { sum: 11, hi: 6, max: true }) + pcardHTML(2, { sum: 7, hi: 5 }) + pcardHTML(3, { sum: 4, hi: 2 });
-        extra = rankLine('令狐冲（我） → 凯叔 → 黄蓉 → 杨过') + pickRow('最大者（我·令狐冲）选座', false) + cdBar(62);
-        hint = '<div class="ceremony-hint mine">轮到你了！任选一座（10s 超时自动保留原位）</div>';
-        foot = footBtn('仪式进行中…');
-      } else if (state === 'pick-wait') {
-        stage = '阶段 ②/3 · 选座';
-        seats = pcardHTML(0, { sum: 12, hi: 6, max: true }) + pcardHTML(1, { sum: 7, hi: 4 }) + pcardHTML(2, { sum: 7, hi: 5 }) + pcardHTML(3, { sum: 4, hi: 2 });
-        extra = rankLine('凯叔 → 令狐冲（我） → 黄蓉 → 杨过') + pickRow('最大者（凯叔）选座', true) + cdBar(38);
-        hint = '<div class="ceremony-hint">等待 凯叔 选座…其余按点数序依次坐下手位</div>';
-        foot = footBtn('仪式进行中…');
-      } else if (state === 'dealer' || state === 'roundbreak') {
-        // 罗盘式落座布局（座位已定：南=我/西=凯叔/北=黄蓉/东=杨过）+ 中央骰 + 庄徽/上子 + 庄家门前牌墙跳组示意
-        stage = state === 'dealer' ? '阶段 ③/3 · 定庄摸牌位' : '局间 · 庄家掷摸牌位骰';
-        const isDealer = state === 'dealer';
-        const diceVal = 7;
-        const dice = dpair(diceVal, 4).map((v) => dieHTML(v, true)).join('');
-        // 庄家=对面 B=黄蓉（北）；跳 7 组=右端 7 组灰显、第 8 组金点开牌点
-        const ws = Array.from({ length: 18 }, (_, g) => {
-          const fromRight = 18 - g;
-          const cls = fromRight <= 7 ? 'ws skip' : fromRight === 8 ? 'ws pt' : 'ws';
-          return `<div class="${cls}"></div>`;
-        }).join('');
-        extra = `<div class="compass">`
-          + scardHTML(2, '北', false, true, isDealer ? null : '庄 1 · 子 2') // 北=黄蓉=B 上庄；局间显庄/子分明
-          + scardHTML(0, '西', false, false, isDealer ? null : '子 2') // 西=凯叔
-          + `<div class="compass-dice">${dice}<div class="sum">${diceVal}</div></div>`
-          + scardHTML(3, '东', false, false, isDealer ? null : '子 0') // 东=杨过
-          + (isDealer ? scardHTML(1, '南', true, false).replace(/<\/div>$/, '<div class="zi-chip">1 子</div></div>') : scardHTML(1, '南', true, false, '子 1')) // 南=我=A；上子标识仅开局仪式态（锚定末尾闭合标签，勿插进 wind 徽章）
-          + `</div>`
-          + `<div class="wall-strip">${ws}</div>`
-          + `<div class="wall-strip-label">B（黄蓉）门前牌墙 · 右端起跳 <b style="color:var(--color-gold-light)">7</b> 组（14 张）· 自第 <b style="color:var(--color-gold-light)">8</b> 组开摸</div>`;
-        hint = isDealer
-          ? '<div class="ceremony-hint">我（A）掷出 <b style="color:var(--color-gold-light)">7</b> → 首庄 = <b style="color:var(--color-gold-light)">黄蓉（B）</b> · 我上 1 子 + B 上庄</div>'
-          : '<div class="ceremony-hint">庄家（黄蓉）掷出 <b style="color:var(--color-gold-light)">7</b> → 开牌点 = 其门前牌墙右端起跳 7 组（14 张）· 自第 8 组开摸</div>';
-        foot = footBtn(isDealer ? '开始第 1 局发牌 ▶' : '开始下一局发牌 ▶', true);
+    const cerShort = (id) => { const n = cerName(id); return n.length > 9 ? n.slice(0, 6) + '…' + (id === CER_ME ? '（我）' : '') : n; };
+    const cerAuto = (id) => cerPlayer(id).isBot || cerPlayer(id).offline || cerPlayer(id).trusteed;
+    const cerSorted = () => [...CER_ROTATION].sort((a, b) => cer.presentation.resultsByUserId[b].sum - cer.presentation.resultsByUserId[a].sum);
+    const cerSetHTML = (node, html) => { if (node.innerHTML !== html) node.innerHTML = html; };
+    window.__ceremonyHistory = [];
+    window.__ceremonySnapshot = () => cer ? JSON.parse(JSON.stringify({ stage: cer.stage, presentation: { ...cer.presentation, serverNow: Date.now() }, players: cer.players, finished: cer.finished })) : null;
+    function cerRecord(event) {
+      window.__ceremonyHistory.push({ event, at: performance.now(), snapshot: window.__ceremonySnapshot() });
+    }
+    function cerClearTimers() {
+      clearTimeout(cerTimer); clearInterval(cerTickTimer); clearTimeout(cerOfflineTimer);
+      cerTimer = cerTickTimer = cerOfflineTimer = null;
+    }
+    function cerSchedule(next) {
+      clearTimeout(cerTimer);
+      const { ceremonyId, stepId, phase } = cer.presentation;
+      cerTimer = setTimeout(() => {
+        if (!cer || cer.finished || cer.presentation.ceremonyId !== ceremonyId || cer.presentation.stepId !== stepId || cer.presentation.phase !== phase) return;
+        next();
+      }, Math.max(0, cer.until - performance.now()));
+    }
+    function cerEnter(stage, phase, actorId, duration, next, summaryKind = null) {
+      clearTimeout(cerOfflineTimer);
+      cer.stage = stage;
+      const p = cer.presentation, now = Date.now();
+      Object.assign(p, { stepId: p.stepId + 1, phase, actor: actorId ? { userId: actorId, seat: cerPlayer(actorId).seat } : null, startedAt: now, deadline: now + duration, serverNow: now, summaryKind });
+      cer.from = performance.now(); cer.until = cer.from + duration; cer.lastPip = -Infinity;
+      cerRender(); cerTick(); cerRecord('step'); cerSchedule(next);
+    }
+    function cerInput(stage, id) {
+      cerEnter(stage, 'input', id, cerAuto(id) ? CER_MS.auto : CER_MS.input, () => {
+        if (stage === 'pick') cerPick(cerPlayer(id).seat); else cerRoll();
+      });
+    }
+    function cerFixture(id) {
+      const initial = { u0: [5, 4], u1: [6, 5], u2: [4, 3], u3: [2, 2] };
+      const rerolls = [
+        { u0: [5, 4], u1: [4, 3], u2: [5, 2], u3: [2, 2] },
+        { u1: [6, 3], u2: [5, 4] },
+        { u0: [6, 4], u1: [5, 5], u2: [3, 3] },
+        { u0: [6, 2], u1: [6, 5] },
+      ];
+      const pair = cer.mode === 'reroll' ? rerolls[cer.presentation.rerollRound][id]
+        : cer.mode === 'pick-wait' ? ({ ...initial, u0: [6, 6], u1: [5, 4] })[id] : initial[id];
+      return { d1: pair[0], d2: pair[1], sum: pair[0] + pair[1], rerollRound: cer.presentation.rerollRound };
+    }
+    function cerRoll() {
+      const p = cer.presentation;
+      if (p.phase !== 'input' || cer.stage === 'pick' || cer.finished) return;
+      const id = p.actor.userId, stage = cer.stage;
+      const hiddenResult = stage === 'roll' ? cerFixture(id) : { d1: 4, d2: 3, sum: 7 };
+      cerEnter(stage, 'rolling', id, CER_MS.rolling, () => {
+        if (stage === 'roll') {
+          p.resultsByUserId[id] = hiddenResult;
+          p.pendingRollUserIds = p.pendingRollUserIds.filter(x => x !== id);
+          cer.rerollIds = cer.rerollIds.filter(x => x !== id);
+        } else {
+          p.ceremonyDice = hiddenResult;
+          if (stage === 'dealerBreak') cer.dealerSeat = (cerPlayer(cer.picker).seat + hiddenResult.sum - 1) % 4;
+        }
+        cerEnter(stage, 'result', id, stage === 'roll' ? CER_MS.result : CER_MS.final, () => {
+          if (stage !== 'roll') return cerFinish();
+          if (p.pendingRollUserIds.length) cerInput('roll', p.pendingRollUserIds[0]); else cerSummarize();
+        });
+      });
+    }
+    function cerSummarize() {
+      const p = cer.presentation, sumOf = id => p.resultsByUserId[id].sum;
+      // 逐轮淘汰：仅待决组内判重；已定序者不再参与比较；并列组在其名次块内定序
+      const groups = (cer.slots && cer.slots.length) ? cer.slots : [CER_ROTATION.slice()];
+      const slots = [];
+      for (const g of groups) {
+        if (typeof g === 'string') { slots.push(g); continue; }
+        const members = g.slice().sort((a, b) => sumOf(b) - sumOf(a));
+        for (let i = 0; i < members.length;) {
+          const v = sumOf(members[i]); let j = i; while (j < members.length && sumOf(members[j]) === v) j++;
+          const run = members.slice(i, j); slots.push(run.length === 1 ? run[0] : run); i = j;
+        }
       }
-      panel.innerHTML = `<div class="ceremony-title">${state === 'roundbreak' ? '🎲 局间定摸牌位' : '🎲 开局仪式'}</div><div class="ceremony-stage">${stage}</div><div class="ceremony-seats">${seats}</div>${extra}${hint}<div class="ceremony-foot">${foot}</div>`;
-      if (state === 'rolling') {
-        cerTimer = setInterval(() => {
-          panel.querySelectorAll('[data-rolling]').forEach((d) => { d.innerHTML = pipsHTML(1 + Math.floor(Math.random() * 6)); });
-        }, 90);
+      cer.slots = slots;
+      cer.rerollIds = slots.filter(g => Array.isArray(g)).flat();
+      cer.order = cer.rerollIds.length ? [] : slots.slice();
+      if (cer.rerollIds.length) {
+        p.pendingRollUserIds = CER_ROTATION.filter(id => cer.rerollIds.includes(id));
+        cerEnter('roll', 'summary', null, CER_MS.summary, () => {
+          p.rerollRound++; cerInput('roll', p.pendingRollUserIds[0]);
+        }, 'reroll');
+      } else {
+        cer.picker = cer.order[0];
+        cerEnter('roll', 'summary', null, CER_MS.summary, () => cerInput('pick', cer.picker), 'ranking');
       }
     }
+    function cerArrange(seat) {
+      cer.order.forEach((id, index) => { cerPlayer(id).seat = (seat + index) % 4; });
+      cer.picked = seat;
+    }
+    function cerPick(seat) {
+      if (cer.finished || cer.stage !== 'pick' || cer.presentation.phase !== 'input') return;
+      cerArrange(seat);
+      cerEnter('pick', 'summary', null, CER_MS.seated, () => cerInput('dealerBreak', cer.picker), 'seated');
+    }
+    function cerFinish() {
+      cer.finished = true; cerRecord('deal-ready'); cerClearTimers();
+      cerOverlay.classList.remove('show');
+      const t = document.getElementById('ceremonyToast');
+      t.textContent = cer.mode === 'roundbreak-off' ? '局间摸牌位骰已关闭 · 原型直接续局（不重置示例牌桌）' : '结果展示完成 · 原型进入发牌（不重置示例牌桌）';
+      t.classList.add('show');
+      cerTimer = setTimeout(() => t.classList.remove('show'), 2500);
+    }
+    function cerHasFinalRanking() {
+      const p = cer.presentation;
+      return cer.order.length === CER_ROTATION.length && !cer.rerollIds.length
+        && ((cer.stage === 'roll' && p.phase === 'summary' && p.summaryKind === 'ranking')
+          || cer.stage === 'pick' || cer.stage === 'dealerBreak');
+    }
+    function cerCard(player, compass) {
+      const p = cer.presentation, id = player.userId, r = p.resultsByUserId[id];
+      const actor = p.actor?.userId === id, rolling = actor && p.phase === 'rolling';
+      const stale = cer.rerollIds.includes(id), ranked = cerHasFinalRanking();
+      const dealer = player.seat === cer.dealerSeat;
+      const card = (compass ? cer.compassCards : cer.cards).get(id);
+      card.className = (compass ? `scard seat-${CER_POS[player.seat]}` : 'pcard')
+        + (id === CER_ME ? ' me' : '') + (actor ? ' is-actor' : '')
+        + (!compass && stale ? ' is-reroll' : '') + (!compass && ranked && id === cer.order[0] ? ' max-roll' : '')
+        + (!compass && actor && p.phase === 'result' ? ' reveal' : '')
+        + (compass && dealer && p.phase === 'result' ? ' dealer-hit' : '');
+      const identity = `${CER_WIND[player.seat]}座 · ${player.isBot ? '机器人' : '真人'}${player.offline ? ' · 离线' : ''}`;
+      const name = `<div class="nick" title="${cerEscape(cerName(id))}">${cerEscape(player.nick)}</div><div class="ceremony-identity">${identity}</div>`;
+      if (compass) {
+        const zi = cer.stage === 'roundBreak' ? [2, 1, 2, 0][Number(id.slice(1))] : Number(id === cer.picker) + Number(dealer);
+        cerSetHTML(card, `<div class="wind">${CER_WIND[player.seat]}</div>${name}<div class="zi">${dealer ? '庄家 · ' : ''}子 ${zi}${actor ? ' · 当前操作' : ''}</div>${dealer ? '<div class="dealer-badge">庄家</div>' : ''}`);
+      } else {
+        const status = (actor ? '当前操作 · ' : '') + (stale ? '待重掷' : ranked ? `第${cer.order.indexOf(id) + 1}名${id === cer.order[0] ? ' · 最大者' : ''}` : r ? '已落定' : actor ? '待落定' : '等待轮转');
+        const old = stale && r ? `<div class="ceremony-old">上次 ${cerPair(r)} ${r.sum}点</div>` : '<div class="ceremony-old"></div>';
+        cerSetHTML(card, `${stale ? '<div class="reroll">同点重掷</div>' : ''}${name}<div class="dice-zone">${cerPair(r, false, rolling)}</div><div class="sum${!r || rolling ? ' pending' : ''}">${rolling ? '掷骰中…' : r ? cerEquation(r) : '待掷'}</div><div class="ceremony-card-status">${status}</div>${old}`);
+      }
+    }
+    function cerRender() {
+      const p = cer.presentation, compass = cer.stage === 'dealerBreak' || cer.stage === 'roundBreak';
+      const actor = p.actor?.userId, mine = actor === CER_ME && !cerAuto(actor), input = p.phase === 'input';
+      cerPanel.className = `result-panel ceremony-panel stage-${cer.stage} phase-${p.phase}${p.summaryKind ? ' summary-' + p.summaryKind : ''}`;
+      Object.assign(cerPanel.dataset, { ceremonyId: p.ceremonyId, stepId: String(p.stepId), phase: p.phase, actor: actor || '' });
+      cerFind('.ceremony-title').textContent = cer.stage === 'roundBreak' ? '局间定摸牌位' : '开局仪式';
+      const title = { roll: '阶段 ①/3 · 逐家掷骰选位', pick: '阶段 ②/3 · 最大者选座', dealerBreak: '阶段 ③/3 · 一次掷骰定庄与开牌点', roundBreak: '当前庄家掷骰 · 不重新选座或定庄' };
+      cerFind('.ceremony-stage').textContent = `${title[cer.stage]}${p.rerollRound && cer.stage === 'roll' ? ' · 重掷第' + p.rerollRound + '轮' : ''}`;
+      cerFind('.ceremony-seats').hidden = compass; cerFind('.compass').hidden = !compass;
+      cer.players.forEach(player => cerCard(player, compass));
+      const info = cerFind('.ceremony-info');
+      let hint = '';
+      if (compass) {
+        const r = p.ceremonyDice;
+        cerSetHTML(cerFind('.compass-dice'), `${cerPair(r, true, p.phase === 'rolling')}<div class="sum">${r ? cerEquation(r) : p.phase === 'rolling' ? '掷骰中…' : '等待掷骰'}</div>`);
+        if (r && cer.wallMode === 'physical') {
+          const wall = Array.from({ length: 18 }, (_, i) => { const g = 18 - i; return `<div class="ws${g <= r.sum ? ' skip' : g === r.sum + 1 ? ' pt' : ''}" data-from-right="${g}" title="右端第${g}组${g <= r.sum ? '（跳过）' : g === r.sum + 1 ? '（开摸）' : ''}"></div>`; }).join('');
+          const dealerId = cer.players.find(x => x.seat === cer.dealerSeat).userId;
+          info.innerHTML = `<div class="wall-strip">${wall}</div><div class="wall-strip-label">${cerEscape(cerShort(dealerId))}门前 · 右端跳${r.sum}组（${r.sum * 2}张）· 第${r.sum + 1}组开摸 ← 从右向左</div>`;
+        } else info.innerHTML = `<div class="ceremony-rank">${cer.wallMode === 'random' ? '随机牌墙 · 不展示物理开牌位置' : '落定后展示庄家门前牌墙开摸位置'}</div>`;
+        if (r) {
+          const d = cer.players.find(x => x.seat === cer.dealerSeat).userId;
+          hint = cer.stage === 'roundBreak' ? `${cerShort(d)}坐庄 · 本次仅定摸牌位，不额外加子` : `${cerShort(d)}坐庄 · ${cerShort(cer.picker)}上1子 + ${cerShort(d)}上庄1子${d === cer.picker ? '（共2子）' : ''}`;
+        }
+      } else {
+        const ranked = cerHasFinalRanking(), tiedSummary = p.phase === 'summary' && p.summaryKind === 'reroll';
+        const rerollPending = cer.stage === 'roll' && p.rerollRound > 0 && !ranked;
+        const pendingOrder = cer.rerollIds.slice().sort((a, b) => (p.resultsByUserId[b]?.sum ?? 0) - (p.resultsByUserId[a]?.sum ?? 0));
+        const labels = ranked ? cer.order.map(id => cerShort(id)).join(' → ')
+          : tiedSummary ? pendingOrder.map(id => cerShort(id)).join(' → ')
+          : rerollPending ? '重掷进行中 · 仅待决组点数待比较' : '房主开始 · 按仪式开始时的下手座序逐家轮转';
+        const detail = tiedSummary ? '仅待决组内判重比大小 · 已定序者不再参与'
+          : ranked && p.summaryKind === 'seated' ? cer.order.map(id => `${cerShort(id)}坐${CER_WIND[cerPlayer(id).seat]}`).join(' · ')
+          : ranked ? '按点数降序落座 · 最大者任选一座，其余依次坐下手'
+          : rerollPending ? '本轮结果展示结束后仅待决组重新比较 · 已定序者保留' : '每家滚动1.2秒 + 结果2秒 · 已揭晓结果全桌保留';
+        info.innerHTML = `<div class="ceremony-rank" title="${cerEscape(labels)}">${tiedSummary ? '同点未决 · 待决组本轮顺序：' : ranked ? '选位顺序：' : ''}<b>${cerEscape(labels)}</b></div><div class="ceremony-rank" title="${cerEscape(detail)}">${cerEscape(detail)}</div>`;
+      }
+      if (!hint) hint = input ? `${mine ? '轮到你了' : '等待 ' + cerShort(actor)} · ${cer.stage === 'pick' ? '任选一座，超时保留当前座位' : cerAuto(actor) ? '准备600毫秒后自动掷骰' : '请掷骰，10秒超时自动代掷'}`
+        : p.phase === 'rolling' ? `${cerShort(actor)}正在掷骰 · 结果尚未揭晓`
+        : p.phase === 'result' ? `${cerShort(actor)} · ${cerEquation(p.resultsByUserId[actor])} · 结果停留2秒`
+        : p.summaryKind === 'reroll' ? `同点重掷：${cer.rerollIds.map(id => cerShort(id)).join('、')} · 汇总2秒`
+        : p.summaryKind === 'seated' ? '落座完成 · 汇总1.5秒后由最大者掷一次骰定庄' : `${cerShort(cer.picker)}为最大者 · 排名汇总2秒后开放选座`;
+      const hintNode = cerFind('.ceremony-hint'); hintNode.textContent = hint; hintNode.title = hint;
+      hintNode.classList.toggle('mine', !!mine && input);
+      const pick = cerFind('.ceremony-pick'), btn = cerFind('[data-cer-roll]');
+      pick.hidden = cer.stage !== 'pick'; btn.hidden = cer.stage === 'pick';
+      pick.querySelectorAll('button').forEach(b => { b.disabled = !input || !mine; b.classList.toggle('selected', Number(b.dataset.seat) === cer.picked); });
+      btn.disabled = !input || !mine;
+      btn.textContent = input ? mine ? '掷骰' : '等待当前玩家' : p.phase === 'rolling' ? '掷骰中…' : p.phase === 'result' ? compass ? '即将自动发牌' : '查看结果' : '仪式进行中…';
+      btn.dataset.token = `${p.ceremonyId}:${p.stepId}`;
+    }
+    function cerTick() {
+      if (!cer || cer.finished) return;
+      const p = cer.presentation, now = performance.now(), remaining = Math.max(0, cer.until - now);
+      cerFind('.ceremony-cd i').style.width = `${100 * remaining / Math.max(1, cer.until - cer.from)}%`;
+      cerFind('.ceremony-clock').textContent = `${p.phase === 'input' ? '操作' : '展示'} ${(remaining / 1000).toFixed(1)}s`;
+      if (p.phase === 'rolling' && now - cer.lastPip >= CER_MS.pip) {
+        cer.lastPip = now;
+        cerPanel.querySelectorAll('[data-rolling]').forEach(d => { d.innerHTML = pipsHTML(1 + Math.floor(Math.random() * 6)); d.setAttribute('aria-label', '滚动中'); });
+      }
+    }
+    function __ceremony(mode) {
+      cerClearTimers(); cerEpoch++; cerOverlay.classList.remove('show');
+      document.getElementById('ceremonyToast').classList.remove('show');
+      if (cer) cer.finished = true;
+      if (!mode) return;
+      mode = ({ rolling: 'full', reveal: 'reroll' })[mode] || mode;
+      const options = [...document.getElementById('ceremonyScenario').options].map(o => o.value);
+      if (!options.includes(mode)) mode = 'full';
+      document.getElementById('ceremonyScenario').value = mode;
+      cer = { mode, players: CER_PLAYERS.map(p => ({ ...p })), stage: 'roll', order: [], picker: null, picked: null, dealerSeat: null, rerollIds: [], slots: [], wallMode: mode === 'random' ? 'random' : 'physical', finished: false,
+        presentation: { ceremonyId: `prototype-${cerEpoch}`, stepId: 0, startedAt: 0, deadline: 0, serverNow: 0, phase: 'input', actor: null, rerollRound: 0, pendingRollUserIds: [...CER_ROTATION], resultsByUserId: {}, ceremonyDice: null, summaryKind: null }, cards: new Map(), compassCards: new Map() };
+      window.__ceremonyHistory = [];
+      if (mode === 'long') cer.players.forEach(p => { p.nick = p.isBot ? '机器人' : '令狐冲与江湖好友一起打麻将的超长昵称'; });
+      const row = cerFind('.ceremony-seats'), compass = cerFind('.compass');
+      row.replaceChildren(); compass.replaceChildren();
+      cer.players.forEach(p => {
+        const card = document.createElement('div'), scard = document.createElement('div');
+        card.dataset.userId = scard.dataset.userId = p.userId;
+        row.appendChild(card); compass.appendChild(scard); cer.cards.set(p.userId, card); cer.compassCards.set(p.userId, scard);
+      });
+      const center = document.createElement('div'); center.className = 'compass-dice'; compass.appendChild(center);
+      cerFind('.ceremony-pick').innerHTML = CER_WIND.map((w, seat) => `<button class="seat-pick" data-seat="${seat}">${w}</button>`).join('');
+      cerOverlay.classList.add('show');
+      cerTickTimer = setInterval(cerTick, 30);
+      if (mode === 'roundbreak-off') { cer.stage = 'roundBreak'; cer.presentation.pendingRollUserIds = []; cerFinish(); return; }
+      if (['pick-mine', 'pick-wait', 'dealer', 'roundbreak'].includes(mode)) {
+        CER_ROTATION.forEach(id => { cer.presentation.resultsByUserId[id] = cerFixture(id); });
+        cer.presentation.pendingRollUserIds = []; cer.slots = []; cer.order = cerSorted(); cer.picker = cer.order[0];
+        if (mode.startsWith('pick-')) cerInput('pick', cer.picker);
+        else {
+          cerArrange(1);
+          if (mode === 'roundbreak') { cer.dealerSeat = 3; cerInput('roundBreak', cer.players.find(p => p.seat === cer.dealerSeat).userId); }
+          else cerInput('dealerBreak', cer.picker);
+        }
+      } else cerInput('roll', CER_ROTATION[0]);
+      if (mode === 'offline') {
+        const id = cer.presentation.ceremonyId, step = cer.presentation.stepId;
+        cerOfflineTimer = setTimeout(() => {
+          if (!cer || cer.finished || cer.presentation.ceremonyId !== id || cer.presentation.stepId !== step || cer.presentation.phase !== 'input') return;
+          cerPlayer(CER_ME).offline = true;
+          const left = Math.max(0, Math.min(CER_MS.auto, cer.until - performance.now()));
+          cer.until = performance.now() + left; cer.presentation.deadline = Date.now() + left;
+          cerRender(); cerRecord('disconnect'); cerSchedule(cerRoll);
+        }, 2000);
+      }
+    }
+    cerFind('[data-cer-roll]').addEventListener('click', e => {
+      if (!cer || cer.finished || cer.presentation.actor?.userId !== CER_ME || cerAuto(CER_ME) || performance.now() >= cer.until) return;
+      if (e.currentTarget.dataset.token !== `${cer.presentation.ceremonyId}:${cer.presentation.stepId}`) return;
+      cerRoll();
+    });
+    cerFind('.ceremony-pick').addEventListener('click', e => {
+      const b = e.target.closest('button[data-seat]');
+      if (!b || b.disabled || !cer || cer.finished || cer.presentation.actor?.userId !== CER_ME || performance.now() >= cer.until) return;
+      cerPick(Number(b.dataset.seat));
+    });
+    document.getElementById('ceremonyScenario').addEventListener('change', e => __ceremony(e.target.value));
+    document.getElementById('ceremonyRestart').addEventListener('click', () => __ceremony(document.getElementById('ceremonyScenario').value));
+    document.getElementById('ceremonyClose').addEventListener('click', () => __ceremony(null));
+    document.addEventListener('visibilitychange', cerTick);
+    window.addEventListener('pagehide', () => __ceremony(null));
     window.__ceremony = __ceremony;
     const _cerParam = new URLSearchParams(location.search).get('ceremony');
     if (_cerParam) __ceremony(_cerParam);
