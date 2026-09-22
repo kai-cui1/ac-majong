@@ -167,6 +167,19 @@
     .side-melds .meld-group { display: flex; flex-direction: column; gap: 1px; padding: 1px; }
     .side-melds .tile, .side-melds .tile-back { width: 14px; height: 19px; border-radius: 2px; margin: 0; cursor: default; }
     .side-melds .tile-back { border-width: 1px; }
+    /* ====== BL-039（2026-09-22 用户要求边界设计）：各家面前 花/碰吃区 极端情况容器 ======
+       侧家明牌默认单列顶对齐（.west-body flex-start）；单列超垂直预算（4 组含杠≈384px > 预算≈228）时
+       换行双列（前两组外列/后两组内列，各列顶对齐）；侧家花=牌背列外侧 12×16 竖列（8 张=144≤预算）；
+       北家花=明牌行左 12×16 横排（8 张=112）；南家花 ≤4 单行 16×22、5~8 两行×4（槽宽 79=4×16+3×3+内边） */
+    .side-melds.wrap { flex-direction: row; gap: 4px; align-items: flex-start; }
+    .meld-col { display: flex; flex-direction: column; gap: 6px; }
+    .side-flowers { display: flex; flex-direction: column; gap: 2px; }
+    .side-flowers .tile { width: 12px; height: 16px; border-radius: 2px; margin: 0; }
+    .north-flowers { display: flex; gap: 2px; align-items: flex-start; }
+    .north-flowers .tile { width: 12px; height: 16px; border-radius: 2px; margin: 0; }
+    .flower-area.two-row { flex-wrap: wrap; width: 79px; row-gap: 3px; }
+    /* 南家明牌 4 组超宽（>271）触发降规格 14×19（与客户端既有降规格规则同口径） */
+    .south-melds.mini .meld-group .tile, .south-melds.mini .meld-group .tile-back { width: 14px; height: 19px; border-radius: 2px; }
 
     /* ====== 中央公共牌河 ====== */
     .center-river {
@@ -656,7 +669,8 @@
         <span class="pinfo-zi">子1</span>
       </div>
       <div class="north-body">
-        <div class="north-melds">
+        <div class="north-flowers" id="northFlowers"></div>
+        <div class="north-melds" id="northMelds">
           <div class="meld-item">
             <div class="meld-group">
               <div class="tile"><img src="res/tiles/wind_west.png?v=3" alt="西"/></div>
@@ -689,8 +703,9 @@
         <span class="pinfo-off-tag">离线</span>
       </div>
       <div class="west-body">
+        <div class="side-flowers" id="westFlowers"></div>
         <div class="side-hand-edge" id="westHand"></div>
-        <div class="side-melds">
+        <div class="side-melds" id="westMelds">
           <div class="meld-item">
             <div class="meld-group">
               <div class="tile"><img src="res/tiles/tong_blue_6.png?v=3" alt="6筒"/></div>
@@ -731,7 +746,7 @@
         <span class="pinfo-auto-tag">托管中</span>
       </div>
       <div class="east-body">
-        <div class="side-melds">
+        <div class="side-melds" id="eastMelds">
           <div class="meld-item">
             <div class="meld-group">
               <div class="tile"><img src="res/tiles/wind_north.png?v=3" alt="北"/></div>
@@ -742,6 +757,7 @@
           </div>
         </div>
         <div class="side-hand-edge" id="eastHand"></div>
+        <div class="side-flowers" id="eastFlowers"></div>
       </div>
     </div>
 
@@ -779,11 +795,11 @@
           <span class="pinfo-dealer">庄</span>
           <span class="pinfo-lian">连2</span>
         </div>
-        <div class="flower-area">
+        <div class="flower-area" id="southFlowers">
           <div class="tile"><img src="res/tiles/flower_spring.png?v=3" alt="春"/></div>
           <div class="tile"><img src="res/tiles/flower_summer.png?v=3" alt="夏"/></div>
         </div>
-        <div class="south-melds">
+        <div class="south-melds" id="southMelds">
           <div class="meld-item">
             <div class="meld-group">
               <div class="tile"><img src="res/tiles/wan_2.png?v=3" alt="二萬"/></div>
@@ -1410,6 +1426,42 @@
       /* 开牌点图例瞬态提示（对齐 TableScreen.showWallLegend）：开局显示 5s 后淡出自隐 */
       setTimeout(() => { const lg = document.querySelector('.wall-legend'); if (lg) lg.style.opacity = '0'; }, 5000);
     })();
+    // ====== BL-039 边界演示（?extreme=1）：四家花 8 张＋副露 4 组（含杠）＋西准备吃，核验各家面前区预算 ======
+    if (new URLSearchParams(location.search).get('extreme') === '1') window.addEventListener('load', buildExtreme);
+    function buildExtreme() {
+      const F = ['spring', 'summer', 'autumn', 'winter', 'plum', 'orchid', 'bamboo', 'chrys'];
+      const flowers8 = F.map((n) => `<div class="tile"><img src="res/tiles/flower_${n}.png?v=3" alt="${n}"/></div>`).join('');
+      const t = (p, a) => `<div class="tile"><img src="res/tiles/${p}.png?v=3" alt="${a}"/></div>`;
+      const back4 = '<div class="tile-back"></div>'.repeat(4);
+      const item = (inner, label, cls = '') => `<div class="meld-item"><div class="meld-group ${cls}">${inner}</div><div class="meld-label ${cls}">${label}</div></div>`;
+      const kong = (p, a) => item(t(p, a).repeat(4), '明杠');
+      const ack = () => item(back4, '暗杠');
+      const chi = (a, b, c) => item(t(a, '') + t(b, '') + t(c, ''), '吃');
+      // 西：花 8 竖列＋明牌双列（外=2 明杠／内=1 吃+准备吃；4 组+预览=合法上限：准备吃仅在第 4 副形成前）
+      document.getElementById('westFlowers').innerHTML = flowers8;
+      const wm = document.getElementById('westMelds');
+      wm.classList.add('wrap');
+      wm.innerHTML = `<div class="meld-col">${kong('tiao_green_2', '2条')}${kong('tong_blue_9', '9筒')}</div>` +
+        `<div class="meld-col">${chi('tiao_green_4', 'tiao_green_5', 'tiao_green_6')}` +
+        `${item(t('wan_1', '一萬') + '<div class="gap"></div>' + t('wan_3', '三萬'), '准备吃', 'pending')}</div>`;
+      // 东：花 8 竖列＋4 暗杠→双列×2
+      document.getElementById('eastFlowers').innerHTML = flowers8;
+      const em = document.getElementById('eastMelds');
+      em.classList.add('wrap');
+      em.innerHTML = `<div class="meld-col">${ack()}${ack()}</div><div class="meld-col">${ack()}${ack()}</div>`;
+      // 北：花 8 横排＋4 组（2 杠+2 吃）
+      document.getElementById('northFlowers').innerHTML = flowers8;
+      document.getElementById('northMelds').innerHTML = kong('wan_6', '6萬') + kong('tong_blue_5', '5筒') +
+        chi('tiao_green_1', 'tiao_green_2', 'tiao_green_3') + chi('wan_7', 'wan_8', 'wan_9');
+      // 南：花 8 两行×4＋4 组（超宽降规格 mini）
+      const sf = document.getElementById('southFlowers');
+      sf.classList.add('two-row');
+      sf.innerHTML = flowers8;
+      const sm = document.getElementById('southMelds');
+      sm.classList.add('mini');
+      sm.innerHTML = chi('wan_1', 'wan_2', 'wan_3') + chi('tong_blue_1', 'tong_blue_2', 'tong_blue_3') +
+        kong('tiao_green_8', '8条') + ack();
+    }
   </script>
 </body>
 </html>

@@ -252,8 +252,8 @@ export class TableScreen extends Screen {
     const RT = { w: 16, h: 22 }; // 摊牌牌面尺寸
     const edgeW = revTiles ? revTiles.length * (RT.w + 1) : o.concealedCount * (EDGE_H.w + 1);
     const totalW = meldW + (meldW ? 10 : 0) + edgeW;
-    // 明牌在左（BL-035：wrap 名=Melds${seat}，与 drawMelds/pop 动画查找一致；旧名 'Melds' 失配致副露停 body 中心与牌背重叠）
-    if (meldW) body.getChildByName(`Melds${o.seat}`)?.setPosition(-totalW / 2 + meldW / 2, 6, 0);
+    // 明牌在左（BL-035：wrap 名=Melds${seat}；BL-038：drawMelds 横排为左缘原点，旧 +meldW/2 补偿致右移半块压牌背行）
+    if (meldW) body.getChildByName(`Melds${o.seat}`)?.setPosition(-totalW / 2, 6, 0);
     // 牌侧横条在右（终局摊牌时为面牌横排）
     const edge = this.mk(body, 'Edge', -totalW / 2 + meldW + (meldW ? 10 : 0) + edgeW / 2, 0);
     if (revTiles) {
@@ -320,7 +320,7 @@ export class TableScreen extends Screen {
         e.setPosition(0, edgeH / 2 - i * pitch - EDGE_V.h / 2, 0);
       }
     }
-    if (meldH) body.getChildByName(`Melds${o.seat}`)?.setPosition(meldX, 0, 0); // BL-035：同北家，旧名失配致侧家副露压牌背竖条
+    if (meldH) body.getChildByName(`Melds${o.seat}`)?.setPosition(meldX, meldH / 2, 0); // BL-038：竖排为顶缘原点，+meldH/2 使列垂直居中（旧 y=0 致下垂）
   }
 
   /** 中央公共牌河：北顶/南底居中换行 + 西左/东右换行 + 风圈盘 */
@@ -502,7 +502,7 @@ export class TableScreen extends Screen {
       meldsNode.destroyAllChildren();
       meldW = this.drawMelds(meldsNode, me.melds ?? [], { w: 14, h: 19 }, 'h', me.seat, this.pendChiFor(v, me.seat));
     }
-    meldsNode.setPosition(-160 + meldW / 2, 0, 0);
+    meldsNode.setPosition(-160, 0, 0); // BL-038：横排左缘原点，自 -160 起右排（旧 +meldW/2 致整行右移半块）
     const preview = previewTai(me.concealed, me.melds ?? [], me.flowers, {
       isDealer: me.seat === v.dealerSeat,
       wallRemaining: v.wallRemaining,
