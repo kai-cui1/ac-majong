@@ -99,7 +99,7 @@ function expectReentrySnapshot(room: RoomActor, conns: MockConn[]): void {
 }
 function setup(settings?: Partial<RoomSettings>, trusteeAfterMs = 60_000, hooks?: GameHooks) {
   const conns = ['u0', 'u1', 'u2', 'u3'].map((u) => new MockConn(u));
-  const room = new RoomActor('654321', 'u0', 8, 42, hooks, { trusteeAfterMs }, {
+  const room = new RoomActor('654321', 'u0', 8, 42, hooks, { trusteeAfterMs, turnMs: 0, respMs: 0 }, { // BL-031：假时钟测试关闭截止代打
     wallMode: 'random', breakDice: false, chiFirstView: true, isPublic: true, ...settings,
   });
   rooms.push(room);
@@ -685,7 +685,7 @@ describe('BL-017 · 权威展示边界与生命周期', () => {
   });
 
   it('仪式中离线 Bot 仍按600ms代掷，但首局不为其建立真人托管等待', () => {
-    const room = new RoomActor('333333', 'u0', 8, 42, undefined, { trusteeAfterMs: 1 });
+    const room = new RoomActor('333333', 'u0', 8, 42, undefined, { trusteeAfterMs: 1, turnMs: 0, respMs: 0 });
     rooms.push(room);
     for (const u of ['u0', 'u1', 'u2', 'bot-3']) room.addPlayer(u, new MockConn(u));
     stubDice(12, 9, 7, 5, 9);

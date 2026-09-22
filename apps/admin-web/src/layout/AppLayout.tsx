@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Avatar, Layout, Menu, Space, Spin, Tag } from 'antd';
+import { Avatar, Layout, Menu, Space, Spin } from 'antd';
 import type { MenuProps } from 'antd';
 import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { hasRole, useAuth } from '../store/auth';
@@ -10,6 +10,8 @@ const TITLES: Record<string, string> = {
   '/users': '用户管理',
   '/rooms': '房间 / 对局',
   '/replay': '回放仲裁',
+  '/diag': '诊断包受理',
+  '/monitor': '实时房间监控',
   '/admins': '管理员管理',
   '/audit': '审计日志',
 };
@@ -17,6 +19,8 @@ const GROUPS: Record<string, string> = {
   '/users': '查证',
   '/rooms': '查证',
   '/replay': '查证',
+  '/diag': '诊断',
+  '/monitor': '诊断',
   '/admins': '系统',
   '/audit': '系统',
 };
@@ -41,6 +45,16 @@ export function AppLayout(): JSX.Element {
         ],
       },
     ];
+    if (hasRole(admin?.role, 'operator')) {
+      groups.push({
+        type: 'group',
+        label: '诊断',
+        children: [
+          { key: '/diag', label: <span>🩺 诊断包受理 🔒</span> },
+          { key: '/monitor', label: <span>📡 实时房间监控 🔒</span> },
+        ],
+      });
+    }
     if (hasRole(admin?.role, 'super')) {
       groups.push({
         type: 'group',
@@ -84,7 +98,6 @@ export function AppLayout(): JSX.Element {
             {GROUPS[selectedKey]} / <b style={{ color: 'rgba(0,0,0,0.88)', fontWeight: 600 }}>{TITLES[selectedKey]}</b>
           </div>
           <div style={{ flex: 1 }} />
-          <Tag color="gold">内网 · 只读一期</Tag>
           <Space size={8}>
             <Avatar size={28} style={{ background: '#1677ff' }}>{admin.username.slice(0, 1).toUpperCase()}</Avatar>
             <span style={{ color: 'rgba(0,0,0,0.65)' }}>

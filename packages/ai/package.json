@@ -1,0 +1,24 @@
+{
+  "name": "@ac-majong/ai",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A&C 麻将可扩展 AI 机器人：策略可插拔（效率/大牌/攻防/蒙特卡洛）+ 统一决策器（BL-031）",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ac-majong/engine": "workspace:*",
+    "@ac-majong/protocol": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8"
+  }
+}

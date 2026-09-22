@@ -27,19 +27,19 @@
       background: linear-gradient(160deg, var(--color-bg-wood) 0%, var(--color-bg-wood-dark) 100%);
       border: 1px solid var(--color-gold-dark); border-radius: var(--radius-xl);
       box-shadow: 0 16px 48px rgba(0,0,0,0.6), 0 0 24px rgba(212,165,55,0.12);
-      padding: 10px 18px 12px; display: flex; flex-direction: column; }
-    .rs-title { text-align: center; font-size: 19px; font-weight: 900; color: var(--color-gold-light); letter-spacing: 2px;
+      padding: 8px 18px 10px; display: flex; flex-direction: column; }
+    .rs-title { text-align: center; font-size: 19px; line-height: 22px; font-weight: 900; color: var(--color-gold-light); letter-spacing: 2px;
       text-shadow: 0 2px 10px rgba(212,165,55,0.35); }
-    .rs-sub { text-align: center; font-size: 9.5px; color: var(--color-text-muted); margin-top: 1px; }
-    .rs-banner { margin: 6px auto 0; width: 420px; height: 22px; border-radius: var(--radius-full);
+    .rs-sub { text-align: center; font-size: 9.5px; line-height: 10px; color: var(--color-text-muted); margin-top: 0; }
+    .rs-banner { margin: 3px auto 0; width: 420px; height: 20px; border-radius: var(--radius-full);
       display: flex; align-items: center; justify-content: center; font-size: 10.5px; font-weight: 700; }
     .rs-banner.win { background: linear-gradient(135deg, rgba(212,165,55,0.28), rgba(212,165,55,0.12)); border: 1px solid var(--color-gold); color: var(--color-gold-light); }
     .rs-banner.pay { background: rgba(220,80,80,0.16); border: 1px solid rgba(220,80,80,0.55); color: #f3b1b1; }
     .rs-banner.none { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); color: var(--color-text-muted); }
-    .rs-cols { flex: 1; min-height: 0; display: flex; gap: 18px; margin-top: 7px; }
+    .rs-cols { flex: 1; min-height: 0; display: flex; gap: 18px; margin-top: 5px; }
     .rs-col { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-    .rs-col-title { font-size: 11px; font-weight: 700; color: var(--color-gold); letter-spacing: 1px; text-align: center; margin-bottom: 4px; }
-    .rs-rows { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 1px; }
+    .rs-col-title { font-size: 11px; font-weight: 700; color: var(--color-gold); letter-spacing: 1px; text-align: center; margin-bottom: 3px; }
+    .rs-rows { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 0; }
     .rs-row { display: flex; align-items: baseline; font-size: 10.5px; line-height: 14px; color: var(--color-text-secondary); }
     .rs-row .n { flex: 1; }
     .rs-row .v { color: var(--color-gold-light); font-weight: 700; font-family: var(--font-mono); }
@@ -51,17 +51,24 @@
     .rs-seat .subnote { display: block; flex-basis: 100%; font-size: 8.5px; line-height: 11px; color: var(--color-text-muted); text-align: right; margin-top: -1px; }
     .rs-cum { margin-top: auto; text-align: right; font-size: 11px; line-height: 14px; font-weight: 700; color: var(--color-gold-light); }
     .rs-note { font-size: 8.5px; line-height: 11px; color: var(--color-text-muted); text-align: center; margin-top: 2px; }
-    /* 各家手牌 2×2（2026-09-20 还原度对齐：牌面改用设计素材图 res/tiles/*，与客户端 createTileNode 同风格；增区块标题并与牌行拉开间距） */
-    .rs-hands-title { margin-top: 6px; border-top: 1px solid rgba(212,165,55,0.15); padding-top: 5px;
+    /* BL-036（2026-09-22 用户要求凸出庄/子与算番影响）：状态徽chip + 公式子注加项金色 + 加成行金色 */
+    .rs-dchip { font-size: 8.5px; line-height: 12px; font-weight: 700; color: #fff; background: #b03030; border: 1px solid var(--color-gold-light); border-radius: 6px; padding: 0 4px; margin-left: 4px; white-space: nowrap; }
+    .rs-zchip { font-size: 8.5px; line-height: 12px; font-weight: 700; color: var(--color-gold-light); background: rgba(212,165,55,0.14); border: 1px solid rgba(212,165,55,0.45); border-radius: var(--radius-full); padding: 0 5px; margin-left: 4px; white-space: nowrap; }
+    .rs-zchip.zero { color: var(--color-text-muted); background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.14); }
+    .rs-formula .add { color: var(--color-gold); font-weight: 700; }
+    .rs-row.addrow .n, .rs-row.addrow .v { color: var(--color-gold); }
+    /* 各家手牌 2×2（2026-09-22 BL-033：名称移至牌行上方、牌行享整列宽——17 张×pitch16=270≤列宽284 不溢面板；
+       原名称内联占 66px 致 17 张溢岀；顶部外边距压缩抵消名称行增高，面板仍 620×370；牌面 13×18 与客户端结算牌尺寸一致） */
+    .rs-hands-title { margin-top: 3px; border-top: 1px solid rgba(212,165,55,0.15); padding-top: 3px;
       text-align: center; font-size: 11px; font-weight: 700; color: var(--color-gold); letter-spacing: 1px; }
-    .rs-hands { margin-top: 4px; padding-top: 2px;
-      display: grid; grid-template-columns: 1fr 1fr; gap: 2px 16px; }
-    .rs-hand { display: flex; align-items: center; gap: 6px; }
-    .rs-hand-name { width: 60px; flex: none; font-size: 8.5px; color: var(--color-text-muted); text-align: right; white-space: nowrap; overflow: hidden; }
+    .rs-hands { margin-top: 2px; padding-top: 0;
+      display: grid; grid-template-columns: 1fr 1fr; gap: 3px 16px; }
+    .rs-hand { display: flex; flex-direction: column; align-items: stretch; gap: 2px; min-width: 0; }
+    .rs-hand-name { font-size: 8.5px; line-height: 10px; color: var(--color-text-muted); text-align: left; white-space: nowrap; overflow: hidden; }
     .rs-tiles { display: flex; gap: 2px; }
-    .rs-tiles img { width: 14px; height: 20px; border-radius: 3px; object-fit: cover; display: block; }
+    .rs-tiles img { width: 13px; height: 18px; border-radius: 3px; object-fit: cover; display: block; }
     .rs-hand-hint img { width: 14px; height: 20px; border-radius: 3px; object-fit: cover; display: block; }
-    .rs-next { margin: 7px auto 0; width: 200px; height: 34px; border-radius: var(--radius-full); cursor: pointer;
+    .rs-next { margin: 4px auto 0; width: 200px; height: 34px; border-radius: var(--radius-full); cursor: pointer;
       background: linear-gradient(135deg, var(--color-gold), var(--color-gold-dark));
       color: var(--color-bg-wood-dark); border: 1px solid var(--color-gold-light);
       font-size: 14px; font-weight: 700; letter-spacing: 2px; font-family: var(--font-cn);
@@ -76,34 +83,33 @@
         <img src="res/tiles/wan_6.png" alt="六萬"/><img src="res/tiles/wan_6.png" alt="六萬"/><img src="res/tiles/wan_6.png" alt="六萬"/><img src="res/tiles/tong_blue_9.png" alt="9筒"/><img src="res/tiles/tong_blue_9.png" alt="9筒"/><img src="res/tiles/tong_blue_9.png" alt="9筒"/><img src="res/tiles/tiao_green_4.png" alt="4条"/><img src="res/tiles/tiao_green_4.png" alt="4条"/><img src="res/tiles/tiao_green_4.png" alt="4条"/><img src="res/tiles/tong_blue_8.png" alt="8筒"/><img src="res/tiles/tong_blue_8.png" alt="8筒"/><img src="res/tiles/tong_blue_8.png" alt="8筒"/><img src="res/tiles/tiao_green_1.png" alt="1条"/><img src="res/tiles/tiao_green_1.png" alt="1条"/>
       </div>
       <div class="rs-panel">
-        <div class="rs-title">🎉 你胡 18台！</div>
+        <div class="rs-title">🎉 你胡 15台！</div>
         <div class="rs-sub">第 1/8 局 · 1 台 = 1 积分</div>
-        <div class="rs-banner win">🎉 本局你为胡方 · 共收 +18 分</div>
+        <div class="rs-banner win">🎉 本局你为胡方 · 共收 +21 分</div>
         <div class="rs-cols">
           <div class="rs-col">
             <div class="rs-col-title">台数明细</div>
             <div class="rs-rows">
-              <div class="rs-row"><span class="n">见花 ×3</span><span class="v">+3</span></div>
-              <div class="rs-row"><span class="n" style="font-size:8.5px;color:var(--color-text-muted);">春、夏、秋</span></div>
+              <div class="rs-row"><span class="n">见花 ×2</span><span class="v">+2</span></div>
               <div class="rs-row"><span class="n">无字</span><span class="v">+1</span></div>
               <div class="rs-row"><span class="n">门清自摸</span><span class="v">+3</span></div>
               <div class="rs-row"><span class="n">胡九筒</span><span class="v">+5</span></div>
-              <div class="rs-row"><span class="n">3九筒</span><span class="v">+5</span></div>
-              <div class="rs-row"><span class="n">对碰</span><span class="v">+1</span></div>
-              <div class="rs-row total"><span class="n">合计</span><span class="v">18 台</span></div>
-              <div class="rs-note">子/连庄加成按付方逐家计入（右列子注）</div>
+              <div class="rs-row addrow"><span class="n">子 ×1（每家付方各加）</span><span class="v">+3</span></div>
+              <div class="rs-row addrow"><span class="n">连庄 1（涉庄付方加）</span><span class="v">+1</span></div>
+              <div class="rs-row total"><span class="n">合计</span><span class="v">15 台</span></div>
+              <div class="rs-note">付方台 = 底番 + 3×(胡方子+付方子) + 庄连庄 2N−1（仅涉庄付方）</div>
             </div>
           </div>
           <div class="rs-col">
             <div class="rs-col-title">积分变动</div>
             <div class="rs-rows">
-              <div class="rs-seat"><span class="n">凯叔（我）</span><span class="d up">+18</span>
-                <span class="subnote">胡 18 台 · 收 点炮方 1 家</span></div>
-              <div class="rs-seat"><span class="n">机器人1</span><span class="d z">+0</span></div>
-              <div class="rs-seat"><span class="n">机器人2</span><span class="d z">+0</span></div>
-              <div class="rs-seat"><span class="n">机器人3</span><span class="d dn">-18</span>
-                <span class="subnote">底 18 · 胡方子 0 · 自身子 0</span></div>
-              <div class="rs-cum">我累计 +18</div>
+              <div class="rs-seat"><span class="n">凯叔（我）<span class="rs-dchip">庄·连1</span><span class="rs-zchip">子1</span></span><span class="d up">+21</span>
+                <span class="subnote rs-formula">胡 15 台 = 底 11 + <span class="add">自身子 1×3</span> + <span class="add">连庄 1(+1)</span> · 按付方子逐家收</span></div>
+              <div class="rs-seat"><span class="n">机器人1<span class="rs-zchip zero">子0</span></span><span class="d z">+0</span></div>
+              <div class="rs-seat"><span class="n">机器人2<span class="rs-zchip zero">子0</span></span><span class="d z">+0</span></div>
+              <div class="rs-seat"><span class="n">机器人3<span class="rs-zchip">子2</span></span><span class="d dn">-21</span>
+                <span class="subnote rs-formula">底 11 + <span class="add">胡方子 1×3</span> + <span class="add">自身子 2×3</span> + <span class="add">连庄 1(+1)</span> = 21 台</span></div>
+              <div class="rs-cum">我累计 +21</div>
             </div>
           </div>
         </div>
@@ -111,12 +117,12 @@
         <div class="rs-hands">
           <div class="rs-hand"><span class="rs-hand-name">凯叔（胡）</span>
             <span class="rs-tiles"><img src="res/tiles/wan_6.png" alt="六萬"/><img src="res/tiles/wan_6.png" alt="六萬"/><img src="res/tiles/wan_6.png" alt="六萬"/><img src="res/tiles/tong_blue_9.png" alt="9筒"/><img src="res/tiles/tong_blue_9.png" alt="9筒"/><img src="res/tiles/tong_blue_9.png" alt="9筒"/><img src="res/tiles/tiao_green_4.png" alt="4条"/><img src="res/tiles/tiao_green_4.png" alt="4条"/><img src="res/tiles/tiao_green_4.png" alt="4条"/><img src="res/tiles/tong_blue_8.png" alt="8筒"/><img src="res/tiles/tong_blue_8.png" alt="8筒"/><img src="res/tiles/tong_blue_8.png" alt="8筒"/><img src="res/tiles/tiao_green_1.png" alt="1条"/><img src="res/tiles/tiao_green_1.png" alt="1条"/></span></div>
-          <div class="rs-hand"><span class="rs-hand-name">机器人1</span>
-            <span class="rs-tiles"><img src="res/tiles/wan_2.png" alt="二萬"/><img src="res/tiles/wan_3.png" alt="三萬"/><img src="res/tiles/wan_5.png" alt="五萬"/><img src="res/tiles/tiao_green_2.png" alt="2条"/><img src="res/tiles/tiao_green_3.png" alt="3条"/><img src="res/tiles/tiao_green_6.png" alt="6条"/><img src="res/tiles/tiao_green_7.png" alt="7条"/><img src="res/tiles/wind_east.png" alt="東"/><img src="res/tiles/wind_north.png" alt="北"/><img src="res/tiles/dragon_zhong.png" alt="中"/><img src="res/tiles/dragon_fa.png" alt="發"/></span></div>
+          <div class="rs-hand"><span class="rs-hand-name">机器人1（四杠极端例·17张）</span>
+            <span class="rs-tiles"><img src="res/tiles/wan_6.png" alt="六萬"/><img src="res/tiles/wan_6.png" alt="六萬"/><img src="res/tiles/wan_6.png" alt="六萬"/><img src="res/tiles/wan_6.png" alt="六萬"/><img src="res/tiles/tiao_green_2.png" alt="2条"/><img src="res/tiles/tiao_green_2.png" alt="2条"/><img src="res/tiles/tiao_green_2.png" alt="2条"/><img src="res/tiles/tiao_green_2.png" alt="2条"/><img src="res/tiles/tong_blue_9.png" alt="9筒"/><img src="res/tiles/tong_blue_9.png" alt="9筒"/><img src="res/tiles/tong_blue_9.png" alt="9筒"/><img src="res/tiles/tong_blue_9.png" alt="9筒"/><img src="res/tiles/wind_east.png" alt="東"/><img src="res/tiles/wind_east.png" alt="東"/><img src="res/tiles/wind_east.png" alt="東"/><img src="res/tiles/wind_east.png" alt="東"/><img src="res/tiles/wind_south.png" alt="南"/></span></div>
           <div class="rs-hand"><span class="rs-hand-name">机器人3（炮）</span>
-            <span class="rs-tiles"><img src="res/tiles/wan_7.png" alt="七萬"/><img src="res/tiles/wan_7.png" alt="七萬"/><img src="res/tiles/tiao_green_3.png" alt="3条"/><img src="res/tiles/tiao_green_4.png" alt="4条"/><img src="res/tiles/tiao_green_5.png" alt="5条"/><img src="res/tiles/tiao_green_6.png" alt="6条"/><img src="res/tiles/wind_south.png" alt="南"/><img src="res/tiles/wind_south.png" alt="南"/><img src="res/tiles/dragon_bai.png" alt="白"/><img src="res/tiles/dragon_zhong.png" alt="中"/></span></div>
+            <span class="rs-tiles"><img src="res/tiles/wan_7.png" alt="七萬"/><img src="res/tiles/wan_7.png" alt="七萬"/><img src="res/tiles/wan_7.png" alt="七萬"/><img src="res/tiles/tiao_green_3.png" alt="3条"/><img src="res/tiles/tiao_green_4.png" alt="4条"/><img src="res/tiles/tiao_green_5.png" alt="5条"/><img src="res/tiles/tiao_green_6.png" alt="6条"/><img src="res/tiles/tong_blue_3.png" alt="3筒"/><img src="res/tiles/tong_blue_5.png" alt="5筒"/><img src="res/tiles/wind_south.png" alt="南"/><img src="res/tiles/wind_south.png" alt="南"/><img src="res/tiles/dragon_bai.png" alt="白"/><img src="res/tiles/dragon_zhong.png" alt="中"/></span></div>
           <div class="rs-hand"><span class="rs-hand-name">机器人2</span>
-            <span class="rs-tiles"><img src="res/tiles/wan_6.png" alt="六萬"/><img src="res/tiles/wan_8.png" alt="八萬"/><img src="res/tiles/tiao_green_2.png" alt="2条"/><img src="res/tiles/tiao_green_4.png" alt="4条"/><img src="res/tiles/tiao_green_5.png" alt="5条"/><img src="res/tiles/wind_west.png" alt="西"/><img src="res/tiles/wind_north.png" alt="北"/><img src="res/tiles/dragon_fa.png" alt="發"/></span></div>
+            <span class="rs-tiles"><img src="res/tiles/wan_6.png" alt="六萬"/><img src="res/tiles/wan_8.png" alt="八萬"/><img src="res/tiles/wan_9.png" alt="九萬"/><img src="res/tiles/tiao_green_2.png" alt="2条"/><img src="res/tiles/tiao_green_4.png" alt="4条"/><img src="res/tiles/tiao_green_5.png" alt="5条"/><img src="res/tiles/tong_blue_1.png" alt="1筒"/><img src="res/tiles/tong_blue_7.png" alt="7筒"/><img src="res/tiles/wind_west.png" alt="西"/><img src="res/tiles/wind_north.png" alt="北"/><img src="res/tiles/dragon_fa.png" alt="發"/><img src="res/tiles/dragon_fa.png" alt="發"/><img src="res/tiles/dragon_fa.png" alt="發"/></span></div>
         </div>
         <div class="rs-next">下一局 ▶</div>
       </div>

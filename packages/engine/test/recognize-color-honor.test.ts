@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { H, recognizedNames, isWinning } from './helpers';
+import { H, meld, recognizedNames, isWinning } from './helpers';
 
 describe('番种识别 · 平 / 一色 / 缺门', () => {
   it('小平（无字+无坎+1花+5顺）', () => {
@@ -20,6 +20,7 @@ describe('番种识别 · 平 / 一色 / 缺门', () => {
     const h = H('W123W456W789Z111Z222W99', { winTile: 'W9' });
     expect(isWinning(h)).toBe(true);
     expect(recognizedNames(h)).toContain('混一色');
+    expect(recognizedNames(h)).not.toContain('缺一门'); // D-33：混一色含字，与缺一门互斥
   });
   it('缺一门（两门，非清一色）', () => {
     const h = H('W123W456T234T567T789W99', { winTile: 'W9' });
@@ -27,6 +28,18 @@ describe('番种识别 · 平 / 一色 / 缺门', () => {
     const n = recognizedNames(h);
     expect(n).toContain('缺一门');
     expect(n).not.toContain('清一色');
+  });
+  it('缺一门须无字：两门数牌＋字牌 → 不计缺一门（D-33，2026-09-22 用户报障口径）', () => {
+    const h = H('W123W456T123T456Z111Z22', { winTile: 'Z2' });
+    expect(isWinning(h)).toBe(true);
+    const n = recognizedNames(h);
+    expect(n).not.toContain('缺一门');
+    expect(n).toContain('见字');
+  });
+  it('缺一门无字检查含副露：两门数牌＋碰字刻 → 不计缺一门（D-33）', () => {
+    const h = H('W123W456T123T456W99', { melds: [meld('pong', 'Z111')], winTile: 'W9' });
+    expect(isWinning(h)).toBe(true);
+    expect(recognizedNames(h)).not.toContain('缺一门');
   });
   it('将一色（全 2/5/8）', () => {
     const h = H('W222W555W888T222T555T88', { winTile: 'T8' });

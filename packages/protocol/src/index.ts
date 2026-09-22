@@ -16,6 +16,10 @@ export interface RoomSettings {
   chiFirstView: boolean;
   /** BL-018 公开房间：开=进入大厅房间列表可被发现；关=仅房号/分享卡可入（默认开） */
   isPublic: boolean;
+  /** BL-032 思考时间档（秒）：10/15/20/30，默认 15；服务端建房的时钳制到档位 */
+  turnSec?: number;
+  /** BL-032 响应时间档（秒）：5/8/10/15，默认 8；服务端建房的时钳制到档位 */
+  respSec?: number;
 }
 
 /** BL-018 大厅公开房间列表行（仅公开且未关闭房；无积分/隐私字段） */
@@ -129,6 +133,10 @@ export interface ViewState {
   };
   /** BL-017：局间摸牌位骰阶段（roundBreak）随 gameView 下发 */
   seating?: SeatingView;
+  /** BL-032 下发时刻服务端时钟（ms epoch）：客户端据此做 deadline 同步显示（消本地钟偏差） */
+  serverNow?: number;
+  /** BL-032 服务端权威截止：turn=当前行动家回合窗（摸+打）；resp=本响应窗待响应座位；null/缺省=无截止 */
+  deadline?: { kind: 'turn' | 'resp'; seats: number[]; at: number; totalMs: number } | null;
 }
 
 /** 房间/等待页视图 */
@@ -141,7 +149,7 @@ export interface RoomView {
   settings?: RoomSettings;
   /** BL-017 开局仪式视图（phase=seating 时下发） */
   seating?: SeatingView;
-  seats: ({ userId: string; seat: number; nickname?: string; isBot?: boolean; offline?: boolean; trusteed?: boolean } | null)[];
+  seats: ({ userId: string; seat: number; nickname?: string; isBot?: boolean; offline?: boolean; trusteed?: boolean; botPersona?: string; trusteePersona?: string } | null)[];
 }
 
 /** 散场原因：打满局数上限 / 房主主动解散（不限局数时） */
@@ -229,8 +237,11 @@ export type ClientMsg =
   | { t: 'start'; seq: number }
   | { t: 'roll'; seq: number; ceremonyToken?: CeremonyToken }              // BL-017：掷骰（选位/定庄/摸牌位，语境由服务端阶段决定）
   | { t: 'pickSeat'; seq: number; seat: number; ceremonyToken?: CeremonyToken } // BL-017：选位最大者选座
-  | { t: 'addBot'; seq: number; count?: number }
+  | { t: 'addBot'; seq: number; count?: number; personaId?: string } // BL-031：放 Bot 时指定打法
   | { t: 'removeBot'; seq: number; seat: number }
+  | { t: 'updateBotPersona'; seq: number; seat: number; personaId: string } // BL-031：改已添加 Bot 的打法
+  | { t: 'updateRoom'; seq: number; maxRounds?: number; settings?: Partial<RoomSettings> } // FR-房间-12：开局前房主改玩法/局数
+  | { t: 'setTrusteePersona'; seq: number; personaId: string } // FR-AI-04/10：玩家预设托管打法
   | { t: 'nextRound'; seq: number }
   | { t: 'dissolve'; seq: number }
   | { t: 'action'; seq: number; action: Action }

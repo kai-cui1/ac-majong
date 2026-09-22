@@ -1,5 +1,6 @@
 import { startGateway, type Gateway } from './wsGateway';
 import { startDiagHttp } from './diag';
+import { startInternalHttp } from './internal';
 import { MockIdentity, WeChatIdentity, TokenIdentity, type IdentityProvider } from './identity';
 import { createPersistence } from '@ac-majong/persistence';
 import { setLogLevel, getLogLevel, createLogger, type LogLevel } from './logger';
@@ -36,6 +37,13 @@ async function main(): Promise<void> {
     diagServer = startDiagHttp(Number(process.env.DEV_HTTP_PORT ?? port + 1), gateway.rooms, persistence.store);
   }
 
+  // FR-Admin-10：内网 + 预共享密钥 + 只读 inspect 端点（供 admin-server 监控代理调用）；仅 INTERNAL_TOKEN 配置时启动，生产不对公网开放
+  let internalServer: ReturnType<typeof startInternalHttp> | null = null;
+  const internalToken = process.env.INTERNAL_TOKEN;
+  if (internalToken) {
+    internalServer = startInternalHttp(Number(process.env.INTERNAL_PORT ?? 8085), gateway.rooms, internalToken);
+  }
+
   log.info(
     `WS listening on :${port} (identity=${mode}, autoBots=${autoBots}, persistence=${persistence.kind}, logLevel=${getLogLevel()})`,
   );
@@ -43,6 +51,7 @@ async function main(): Promise<void> {
   const shutdown = () => {
     log.info('收到终止信号，正在关闭...');
     diagServer?.close();
+    internalServer?.close();
     gateway.close();
     void persistence.store.close();
     void persistence.realtime.close();

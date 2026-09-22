@@ -79,6 +79,8 @@ export interface ButtonOpts {
   /** 填充/描边色覆盖（原型 .btn-exit 等需黑.5+淡金.2 圆钮时逐点对齐） */
   fill?: Color;
   stroke?: Color;
+  /** 文字色覆盖（危险/强调按钮用，缺省随 variant） */
+  textColor?: Color;
 }
 
 const disabledMap = new WeakMap<Node, boolean>();
@@ -115,6 +117,7 @@ export function uiButton(text: string, onClick: () => void, opts: ButtonOpts = {
   }
   if (opts.fill) fill = opts.fill;
   if (opts.stroke) stroke = opts.stroke;
+  if (opts.textColor) textColor = opts.textColor;
   if (opts.radius != null) radius = opts.radius;
 
   const node = new Node(`Btn_${text}`);

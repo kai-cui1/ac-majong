@@ -135,13 +135,25 @@ export class GameClient {
   pickSeat(seat: number, ceremonyToken?: CeremonyToken): void {
     this.send({ t: 'pickSeat', seq: this.nextSeq(), seat, ceremonyToken });
   }
-  /** 房主为空位放入 Bot 陪玩（FR-房间-08） */
-  addBot(count = 1): void {
-    this.send({ t: 'addBot', seq: this.nextSeq(), count });
+  /** 房主为空位放入 Bot 陪玩（FR-房间-08）；BL-031：可指定打法 personaId（FR-AI-03） */
+  addBot(count = 1, personaId?: string): void {
+    this.send({ t: 'addBot', seq: this.nextSeq(), count, personaId });
   }
   /** 房主移除一个 Bot（真人想加入时腾位） */
   removeBot(seat: number): void {
     this.send({ t: 'removeBot', seq: this.nextSeq(), seat });
+  }
+  /** BL-031（FR-AI-03）：房主改已添加 Bot 的打法（waiting/playing 均可，即时生效） */
+  updateBotPersona(seat: number, personaId: string): void {
+    this.send({ t: 'updateBotPersona', seq: this.nextSeq(), seat, personaId });
+  }
+  /** BL-031（FR-房间-12）：房主开局前改房间局数/玩法（开局后服务端拒绝） */
+  updateRoom(patch: { maxRounds?: number; settings?: Partial<RoomSettings> }): void {
+    this.send({ t: 'updateRoom', seq: this.nextSeq(), maxRounds: patch.maxRounds, settings: patch.settings });
+  }
+  /** BL-031（FR-AI-04/10）：玩家预设自己掉线托管所用打法 */
+  setTrusteePersona(personaId: string): void {
+    this.send({ t: 'setTrusteePersona', seq: this.nextSeq(), personaId });
   }
   nextRound(): void {
     this.send({ t: 'nextRound', seq: this.nextSeq() });

@@ -29,10 +29,22 @@ export interface RoomRow {
   settings?: RoomSettings | null;
   /** BL-017 开局仪式日志（选位骰/选座/定庄骰/摸牌位骰，事件溯源可复现） */
   seating?: unknown | null;
+  /** BL-031（FR-AI-11）座位→Bot 打法 personaId：重进/重启恢复 */
+  botPersonas?: Record<number, string> | null;
+  /** BL-031（FR-AI-11）userId→托管打法预设：重进/重启恢复 */
+  trusteePersonas?: Record<string, string> | null;
   finalScore: ScoreMap | null;
   status: RoomStatus;
   createdAt?: Date;
   closedAt?: Date | null;
+}
+
+/** BL-031/FR-房间-12：房间元信息增量更新 patch（仅更新提供的字段） */
+export interface RoomMetaPatch {
+  maxRounds?: number;
+  settings?: RoomSettings | null;
+  botPersonas?: Record<number, string> | null;
+  trusteePersonas?: Record<string, string> | null;
 }
 
 export interface MemberEventRow {
@@ -95,6 +107,8 @@ export interface GameStore {
   updateRoomScores(roomId: string, memberScores: ScoreMap): Promise<void>;
   /** BL-017：开局仪式结束落 seating 日志 */
   updateRoomSeating(roomId: string, seating: unknown): Promise<void>;
+  /** BL-031/FR-房间-12/FR-AI-11：房间元信息增量落库（局数/玩法/Bot打法/托管预设） */
+  updateRoomMeta(roomId: string, patch: RoomMetaPatch): Promise<void>;
   closeRoom(roomId: string, finalScore: ScoreMap, closedAt: Date): Promise<void>;
 
   addMemberEvent(e: MemberEventRow): Promise<void>;

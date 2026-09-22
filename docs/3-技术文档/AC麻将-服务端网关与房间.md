@@ -68,6 +68,7 @@ Connection.send（ServerMsg：gameView/roomView/event/ack/…）
 - `start(byUserId)`：仅 `waiting` + 房主 + **座位满 4 人（真人 + Bot 混合皆可）** → `phase='seating'`，依次执行逐家选位、选座、首局一次定庄/开牌点骰；完整结果期后 `finalizeCeremony` 才建桌、发牌、进入 playing（§13）。
 - `addBot(byUserId, count=1)`（**M-D 新增，Bot 陪玩 FR-房间-08**）：仅 `waiting` + 房主 + 有空位 → 为空位放入至多 `count` 个 Bot（复用 §7 Bot 连接与代打策略）；`broadcastAll` 刷新 `roomView`（座位标记 Bot）。
 - `handleAction(userId, action)`：**服务端权威合法性校验**——相位=playing、座位存在、`action.seat===本座`、`actionKind(action) ∈ legalActions(state, seat)`；通过则 `applyAction` → 更新 state → `broadcastGame(events)`。
+- **BL-032 服务端权威截止（回合/响应窗）**：`broadcastGame` 内先 `syncDeadline()` 对齐截止窗再下发视图。窗定义：回合窗=`draw|discard` 相位（seats=[currentSeat]，时长=`settings.turnSec`）、响应窗=`response` 相位（seats=`pending===null` 各家，时长=`settings.respSec`）；**窗锚点键**（局序+弃牌序+弃牌张 / 当前行动家）不变=不重置定时器（防窗内广播刷时）；到期 `onDeadline()` 经 `execSeatAction`（与真人同一路径：合法性校验→applyAction→落库→广播）产出代打动作——回合窗=代摸（如需）＋**摸切优先**代打（`lastDrawn.tile`，无摸牌张如碰/杠后=手牌首张），响应窗=待响应家逐家**自动过**；动作入事件流与 `game_actions`，**回放可复现**；gameView 附 `deadline{kind,seats,at,totalMs}`+`serverNow` 供客户端同步显示（客户端不再自发 pass）；仪式/散场/dispose 清定时器；代打被拒（竞态）末尾重挂同窗防永久停摆。建房参数经 `normalizeRoomSettings` 归一（时间档钳到最近档位：10/15/20/30 与 5/8/10/15）；`RoomTimings.turnMs/respMs` 测试注入优先，**<=0=关闭截止**（旧假时钟测试隔离）。
 - `nextRound(byUserId)`：**相位守卫**——仅 `state.phase ∈ {settled, exhaustive}` 才受理（天然防重复推进）；**`maxRounds>0` 且 `round>=maxRounds`** → `phase='finished'` + `broadcastAll`；**`maxRounds=0`（不限）** → 永不因上限 `finished`，仅房主手动解散才结束（解散 → M-D/M-F）；否则先按玩法决定是否进入 `roundBreak`：启用摸牌位骰则等待完整结果期再建下一局，关闭则直接续局；新局广播仍由服务端驱动（§13.3）。
 - `broadcastGame(events?)`：先发 `event`（如有），再对每个在座连接发 `gameView = redact(state, seat, id, maxRounds)`（**按座位裁剪**）。
 - `broadcastAll`：playing 走 `broadcastGame`；否则发 `roomView`（等待/结束页）。
@@ -111,6 +112,7 @@ Connection.send（ServerMsg：gameView/roomView/event/ack/…）
 - `roomActor.test.ts`：房间生命周期、权限（仅房主开始/满 4 人）、`nextRound` 相位守卫、非法操作拦截。
 - `wsGateway.test.ts`：真实 WS 端到端（auth→create→join×3→start→各家收 `gameView` 且他家不含暗牌）；登录落库/会话。Spec 分支回归新增 4 例：首局 input 主动 leave、既有离线后 leave、定庄 result 期 leave、waiting 原逻辑；校验 offline/成员保留、600ms 自动掷、完整展示、原离线60s期限托管、真实 WS 代打广播和重入后的座位/非零积分不丢。
 - `redact.test.ts`：防透视断言。`integration.test.ts`：全链路。
+- `deadline.test.ts`（BL-032）7 例：时间档归一钳制（12→10/999→15/非法回默认）＋RoomActor 构造归一；gameView 带 serverNow/deadline(turn)；回合窗超时代摸＋摸切代打（打出=刚摸）且 hooks 落库；同窗 draw→discard 不重置 deadline.at；响应窗超时逐家自动过（pass 入事件流与落库）且窗后推进；真人及时出牌后本家不再被代打。
 
 ## 11. 待接线（BL-013 持久化接入实时对局流程）
 
@@ -225,6 +227,7 @@ Connection.send（ServerMsg：gameView/roomView/event/ack/…）
 
 | 日期 | 概要 |
 |---|---|
+| 2026-09-22 | **BL-032 思考/响应时间可配置＋服务端权威截止**：§5 增 deadline 机制（syncDeadline/onDeadline/execSeatAction/normalizeRoomSettings）与 gameView `deadline/serverNow` 下发；§10 增 deadline.test 7 例；根因=旧客户端 8s 自动过回调被 stopCountdown 清空＋回合无服务端截止；game-server 129 绿（旧假时钟测试经 turnMs/respMs=0 隔离） |
 | 2026-09-21 | **BL-017 定座位逐轮淘汰定序修订**：§13 选位骰同点判定改为仅本轮掷骰者（未定序组）内判重；RoomActor 新增 seatingSlots（有序槽位表：已定序座位+待决并列组）与 seatingRollers，resolveSeatingRolls 逐轮细化、已定序者不再参与判重/比大小；同步原型 cerSummarize 与展示文案；seatingCeremony 新增 3 例（撞点不重掷/块内定序/三轮细化）并修订连续重掷例，全量 engine179/UI100/server111/persistence6 通过、包与 Cocos assets 类型检查无新增错误 |
 | 2026-09-20 | **BL-017 当前缺项修补与最终验证回填**：seating leave接入playerDisconnected并接续原60s，复用既有收尾/重入；最终全量engine179/UI100/server108/persistence6通过、3项integration跳过，合计393/3；包/Cocos类型检查通过，指定App场景H5 CLI13:39 Finished（日志已核实）。整体已修补当前发现缺项、浏览器视觉验收外部受阻，非全Spec完成；[BL-017详表](../5-backlog/README.md#bl-017-开局仪式与摸牌位骰实现与验证流水)集中记录，旧流水不倒写 |
 | 2026-09-20 | **Spec 分支补齐·服务端验证**：仅改 wsGateway leave 的 seating 分支，复用 playerDisconnected 与既有 finalize 接续。新增真实 WS 4 例，旧分支 input/result 退出 2 例因缺 offline 失败，修复后服务端 104→108 pass、WS 11→15 pass；服务端 typecheck 及测试文件严格 tsc 通过。独立随机端口/内存存储，正式时长+业务假时钟验证600ms代掷、原60s期限、完整结果期、重入卸托管/座位/非零积分及 waiting；用户服务未重启，RoomActor 与其测试未改。本轮尚待项目全量汇总，浏览器仍待验收（§13.5） |

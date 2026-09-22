@@ -23,6 +23,7 @@ const TILES_DST = join(COCOS, 'assets/resources/tiles');
 const PKGS = [
   { name: 'engine', src: join(ROOT, 'packages/engine/src') },
   { name: 'protocol', src: join(ROOT, 'packages/protocol/src') },
+  { name: 'ai', src: join(ROOT, 'packages/ai/src') },
   { name: 'client-core', src: join(ROOT, 'packages/client-core/src') },
 ];
 
@@ -36,15 +37,28 @@ function rewriteImports(code, fileDir) {
   });
 }
 
+/** 递归收集目录下所有 .ts（ai 包含 features/ strategies/ 子目录） */
+function walkTs(dir) {
+  const out = [];
+  for (const f of readdirSync(dir)) {
+    const p = join(dir, f);
+    if (statSync(p).isDirectory()) out.push(...walkTs(p));
+    else if (f.endsWith('.ts')) out.push(p);
+  }
+  return out;
+}
+
 function syncPkg({ name, src }) {
   const dst = join(VENDOR, name);
   // 原位更新生成源码，保留 Cocos .meta UUID；整目录重建会破坏已有资源引用。
   mkdirSync(dst, { recursive: true });
   let count = 0;
-  for (const f of readdirSync(src)) {
-    if (!f.endsWith('.ts')) continue;
-    const code = readFileSync(join(src, f), 'utf8');
-    writeFileSync(join(dst, f), rewriteImports(code, dst), 'utf8');
+  for (const file of walkTs(src)) {
+    const rel = relative(src, file);
+    const target = join(dst, rel);
+    mkdirSync(dirname(target), { recursive: true });
+    const code = readFileSync(file, 'utf8');
+    writeFileSync(target, rewriteImports(code, dirname(target)), 'utf8');
     count++;
   }
   console.log(`  ✓ ${name}: ${count} 个 .ts → assets/scripts/vendor/${name}/`);

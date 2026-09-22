@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { H, meld, recognizedNames, isWinning } from './helpers';
+import { scoreHand } from '../src/pipeline';
+import type { TileId } from '../src/types';
 
 const FIVE_PONGS = [
   meld('pong', 'W111'),
@@ -73,5 +75,31 @@ describe('番种识别 · 九筒 / 九万', () => {
     const h = H('W123W456T789T123B99', { melds: [meld('kong_concealed', 'W9999')], winTile: 'B9' });
     expect(isWinning(h)).toBe(true);
     expect(recognizedNames(h)).toContain('暗杠九万');
+  });
+});
+
+describe('八对半三种特殊听法（TC-8D-01~03，规格书 §2.3/9.4）', () => {
+  const namesFor = (spec: string, winTile: TileId): string[] => scoreHand(H(spec, { winTile })).detail.map((d) => d.name);
+  it('TC-8D-01 单张补对（6对+1刻+1单）胡单张 → 独独，不计1独', () => {
+    const names = namesFor('W11W44W77B22B55B88T333Z11', 'Z1');
+    expect(names).toContain('八对半');
+    expect(names).toContain('独独');
+    expect(names).not.toContain('1独');
+  });
+  it('TC-8D-02 两刻选一（5对+2刻）胡刻第四张 → 1独，不计独独/对碰', () => {
+    for (const [spec, wt] of [['W11W44W77B22B55T3333T666', 'T3'], ['W11W44W77B22B55T333T6666', 'T6']] as [string, TileId][]) {
+      const names = namesFor(spec, wt);
+      expect(names).toContain('八对半');
+      expect(names).toContain('1独');
+      expect(names).not.toContain('独独');
+      expect(names).not.toContain('对碰');
+    }
+  });
+  it('TC-8D-03 八对选一（8对）胡对子第三张 → 1独，不计独独/对碰', () => {
+    const names = namesFor('W111W44W77B22B55B88T33T66', 'W1');
+    expect(names).toContain('八对半');
+    expect(names).toContain('1独');
+    expect(names).not.toContain('独独');
+    expect(names).not.toContain('对碰');
   });
 });

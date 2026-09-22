@@ -273,6 +273,65 @@ flowchart LR
 - **MVP：单实例**（所有 RoomActor 在一个 Node 进程，房间制并发不高）。
 - **扩展**：多实例时，`room → instance` 注册表入 Redis；网关按房间路由/重定向连接，保证**同房间玩家连到同一实例**（WS 会话粘性）。
 
+### 10.5 本地管理后台启动（开发用途）
+
+[`run/start-admin.sh`](../../run/start-admin.sh) 同时启动 `apps/admin-server`（Fastify + tsx）与 `apps/admin-web`（Vite）；默认访问 **http://localhost:5173**，后端端口 **8090**。这是本地开发入口，不是生产部署脚本；生产同源反代与安全配置见 [Admin 后台技术方案 §8](./AC麻将-Admin后台技术方案.md#8-配置与部署)。
+
+#### 前置配置与首次启动
+
+下列命令均在**仓库根目录**执行；需要 Node.js（支持 `--env-file-if-exists`）、pnpm、Docker Compose 和 `lsof`：
+
+```bash
+pnpm install --frozen-lockfile
+# 启动本地数据库依赖；首次初始化数据卷时执行 schema.sql 建游戏表
+# 已使用外部 MySQL/Redis 时无需启动本地容器
+docker compose -f deploy/docker-compose.yml up -d
+# 确认 MySQL / Redis 均显示 healthy 后再进行迁移与起服
+docker compose -f deploy/docker-compose.yml ps
+# 仅首次复制，不覆盖已有配置
+[ -f apps/admin-server/.env ] || cp apps/admin-server/.env.example apps/admin-server/.env
+```
+
+编辑 `apps/admin-server/.env`：配置 `DATABASE_URL`（必须可连接的 MySQL，无内存回退）、`SESSION_SECRET`（至少 32 字符的随机密钥）；按需配置 `REDIS_URL` 与首个超管的 `ADMIN_BOOTSTRAP_USERNAME` / `ADMIN_BOOTSTRAP_PASSWORD`。示例凭据仅供开发，真实凭据不得提交仓库。超管仅在 `admins` 表为空且引导凭据齐全时创建；修改引导配置不会重置已有账号。
+
+```bash
+# 本地默认数据库：首次应用 Admin 三表迁移后启动前后台
+./run/start-admin.sh --migrate
+# 后续正常启动
+./run/start-admin.sh
+```
+
+**自定义数据库注意**：`--migrate` 执行 `pnpm --filter @ac-majong/persistence db:migrate`，迁移配置读取父进程的 `DATABASE_URL`，**不读取 `apps/admin-server/.env`**；未提供时使用内置本地开发连接（`127.0.0.1:3306/ac_majong`）。自定义数据库时，须先在当前终端安全地导出与后台配置一致的 `DATABASE_URL`，再执行 `--migrate`。迁移依赖迁移记录避免重复应用，仅管理 Admin 表，不代替游戏表初始化；迁移失败则不会启动前后台。脚本不会自动启动或检查数据库就绪。
+
+#### 选项与常用命令
+
+| 选项 | 默认值 | 作用 |
+|---|---|---|
+| `-l LEVEL` / `--log-level LEVEL` | `info` | 后端日志：`silent` / `error` / `warn` / `info` / `debug` / `trace` |
+| `--api-port PORT` | `8090` | 后端监听端口；改动后须同步修改前端代理，见下文 |
+| `--web-port PORT` | `5173` | Vite 前端端口；使用 `--strictPort`，占用时不自动跳号 |
+| `--migrate` | 关闭 | 启动前应用已有数据库迁移 |
+| `-h` / `--help` | — | 显示帮助并退出 |
+
+```bash
+./run/start-admin.sh -l debug
+./run/start-admin.sh --log-level error
+./run/start-admin.sh --web-port 5174
+./run/start-admin.sh --help
+```
+
+带值选项必须用空格提供参数。脚本总是显式传入 `PORT` / `LOG_LEVEL`，包括未传选项时的默认值，因此它们会覆盖后台 `.env` 中对应值；其他后台配置由启动命令自动加载该文件。
+
+日志从 `error` 到 `trace` 逐级放宽，`silent` 关闭后端 logger 输出；仅过滤已有日志点，不新增请求日志。当前 Admin logger 无独立 `trace()` 方法，`trace` 实际包含现有 `debug` 输出；该选项不控制 Vite、pnpm 或脚本自身的提示，也不屏蔽启动入口直接输出的致命错误。
+
+#### 端口排障与停止
+
+- 启动前检测两个端口；占用时显示进程 PID/命令、`kill` / `kill -9` 及换端口建议并退出，**不会自动终止已有进程**。先确认进程归属，优先到原启动终端按 Ctrl+C；必要时执行提示的 `kill`，强制终止仅作最后手段。缺少 `lsof` 时须先安装，不应认为端口检查已生效。
+- 修改后端端口（例如 `--api-port 8091`）后，须同步将 [`apps/admin-web/vite.config.ts`](../../apps/admin-web/vite.config.ts) 中 `/api` 的代理目标改为 `http://127.0.0.1:8091`；脚本只打印提醒，不自动更新代理。
+- 缺少 `apps/admin-server/.env` 时，脚本会提示复制样例并退出；文件存在不代表配置有效。数据库连接失败、表不存在或密钥缺失时，应查看后端报错并检查配置/迁移。
+- Ctrl+C 会触发前后台收尾；后端退出也会触发前端收尾。当前实现仅向记录的两个直接子进程发终止信号，**未保证清理所有后代进程**；退出后若端口仍占用，按上面的端口排障处理。前端单独退出不会自动停止后端，后端失败退出码也未透传，不能仅凭脚本退出码或打印访问地址判断启动成功，需确认两端日志及页面可访问。
+- 不会停止 MySQL、Redis 或游戏服务，也不会清除数据；脚本不自动启动 game-server。后端无 watch，修改后端代码后需手动重启。
+
 ---
 
 ## 11. 数据存储
@@ -455,3 +514,4 @@ interface IdentityProvider { login(): Promise<{ userId: string; token?: string }
 | 2026-09-16 | 建立维护记录。当前 v0.2：数据存储升级为 Redis（热/实时）+ MySQL（权威/永久）双层，§11 重写为**事件溯源**（只存业务事实：初始牌墙+手牌+动作日志+结算，可经 `rehydrate`/`replayRound` 还原）；§14 里程碑迁入 [`../5-backlog/`](../5-backlog/开发计划-路线图.md)；新增风险 A8（事件溯源依赖引擎确定性）；对齐 D-32（积分不做账户、随房间生命周期）。存储落地细节将由 [AC麻将-数据持久化与事件溯源.md](./AC麻将-数据持久化与事件溯源.md) 承接 |
 | 2026-09-16 | 持久化技术方案（04）产出后回填交叉引用：§11 顶部指向 04 为落地细节准绳、§11.2 还原入口由「需增加」更新为「已实现（M-A2 `rehydrate`/`replayRound`）」、上游 PRD 改指 PRD 索引，并修正维护记录中指向 README 的占位链接 |
 | 2026-09-18 | 目录重构 P0/P1：§10.1 与 §16.3 工程结构更新为 apps/packages/client 三分法（server→apps/game-server、新增 packages/persistence、预留 admin-server/admin-web）；多服务编排与 Admin 架构详见 [08](./AC麻将-目录结构重构与Admin系统架构.md) |
+| 2026-09-21 | 补充 §10.5 本地管理后台启动（关联 BL-015 Admin 后台）：记录 `run/start-admin.sh` 的前置配置、首次迁移、参数与日志级别、端口检测和退出排障；明确迁移数据库来源、代理端口及进程清理边界。本次仅同步使用文档，未修改脚本行为 |

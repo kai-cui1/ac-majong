@@ -14,6 +14,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@ac-majong/ai": "workspace:*",
     "@ac-majong/engine": "workspace:*",
     "@ac-majong/protocol": "workspace:*"
   },

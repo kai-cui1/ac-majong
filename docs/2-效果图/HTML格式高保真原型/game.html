@@ -233,8 +233,10 @@
     .south-melds .meld-group .tile { width: 20px; height: 28px; border-radius: 3px; margin: 0; cursor: default; }
     .south-top-spacer { flex: 1; }
 
-    /* 台数徽章（收起态，点击展开） */
+    /* 台数徽章（收起态，点击展开）——2026-09-22 用户报障重叠：自明牌行右端移至右下角（出牌钮右侧、手牌行上沿带），
+       避让自己明牌区（碰/吃组右延）与下家牌背列；设计坐标中心 (372,-140)、宽84高26 */
     .score-badge {
+      position: absolute; right: 8px; bottom: 42px; z-index: 22;
       display: flex; align-items: center; gap: 4px;
       background: rgba(9,61,34,0.9); border: 1px solid var(--color-gold-dark);
       border-radius: var(--radius-full); padding: 4px 12px;
@@ -393,7 +395,7 @@
 
     /* ====== 台数详情浮层（徽章点击展开）====== */
     .score-popover {
-      position: absolute; bottom: 122px; right: 12px; z-index: 210;
+      position: absolute; bottom: 74px; right: 8px; z-index: 210;
       width: 190px; background: rgba(9,61,34,0.95);
       backdrop-filter: blur(10px); border: 1px solid rgba(212,165,55,0.3);
       border-radius: var(--radius-lg); padding: 10px 12px; font-size: 11px;
@@ -811,13 +813,9 @@
           </div>
         </div>
         <div class="south-top-spacer"></div>
-        <!-- BL-021：徽章两态——听牌=💡 N台 ▴（预览台数）；未听牌=💡 保底 N台 ▴（锁定番种小计，不再显 0） -->
-        <div class="score-badge" onclick="document.getElementById('scorePopover').classList.toggle('show')">
-          💡 <span>20台</span> ▴
-        </div>
       </div>
 
-      <!-- 下行: 手牌 + 出牌确认 -->
+      <!-- 下行: 手牌 + 出牌确认（自己暗牌上限 14=13+摸，2026-09-22 修正演示数据） -->
       <div class="south-hand-row">
         <div class="south-hand" id="southHand">
           <div class="tile interactive"><img src="res/tiles/wan_1.png?v=3" alt="一萬"/></div>
@@ -832,13 +830,15 @@
           <div class="tile interactive"><img src="res/tiles/tong_blue_9.png?v=3" alt="9筒"/></div>
           <div class="tile interactive"><img src="res/tiles/tong_blue_9.png?v=3" alt="9筒"/></div>
           <div class="tile interactive"><img src="res/tiles/tong_blue_9.png?v=3" alt="9筒"/></div>
-          <div class="tile interactive"><img src="res/tiles/tiao_green_2.png?v=3" alt="2条"/></div>
+          <div class="tile interactive"><img src="res/tiles/tiao_green_2.png?v=3" alt="2条"/>
+          </div>
           <div class="tile interactive"><img src="res/tiles/tiao_green_3.png?v=3" alt="3条"/></div>
-          <div class="tile interactive"><img src="res/tiles/tiao_green_4.png?v=3" alt="4条"/></div>
-          <div class="tile interactive"><img src="res/tiles/wind_south.png?v=3" alt="南"/></div>
-          <div class="tile interactive"><img src="res/tiles/dragon_zhong.png?v=3" alt="中"/></div>
         </div>
         <button class="confirm-discard-btn my-turn" id="discardBtn" disabled>出牌</button>
+      </div>
+      <!-- BL-021：徽章两态——听牌=💡 N台 （预览台数）；未听牌=💡 保底 N台 ▴；2026-09-22 移至右下角（.score-badge 绝对定位） -->
+      <div class="score-badge" onclick="document.getElementById('scorePopover').classList.toggle('show')">
+        💡 <span>20台</span> ▴
       </div>
     </div>
 

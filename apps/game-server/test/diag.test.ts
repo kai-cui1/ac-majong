@@ -79,11 +79,18 @@ describe('BL-022 房间自检与停滞看门狗', () => {
     expect(game.legalBySeat[game.currentSeat].length).toBeGreaterThan(0);
     expect(game.wallLen).toBeGreaterThan(0);
     expect((d as { stall: { idleMs: number } }).stall.idleMs).toBeGreaterThanOrEqual(0);
+    // FR-Admin-10：inspect 扩展携带完整台态（上帝全知，纯只读投影）+ gameId
+    const full = room.inspect() as { gameId: string | null; state: { wall: string[]; players: unknown[]; discards: unknown[] } | null };
+    expect(full.state).not.toBe(null);
+    expect(full.state!.wall.length).toBeGreaterThan(0);
+    expect(full.state!.players).toHaveLength(4);
+    // gameId 仅在注入 hooks（生产）时由 beginGame 赋值；本用例无 hooks 故为 null，仅验证键与类型联合
+    expect(full.gameId === null || typeof full.gameId === 'string').toBe(true);
   });
 
   it('停滞看门狗：playing 超 20s 无动作 warn 一次（含在等谁/legal）；成功动作后重置可再告警', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const room = setup({ stallWatchdogMs: 20_000 });
+    const room = setup({ stallWatchdogMs: 20_000, turnMs: 0, respMs: 0 }); // BL-031：假时钟下关闭截止代打，保 idle 现场
     toPlaying(room);
     vi.advanceTimersByTime(25_000);
     expect(warn.mock.calls.some((c) => String(c[0]).includes('停滞看门狗'))).toBe(true);
@@ -102,7 +109,7 @@ describe('BL-022 房间自检与停滞看门狗', () => {
   });
 
   it('dispose 清理看门狗定时器（playing 中回收不留 interval）', () => {
-    const room = setup({ stallWatchdogMs: 20_000 });
+    const room = setup({ stallWatchdogMs: 20_000, turnMs: 0, respMs: 0 });
     toPlaying(room);
     room.dispose();
     vi.runOnlyPendingTimers();

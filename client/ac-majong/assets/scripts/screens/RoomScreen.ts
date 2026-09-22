@@ -2,6 +2,9 @@ import { Node, Label, UITransform, Graphics } from 'cc';
 import { Screen } from '../app/SceneRouter';
 import { Theme, rgba } from '../ui/Theme';
 import { uiBackground, uiLabel, uiButton, uiPanel, setButtonEnabled } from '../ui/UiKit';
+import { openBotPersonaModal } from '../ui/BotPersonaModal';
+import { openRoomRulesModal } from '../ui/RoomRulesModal';
+import { personaById } from '../vendor/ai/index';
 import { NetService } from '../game/NetService';
 import type { RoomView } from '../vendor/protocol/index';
 
@@ -21,6 +24,7 @@ export class RoomScreen extends Screen {
   private statusLbl: Label | null = null;
   private startBtn: Node | null = null;
   private addBotBtn: Node | null = null;
+  private rulesBtn: Node | null = null;
   private seatNodes: Node[] = [];
 
   build(): Node {
@@ -48,7 +52,7 @@ export class RoomScreen extends Screen {
     const share = uiButton('💬 分享微信好友，一键入座', () => this.onShare(), { variant: 'wx', width: 250, height: 44, fontSize: 15 });
     share.setParent(root);
     share.setPosition(-250, -84, 0);
-    this.addBotBtn = uiButton('🤖 添加机器人陪玩', () => void this.onAddBot(1), { variant: 'action', width: 250, height: 40, fontSize: 14 });
+    this.addBotBtn = uiButton('🤖 添加机器人陪玩', () => this.openAddPersona(), { variant: 'action', width: 250, height: 40, fontSize: 14 });
     this.addBotBtn.setParent(root);
     this.addBotBtn.setPosition(-250, -134, 0);
 
@@ -105,6 +109,14 @@ export class RoomScreen extends Screen {
       return;
     }
     if (r) this.render(r);
+    // BL-037 自检演示态：?rpDemo=1 直开玩法弹层（mock 参数，与原型 ?rpDemo=1 同参几何核对）
+    if (typeof location !== 'undefined' && location.search.includes('rpDemo=1')) {
+      openRoomRulesModal(this.node!, {
+        maxRounds: 8,
+        settings: { wallMode: 'physical', breakDice: true, chiFirstView: true, isPublic: true, turnSec: 15, respSec: 8 },
+        onConfirm: () => {},
+      });
+    }
   }
 
   /** 房间号卡片：标签 + 大字房号（点击复制）+ 分隔线 + 局数/底注 */
@@ -148,6 +160,16 @@ export class RoomScreen extends Screen {
     this.playLbl = play.getComponent(Label)!;
     play.setParent(card);
     play.setPosition(0, -70, 0);
+
+    // FR-房间-12：房号卡右上「⚙」入口 → 房间玩法弹层（仅房主可见，render 控制）
+    const rules = uiButton('⚙', () => this.openRules(), {
+      variant: 'dark', fill: rgba(212, 165, 55, 0.12), stroke: rgba(212, 165, 55, 0.35),
+      textColor: Theme.color.gold, width: 22, height: 22, radius: 11, fontSize: 11,
+    });
+    this.rulesBtn = rules;
+    rules.setParent(card);
+    rules.setPosition(121, 74, 0);
+    rules.active = false;
   }
 
   private render(r: RoomView): void {
@@ -157,13 +179,15 @@ export class RoomScreen extends Screen {
       const wall = r.settings?.wallMode === 'physical' ? '物理牌墙' : '随机发牌';
       const brk = r.settings?.breakDice ? '摸牌位骰开' : '摸牌位骰关';
       const cfv = r.settings?.chiFirstView !== false ? '先看吃再碰开' : '先看吃再碰关';
-      this.playLbl.string = `玩法 ${wall} · ${brk} · ${cfv} · 选位仪式恒开`;
+      const tim = `思${r.settings?.turnSec ?? 15}s/响${r.settings?.respSec ?? 8}s`; // BL-032 时间档
+      this.playLbl.string = `玩法 ${wall} · ${brk} · ${cfv} · ${tim} · 选位仪式恒开`;
     }
     const filled = r.seats.filter((s) => s != null).length;
     if (this.countLbl) this.countLbl.string = `${filled} / 4`;
     const me = NetService.instance.userId;
     const isHost = me === r.hostUserId;
     const full = filled >= 4;
+    if (this.rulesBtn) this.rulesBtn.active = isHost; // FR-房间-12：仅房主可改玩法
 
     for (let seat = 0; seat < 4; seat++) this.renderSeat(this.seatNodes[seat]!, r, seat, me, isHost);
 
@@ -195,7 +219,7 @@ export class RoomScreen extends Screen {
     const occ = r.seats[seat];
     if (!occ) {
       this.drawEmptySeat(node, isHost && waiting);
-      if (isHost && waiting) node.on(Node.EventType.TOUCH_END, () => void this.onAddBot(1));
+      if (isHost && waiting) node.on(Node.EventType.TOUCH_END, () => this.openAddPersona());
       return;
     }
     const panel = uiPanel(200, 88, { variant: 'panel', radius: Theme.radius.lg });
@@ -214,14 +238,21 @@ export class RoomScreen extends Screen {
     nameL.setParent(node);
     nameL.setPosition(18, 16, 0);
 
-    const removable = isHost && isBot && waiting;
-    const tag = isHostSeat ? '👑 房主' : isMe ? '我' : removable ? '🤖 点击移除' : isBot ? '🤖 Bot' : '已就位';
-    const tagColor = isHostSeat ? Theme.color.gold : isMe ? Theme.color.success : removable ? Theme.color.warning : Theme.color.textMuted;
+    const editable = isHost && isBot && waiting; // 房主可改打法/移除（FR-AI-03）
+    const personaName = isBot ? (personaById(occ.botPersona ?? '')?.displayName ?? '最大概率打法') : '';
+    const tag = isHostSeat ? '👑 房主' : isMe ? '我' : isBot ? `🤖 Bot · ${personaName}` : '已就位';
+    const tagColor = isHostSeat ? Theme.color.gold : isMe ? Theme.color.success : Theme.color.textMuted;
     const tagL = uiLabel(tag, { size: 11, color: tagColor, bold: isHostSeat || isMe });
     tagL.setParent(node);
-    tagL.setPosition(removable ? 8 : -14, -16, 0);
+    tagL.setPosition(isBot ? 18 : -14, -16, 0);
 
-    if (removable) node.on(Node.EventType.TOUCH_END, () => this.onRemoveBot(seat));
+    if (editable) {
+      // 「✎ 改打法」提示（右上角，对齐原型 .rm-seat-edit）；点击座位 → 改打法/移除弹层
+      const hint = uiLabel('✎ 改打法', { size: 9, color: Theme.color.textMuted, align: 'right', anchorX: 1 });
+      hint.setParent(node);
+      hint.setPosition(96, 30, 0);
+      node.on(Node.EventType.TOUCH_END, () => this.openModifyPersona(seat, occ.botPersona));
+    }
   }
 
   private drawEmptySeat(node: Node, clickable: boolean): void {
@@ -315,13 +346,45 @@ export class RoomScreen extends Screen {
     return userId.length > 8 ? `${userId.slice(0, 8)}…` : userId;
   }
 
-  private async onAddBot(count: number): Promise<void> {
+  private async onAddBot(count: number, personaId?: string): Promise<void> {
     try {
-      const r = await NetService.instance.addBot(count);
+      const r = await NetService.instance.addBot(count, personaId);
       this.render(r);
     } catch (e) {
       console.error('[Room] 添加机器人失败:', e);
     }
+  }
+
+  /** FR-AI-03：添加机器人前选打法（默认高亮「最大概率打法」） */
+  private openAddPersona(): void {
+    openBotPersonaModal(this.node!, {
+      title: '选择机器人打法',
+      okText: '添加',
+      onConfirm: (pid) => void this.onAddBot(1, pid),
+    });
+  }
+
+  /** FR-AI-03：改已添加 Bot 的打法（预选当前）；附带移除腾位（PRD 03 §3.1） */
+  private openModifyPersona(seat: number, current?: string): void {
+    openBotPersonaModal(this.node!, {
+      title: '修改机器人打法',
+      okText: '保存',
+      current,
+      onConfirm: (pid) => NetService.instance.updateBotPersona(seat, pid),
+      onRemove: () => this.onRemoveBot(seat),
+    });
+  }
+
+  /** FR-房间-12：房间玩法集中展示 + 房主开局前可改（开局后锁定） */
+  private openRules(): void {
+    const r = NetService.instance.room;
+    if (!r) return;
+    openRoomRulesModal(this.node!, {
+      maxRounds: r.maxRounds,
+      settings: r.settings,
+      locked: r.phase !== 'waiting',
+      onConfirm: (patch) => NetService.instance.updateRoom(patch),
+    });
   }
 
   private onRemoveBot(seat: number): void {

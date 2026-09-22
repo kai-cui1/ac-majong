@@ -20,7 +20,7 @@
     }
     .ls-stage { position: absolute; left: 50%; top: 50%; width: 844px; height: 390px; transform-origin: center; }
     .ls-dim { position: absolute; inset: 0; background: rgba(0,0,0,0.55); backdrop-filter: blur(2px); }
-    .st-panel { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); width: 320px; height: 292px;
+    .st-panel { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); width: 320px; height: 326px;
       background: linear-gradient(160deg, var(--color-bg-wood) 0%, var(--color-bg-wood-dark) 100%);
       border: 1px solid var(--color-gold-dark); border-radius: var(--radius-xl);
       box-shadow: 0 16px 48px rgba(0,0,0,0.6), 0 0 24px rgba(212,165,55,0.12);
@@ -39,6 +39,12 @@
     .st-agree { padding: 3px 10px; border-radius: var(--radius-full); background: rgba(255,255,255,0.06);
       border: 1px solid rgba(255,255,255,0.12); color: var(--color-text-muted); font-size: 10px; cursor: pointer; }
     .st-ver { font-size: 9px; color: var(--color-text-muted); font-family: var(--font-mono); }
+    /* BL-031 P1：断线托管打法预设（玩家个人，掉线代打所用风格） */
+    .st-pills { display: flex; gap: 5px; }
+    .st-pill { padding: 4px 9px; border-radius: var(--radius-full); font-size: 10px; cursor: pointer;
+      border: 1px solid rgba(212,165,55,0.25); color: var(--color-text-secondary); }
+    .st-pill.sel { background: rgba(212,165,55,0.15); border-color: var(--color-gold-light); color: var(--color-gold-light); font-weight: 700; }
+    .st-pill.lock { opacity: 0.4; cursor: not-allowed; }
   </style>
 </head>
 <body>
@@ -51,6 +57,13 @@
         <div class="st-row">
           <span class="st-label">音效</span>
           <button class="st-btn">🔊 已开启</button>
+        </div>
+        <!-- BL-031 P1：托管打法预设（FR-AI-04/10）：玩家可选掉线代打风格，默认保守 -->
+        <div class="st-row">
+          <span class="st-label">断线托管打法<span style="display:block;font-size:8.5px;color:var(--color-text-muted);">掉线代打所用风格</span></span>
+          <span class="st-pills">
+            <span class="st-pill sel">保守</span><span class="st-pill">新手</span><span class="st-pill">最大概率</span>
+          </span>
         </div>
         <div class="st-row">
           <span class="st-label">退出房间<span style="display:block;font-size:8.5px;color:var(--color-text-muted);">对局中退出＝离线托管流程</span></span>

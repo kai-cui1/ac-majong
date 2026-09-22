@@ -162,17 +162,64 @@ export function waitingTiles(readyConcealed: Record<string, number>, formedMeldC
   return waits;
 }
 
-/** 听牌型分类：独独(单听) / 对碰(双碰) / 1独(多面听且胡张在手中) */
+/**
+ * 标准型1独见证（新版D-10 / 规格书 §2.5）：actual winTile 在「胡前暗牌＋新胡张」的
+ * 某个整手合法标准拆解及归属中，可作将牌对子，或作同花色顺子的中间卡张（存在一次即可）。
+ * 相同牌等价：新胡张可归入任一含该牌的将/顺组；刻子第三张或顺子端部不产生见证。
+ * @param full 胡后暗牌（= readyConcealed + 一张 winTile）
+ */
+export function hasPairOrKanWitness(full: Record<string, number>, formedMeldCount: number, winTile: TileId): boolean {
+  for (const d of standardDecomps(full, formedMeldCount)) {
+    if (d.pair === winTile) return true; // 将牌见证
+    for (const u of d.concealedMelds) {
+      if (u.kind === 'seq' && [...u.tiles].sort()[1] === winTile) return true; // 卡张见证（顺子中间）
+    }
+  }
+  return false;
+}
+
+/**
+ * 对碰（新版D-13 / 规格书 §2.5）：胡前 winTile 恰为一组对子，胡入后补成刻、另一组对子作将。
+ * 结构判据（不仅凭听张出现两次）：readyConcealed[winTile]===2，且 full 存在拆解使 winTile 成刻且将为另一种牌。
+ * 注：是否为对碰还须叠加「整手纯双碰」门控（所有听张均无将/卡见证），见 classifyWait。
+ */
+export function isDuiPeng(
+  readyConcealed: Record<string, number>,
+  full: Record<string, number>,
+  formedMeldCount: number,
+  winTile: TileId,
+): boolean {
+  if ((readyConcealed[winTile] ?? 0) !== 2) return false;
+  for (const d of standardDecomps(full, formedMeldCount)) {
+    if (d.pair === winTile) continue; // 将须为「另一组」对子
+    if (d.concealedMelds.some((u) => u.kind === 'pung' && u.tiles[0] === winTile)) return true;
+  }
+  return false;
+}
+
+/**
+ * 标准型听牌型分类（单听优先，2026-09-21 定案 / 规格书 §2.5）：
+ * 1) |waits|==1 → 独独（即使新胡张可作将＋卡张的多种摆法并存也不升级）；
+ * 2) |waits|>1 → 对实际 winTile 跑整手见证：有将/卡见证→1独；
+ *    否则若**整手为纯双碰**（所有听张均无将/卡见证）且 winTile 补一组对子成刻→对碰；否则无附加。
+ * “整手纯双碰”门控保证与1独手级互斥：若某听张能摆出卡张/作将（如 W1112233344 胡W2），
+ * 整手归为1独型，其余无见证听张（如胡W4）不再归对碰而归无附加（规格书 §9.5 项1）。
+ * 八对半三种特殊听法另在 recognize 层按 winKind==='pairs8' 分支处理，不走本函数。
+ */
 export function classifyWait(
   readyConcealed: Record<string, number>,
   formedMeldCount: number,
   winTile: TileId,
 ): WaitType {
   const waits = waitingTiles(readyConcealed, formedMeldCount);
-  if (waits.length === 1) return '独独';
-  if (waits.length > 1) {
-    if (waits.every((t) => (readyConcealed[t] ?? 0) === 2)) return '对碰';
-    if ((readyConcealed[winTile] ?? 0) >= 1) return '1独';
-  }
+  if (!waits.includes(winTile)) return null; // 实际胡张须在结构听张集合内
+  if (waits.length === 1) return '独独'; // 单听优先：仅一种胡张 → 独独，多摆法不升级
+  const full = { ...readyConcealed, [winTile]: (readyConcealed[winTile] ?? 0) + 1 };
+  if (hasPairOrKanWitness(full, formedMeldCount, winTile)) return '1独';
+  // 对碰：需整手为纯双碰——任一听张能将/卡见证则整手属1独型，本听张归无附加
+  const anyWitness = waits.some((w) =>
+    hasPairOrKanWitness({ ...readyConcealed, [w]: (readyConcealed[w] ?? 0) + 1 }, formedMeldCount, w),
+  );
+  if (!anyWitness && isDuiPeng(readyConcealed, full, formedMeldCount, winTile)) return '对碰';
   return null;
 }

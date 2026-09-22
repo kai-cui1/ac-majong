@@ -13,6 +13,8 @@ import { roomRoutes } from './routes/rooms';
 import { gameRoutes } from './routes/games';
 import { adminRoutes } from './routes/admins';
 import { auditRoutes } from './routes/audit';
+import { monitorRoutes } from './routes/monitor';
+import { diagRoutes } from './routes/diag';
 
 export interface BuildAppOptions {
   deps: AppDeps;
@@ -62,6 +64,8 @@ export async function buildApp(opts: BuildAppOptions): Promise<FastifyInstance> 
   await gameRoutes(app);
   await adminRoutes(app);
   await auditRoutes(app);
+  await monitorRoutes(app);
+  await diagRoutes(app);
 
   await app.ready();
   return app;

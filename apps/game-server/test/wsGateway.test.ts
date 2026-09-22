@@ -373,7 +373,7 @@ describe('wsGateway · 端到端（真实 WebSocket）', () => {
 describe('Spec 分支回归 · 主动 leave（真实 WebSocket）', () => {
   async function setupRoom() {
     // 独立随机端口/内存存储；本组使用正式仪式时长和默认60s托管，不缩小生产参数。
-    const port = await start({ ceremony: CEREMONY_MS });
+    const port = await start({ ceremony: CEREMONY_MS, turnMs: 0, respMs: 0 }); // BL-031：leave 分支回归不需截止代打
     const cs = [client(port), client(port), client(port), client(port)];
     await Promise.all(cs.map((c) => c.opened));
     for (let i = 0; i < cs.length; i++) {

@@ -3,6 +3,7 @@ import { App as AntApp, Button, Card, Form, Input, Select, Slider, Space, Spin, 
 import { useParams } from 'react-router-dom';
 import { downloadReplayBundle, useArbitrationsByGame, useCreateArbitration, useReplay } from '../api/hooks';
 import { hasRole, useAuth } from '../store/auth';
+import TableBoard, { type BoardState } from '../components/TableBoard';
 
 // ---- 牌面 Unicode 映射（引擎 TileId：W/T/B 数牌、Z1-7 字、H1-8 花）----
 const cp = (n: number): string => String.fromCodePoint(n);
@@ -19,31 +20,6 @@ function tileGlyph(id: string): string {
     default: return '🀫';
   }
 }
-function expand(c: Record<string, number> | undefined): string[] {
-  const out: string[] = [];
-  for (const id of Object.keys(c ?? {}).sort()) {
-    const n = c?.[id] ?? 0;
-    for (let i = 0; i < n; i++) out.push(id);
-  }
-  return out;
-}
-const Tiles = ({ ids, size = 22 }: { ids: string[]; size?: number }): JSX.Element => (
-  <span style={{ fontSize: size, lineHeight: 1, letterSpacing: 1 }}>
-    {ids.map((id, i) => (
-      <span key={i}>{tileGlyph(id)}</span>
-    ))}
-  </span>
-);
-
-interface SeatState {
-  seat: number;
-  concealed: Record<string, number>;
-  melds: { type: string; tiles: string[] }[];
-  flowers: string[];
-  zi: number;
-  score: number;
-}
-
 /** 回放仲裁（★核心，FR-Admin-06/08）：逐帧全信息回放 + 动作序列 + 仲裁录入（operator+）+ 导出回放包 */
 export default function Replay(): JSX.Element {
   const params = useParams<{ gameId?: string }>();
@@ -75,12 +51,14 @@ export default function Replay(): JSX.Element {
   }, [playing, data]);
 
   const frame = data?.frames[idx];
-  const state = frame?.state as
-    | { wall: string[]; players: SeatState[]; currentSeat: number; dealerSeat: number; phase: string; discards: { seat: number; tile: string }[]; lastDiscard: { seat: number; tile: string } | null }
-    | undefined;
+  const state = frame?.state as BoardState | undefined;
 
   const names = data?.meta.names ?? {};
   const seatName = (s: number): string => names[s] ?? `座位${s}`;
+  const winnerSeat = useMemo(() => {
+    const r = data?.meta.result as { winners?: { seat: number }[] } | null;
+    return r?.winners?.[0]?.seat ?? null;
+  }, [data]);
 
   const onSubmitArb = async (): Promise<void> => {
     if (!gameId) return;
@@ -118,41 +96,6 @@ export default function Replay(): JSX.Element {
   if (error) return <Card><span style={{ color: '#ff4d4f' }}>回放加载失败：{(error as Error).message}</span></Card>;
   if (!data || !state || !frame) return <Card className="muted">无回放数据</Card>;
 
-  const seatPanels = [0, 1, 2, 3].map((s) => {
-    const p = state.players.find((x) => x.seat === s);
-    if (!p) return null;
-    const isCur = state.currentSeat === s;
-    const isDealer = state.dealerSeat === s;
-    return (
-      <Card
-        key={s}
-        size="small"
-        style={{ borderColor: isCur ? '#1677ff' : undefined, boxShadow: isCur ? '0 0 0 2px rgba(22,119,255,0.1)' : undefined }}
-        styles={{ body: { padding: 10 } }}
-        title={
-          <Space size={6}>
-            <b>{seatName(s)}</b>
-            {isDealer && <Tag color="gold">庄</Tag>}
-            {isCur && <Tag color="blue">行动中</Tag>}
-          </Space>
-        }
-        extra={<span className="mono">{p.score >= 0 ? `+${p.score}` : p.score} 分 · 子{p.zi}</span>}
-      >
-        <div style={{ marginBottom: 4 }}>
-          <Tiles ids={expand(p.concealed)} />
-        </div>
-        {p.melds.length > 0 && (
-          <div className="muted" style={{ fontSize: 12, marginBottom: 2 }}>
-            副露：{p.melds.map((m, i) => <span key={i} style={{ marginRight: 8 }}>{m.type} <Tiles ids={m.tiles} size={16} /></span>)}
-          </div>
-        )}
-        {p.flowers.length > 0 && (
-          <div className="muted" style={{ fontSize: 12 }}>花：<Tiles ids={p.flowers} size={16} /></div>
-        )}
-      </Card>
-    );
-  });
-
   return (
     <>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4 }}>
@@ -166,21 +109,15 @@ export default function Replay(): JSX.Element {
 
       <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
         <div style={{ flex: 1, minWidth: 0 }}>
-          {/* 牌桌 */}
-          <Card style={{ marginBottom: 16, background: '#0b6b3a', borderColor: '#0b6b3a' }} styles={{ body: { padding: 16 } }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>{seatPanels}</div>
-            <div style={{ marginTop: 12, background: 'rgba(255,255,255,0.1)', borderRadius: 8, padding: 10, color: '#fff' }}>
-              <Space size={16} wrap>
-                <span>牌墙剩余 <b className="mono">{state.wall.length}</b></span>
-                <span>阶段 <Tag color="blue">{state.phase}</Tag></span>
-                <span>当前 <b>{seatName(state.currentSeat)}</b></span>
-                {state.lastDiscard && <span>最近弃牌 {tileGlyph(state.lastDiscard.tile)}（{seatName(state.lastDiscard.seat)}）</span>}
-              </Space>
-              <div style={{ marginTop: 8 }}>
-                <span className="muted" style={{ color: 'rgba(255,255,255,0.7)', marginRight: 8 }}>牌河：</span>
-                <Tiles ids={state.discards.map((d) => d.tile)} size={20} />
-              </div>
-            </div>
+          {/* 牌桌（共享 <TableBoard>：与实时监控同款——贴图 + 四家横排 + 弃牌按家分区 + 花牌独立区） */}
+          <Card style={{ marginBottom: 16 }} styles={{ body: { padding: 16 } }}>
+            <TableBoard
+              state={state}
+              names={names}
+              variant="replay"
+              winnerSeat={winnerSeat}
+              centerExtra={<>结束 <b>{data.meta.endType ?? '进行中'}</b>{winnerSeat != null ? <><br />赢家 <b>seat{winnerSeat}</b></> : null}</>}
+            />
           </Card>
 
           {/* 控制条 */}

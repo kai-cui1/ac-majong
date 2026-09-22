@@ -42,7 +42,9 @@ describe('必然包含去重（规格书 4）', () => {
   it('小四喜吸收大三风/小三风/见字 → 40', () =>
     expect(computeTai([P('小四喜'), P('大三风'), P('小三风'), P('见字', 3)]).total).toBe(40));
   it('清一色吸收缺一门 → 40（N7）', () => expect(computeTai([P('清一色'), P('缺一门')]).total).toBe(40));
-  it('对碰吸收1独 → 仅1台（D-13）', () => expect(computeTai([P('对碰'), P('1独')]).total).toBe(1));
+  // 新版D-13：对碰/1独 已在识别层互斥（classifyWait 与八对半分支只产出其一），废止「对碰⊇1独」吸收；
+  // 若两者被人为同时传入则按叠加计（实际不会出现），此处固化吸收关系已移除。
+  it('对碰与1独改为识别层互斥、废止吸收（D-13）', () => expect(computeTai([P('对碰'), P('1独')]).total).toBe(2));
   it('自摸九筒吸收自摸 → 10（特例1）', () => expect(computeTai([P('自摸九筒'), P('自摸')]).total).toBe(10));
   it('将一色不吸收缺一门 → 44（原例8）', () => expect(computeTai([P('将一色'), P('缺一门')]).total).toBe(44));
 });

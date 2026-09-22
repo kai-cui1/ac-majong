@@ -1,11 +1,13 @@
 import type { TableState, Action, GameEvent, ActionKind, RoundSnapshot } from '@ac-majong/engine';
 import { createTable, applyAction, startNextRound, legalActions, snapshotRound, buildPhysicalLayout, wallInfo } from '@ac-majong/engine';
+import { DEFAULT_PERSONA, TRUSTEE_PERSONA, personaById } from '@ac-majong/ai';
 import type { RoomView, RoomPhase, FinalStanding, RoundReview, RoomEndReason, RoomSettings, SeatingView, PublicRoomEntry, CeremonyPresentation, CeremonyDice, CeremonyToken } from '@ac-majong/protocol';
 import { randomUUID } from 'node:crypto';
 import type { Connection } from './connection';
 import { redact } from './redact';
 import { makeBotConnection, makeTrusteeConnection } from './devBots';
 import { createLogger } from './logger';
+import type { RoomMetaPatch } from '@ac-majong/persistence';
 
 const log = createLogger('room');
 
@@ -17,6 +19,28 @@ export interface RoomTimings {
   /** BL-022 停滞看门狗阈值(ms)；<=0 或省略=不启用（仅按需 inspect().stall.idleMs）。服务端经 STALL_WATCHDOG_MS 启用 */
   stallWatchdogMs?: number;
   ceremony?: Partial<CeremonyTimings>;
+  /** BL-032 测试注入：回合/响应截止毫秒（优先于 settings 档位；<=0=关闭截止，仅供旧假时钟测试隔离用） */
+  turnMs?: number;
+  respMs?: number;
+}
+
+/** BL-032 建房可选档位（秒）：思考时间/响应时间；网关建房时钳制到最近档位 */
+export const TURN_TIERS = Object.freeze([10, 15, 20, 30]);
+export const RESP_TIERS = Object.freeze([5, 8, 10, 15]);
+const snapTier = (v: unknown, tiers: readonly number[], dflt: number): number =>
+  typeof v === 'number' && Number.isFinite(v)
+    ? tiers.reduce((b, t) => (Math.abs(t - v) < Math.abs(b - v) ? t : b), dflt)
+    : dflt;
+/** 建房参数归一：开关类容错 + 时间档钳制（BL-032）；RoomActor 内部信任本函数输出 */
+export function normalizeRoomSettings(s?: Partial<RoomSettings> | null): RoomSettings {
+  const out: RoomSettings = { wallMode: 'random', breakDice: false, chiFirstView: true, isPublic: true, ...s };
+  out.wallMode = out.wallMode === 'physical' ? 'physical' : 'random';
+  out.breakDice = out.breakDice !== false;
+  out.chiFirstView = out.chiFirstView !== false;
+  out.isPublic = out.isPublic !== false;
+  out.turnSec = snapTier(s?.turnSec, TURN_TIERS, 15);
+  out.respSec = snapTier(s?.respSec, RESP_TIERS, 8);
+  return out;
 }
 
 export interface OpResult {
@@ -35,6 +59,8 @@ export interface GameHooks {
   onRoomEnd(roomId: string, standings: FinalStanding[], rounds: RoundReview[]): void;
   /** BL-017：开局仪式结束落 seating 日志（弱依赖） */
   onSeating?(roomId: string, seating: unknown): void;
+  /** BL-031/FR-AI-11/FR-房间-12：房间元信息增量落库（局数/玩法/Bot打法/托管预设，弱依赖） */
+  onRoomMeta?(roomId: string, patch: RoomMetaPatch): void;
 }
 
 /** BL-016：服务重启后由 DB 事件溯源重建房间的恢复快照（网关组装，RoomActor.restore 同步注入） */
@@ -55,6 +81,10 @@ export interface RoomRestore {
   ledgerScores?: Record<number, number>;
   /** 重连时立即恢复托管代打的离线真人座位（对局中重建，FR-断线-03 语义） */
   absentUsers?: string[];
+  /** BL-031（FR-AI-11）：重建恢复的 Bot 打法（seat→personaId） */
+  botPersonas?: Record<number, string>;
+  /** BL-031（FR-AI-11）：重建恢复的托管打法预设（userId→personaId） */
+  trusteePersonas?: Record<string, string>;
 }
 
 /** action → legalActions 的 ActionKind 映射（服务端权威合法性校验） */
@@ -94,7 +124,7 @@ export class RoomActor {
   readonly hostUserId: string;
   /** BL-018：创建时间戳（列表同组内倒序排序用） */
   readonly createdAt = Date.now();
-  readonly maxRounds: number;
+  maxRounds: number;
   phase: RoomPhase = 'waiting';
   private state: TableState | null = null;
   /** BL-026：本局终局事件（win/exhaustive/zhahu）缓存：重连/晚进入客户端补发结算浮层用 */
@@ -111,6 +141,10 @@ export class RoomActor {
   private trusteeAfterMs: number;
   private seed: number;
   private botSeq = 0;
+  /** BL-031：座位 → Bot 打法 personaId（房主可选/可改） */
+  private botPersonas: Record<number, string> = {};
+  /** BL-031：userId → 托管打法预设（FR-AI-04/10，玩家个人） */
+  private trusteePersonas: Record<string, string> = {};
   private hooks?: GameHooks;
   private gameId: string | null = null;
   private gameSeq = 0;
@@ -120,8 +154,8 @@ export class RoomActor {
   private winCount: Record<number, number> = {};
   /** BL-016：重建降级 waiting 时的积分账本，开局写入各家初始累计分 */
   private ledgerScores: Record<number, number> | null = null;
-  /** BL-017 房间玩法参数（建房设定，开局后不可改） */
-  readonly settings: RoomSettings;
+  /** BL-017 房间玩法参数（建房设定；FR-房间-12 开局前房主可改、开局后锁定） */
+  settings: RoomSettings;
   /** BL-017 开局仪式/摸牌位骰视图（null=不在仪式阶段） */
   private seating: SeatingView | null = null;
   private seatingInputTimer?: ReturnType<typeof setTimeout>;
@@ -139,6 +173,12 @@ export class RoomActor {
   private stallWatchdogMs: number;
   private stallTimer?: ReturnType<typeof setInterval>;
   private stallLogged = false;
+  /** BL-032 服务端权威截止：当前窗（turn=摸+打 / resp=响应窗）+ 定时器 + 窗锚点键（窗内广播不重置） */
+  private deadline: { kind: 'turn' | 'resp'; seats: number[]; at: number; totalMs: number } | null = null;
+  private deadlineKey = '';
+  private deadlineTimer?: ReturnType<typeof setTimeout>;
+  private readonly turnMsOverride?: number;
+  private readonly respMsOverride?: number;
 
   constructor(id: string, hostUserId: string, maxRounds: number, seed: number, hooks?: GameHooks, timings?: RoomTimings, settings?: RoomSettings) {
     this.id = id;
@@ -148,8 +188,19 @@ export class RoomActor {
     this.hooks = hooks;
     this.trusteeAfterMs = timings?.trusteeAfterMs ?? 60_000; // D-24：掉线保留 60 秒后托管
     this.stallWatchdogMs = timings?.stallWatchdogMs ?? 0; // BL-022：默认关，服务端经 env 启用
-    this.settings = { wallMode: 'random', breakDice: false, chiFirstView: true, isPublic: true, ...settings };
+    this.settings = normalizeRoomSettings(settings);
+    this.turnMsOverride = timings?.turnMs;
+    this.respMsOverride = timings?.respMs;
     this.ceremonyMs = { ...CEREMONY_MS, ...timings?.ceremony };
+  }
+
+  /** BL-032 回合窗时长（ms）：测试注入优先，否则 settings 档位 */
+  private get turnMs(): number {
+    return this.turnMsOverride ?? (this.settings.turnSec ?? 15) * 1000;
+  }
+  /** BL-032 响应窗时长（ms）：同上 */
+  private get respMs(): number {
+    return this.respMsOverride ?? (this.settings.respSec ?? 8) * 1000;
   }
 
   getState(): TableState | null {
@@ -162,6 +213,8 @@ export class RoomActor {
     this.clearSeatingTimers();
     this.stopStallWatchdog();
     this.seating = null;
+    if (this.deadlineTimer) { clearTimeout(this.deadlineTimer); this.deadlineTimer = undefined; } // BL-032
+    this.deadline = null;
     for (const timer of this.trusteeTimers.values()) clearTimeout(timer);
     this.trusteeTimers.clear();
     this.connOf.clear();
@@ -188,15 +241,22 @@ export class RoomActor {
       this.seatOf.set(u, seat);
       this.names[seat] = r.names[seat] ?? null;
     });
+    if (r.botPersonas) this.botPersonas = { ...r.botPersonas };
+    if (r.trusteePersonas) this.trusteePersonas = { ...r.trusteePersonas };
     log.info(`房间重建: room=${this.id} phase=${this.phase} seats=[${r.seats.map((u) => u ?? '-').join(',')}] game=${r.gameId ?? '-'} actionSeq=${r.actionSeq}`);
     for (const u of r.absentUsers ?? []) {
       if (this.phase === 'playing' && this.seatOf.has(u) && !u.startsWith('bot-') && !this.connOf.has(u)) this.enterTrustee(u);
     }
   }
 
-  /** BL-016：重建后为 Bot 座位挂回保守代打连接（网关在 restore 后调用） */
+  /** BL-016：重建后为 Bot 座位挂回代打连接（网关在 restore 后调用）；persona 读当前座位设定 */
   attachBot(userId: string, delayMs = 300): void {
-    this.connOf.set(userId, makeBotConnection(this, userId, delayMs));
+    this.connOf.set(userId, makeBotConnection(this, userId, delayMs, () => this.botPersonaOf(userId)));
+  }
+  /** 某 Bot 用户当前打法（缺省默认） */
+  private botPersonaOf(userId: string): string {
+    const seat = this.seatOf.get(userId);
+    return (seat != null ? this.botPersonas[seat] : undefined) ?? DEFAULT_PERSONA;
   }
   seatOfUser(userId: string): number | undefined {
     return this.seatOf.get(userId);
@@ -239,6 +299,8 @@ export class RoomActor {
         isBot: u.startsWith('bot-'),
         offline: this.offlineSince.has(u) || undefined,
         trusteed: this.trusteeOf.has(u) || undefined,
+        botPersona: u.startsWith('bot-') ? this.botPersonas[seat] : undefined,
+        trusteePersona: this.trusteePersonas[u],
       } : null)),
     };
   }
@@ -303,7 +365,7 @@ export class RoomActor {
     if (this.phase === 'finished' || !this.seatOf.has(userId) || this.connOf.has(userId)) return; // 已重连则不作动
     this.offlineSince.delete(userId);
     this.trusteeOf.add(userId);
-    this.connOf.set(userId, makeTrusteeConnection(this, userId));
+    this.connOf.set(userId, makeTrusteeConnection(this, userId, 400, () => this.trusteePersonas[userId] ?? TRUSTEE_PERSONA));
     this.shortenSeatingInput(userId);
     log.info(`转托管: room=${this.id} user=${userId} seat=${this.seatOf.get(userId)}`);
     this.broadcastAll();
@@ -617,18 +679,55 @@ export class RoomActor {
     this.hooks.onGameStart(this.id, this.gameId, snap, this.state.dealerSeat, seed, this.state.round);
   }
 
-  /** 房主为空位放入 Bot 陪玩（FR-房间-08）：仅 waiting + 房主 + 有空位；Bot 计入满员 */
-  addBot(byUserId: string, count = 1): OpResult {
+  /** 房主为空位放入 Bot 陪玩（FR-房间-08）：仅 waiting + 房主 + 有空位；Bot 计入满员；BL-031 可指定打法 */
+  addBot(byUserId: string, count = 1, personaId?: string): OpResult {
     if (this.phase !== 'waiting') return { ok: false, reason: '已开始' };
     if (byUserId !== this.hostUserId) return { ok: false, reason: '仅房主可添加机器人' };
+    if (personaId != null && !personaById(personaId)?.available) return { ok: false, reason: '打法不可用' };
     let added = 0;
     for (let i = 0; i < count && this.playerCount() < 4; i++) {
       const n = ++this.botSeq;
       const botId = `bot-${n}`;
-      this.addPlayer(botId, makeBotConnection(this, botId, 260 + i * 80), `机器人${n}`);
+      this.addPlayer(botId, makeBotConnection(this, botId, 260 + i * 80, () => this.botPersonaOf(botId)), `机器人${n}`);
+      const seat = this.seatOf.get(botId);
+      if (seat != null) this.botPersonas[seat] = personaId ?? DEFAULT_PERSONA;
       added++;
     }
     if (added === 0) return { ok: false, reason: '无空位' };
+    this.hooks?.onRoomMeta?.(this.id, { botPersonas: { ...this.botPersonas } });
+    this.broadcastAll();
+    return { ok: true };
+  }
+
+  /** BL-031（FR-AI-03）：房主改已添加 Bot 的打法；waiting/playing 均可（即时生效于后续决策） */
+  updateBotPersona(byUserId: string, seat: number, personaId: string): OpResult {
+    if (byUserId !== this.hostUserId) return { ok: false, reason: '仅房主可修改机器人打法' };
+    const uid = this.userAtSeat[seat];
+    if (!uid || !uid.startsWith('bot-')) return { ok: false, reason: '该座位不是机器人' };
+    if (!personaById(personaId)?.available) return { ok: false, reason: '打法不可用' };
+    this.botPersonas[seat] = personaId;
+    this.hooks?.onRoomMeta?.(this.id, { botPersonas: { ...this.botPersonas } });
+    this.broadcastAll();
+    return { ok: true };
+  }
+
+  /** FR-房间-12：房主开局前改房间玩法/局数；开局后锁定 */
+  updateRoom(byUserId: string, patch: { maxRounds?: number; settings?: Partial<RoomSettings> }): OpResult {
+    if (this.phase !== 'waiting') return { ok: false, reason: '已开始，玩法不可修改' };
+    if (byUserId !== this.hostUserId) return { ok: false, reason: '仅房主可修改房间玩法' };
+    if (patch.maxRounds != null) this.maxRounds = patch.maxRounds;
+    if (patch.settings) this.settings = { ...this.settings, ...patch.settings };
+    this.hooks?.onRoomMeta?.(this.id, { maxRounds: this.maxRounds, settings: this.settings });
+    this.broadcastAll();
+    return { ok: true };
+  }
+
+  /** FR-AI-04/10：玩家预设自己掉线托管所用打法（个人级，持久化见 FR-AI-11） */
+  setTrusteePersona(userId: string, personaId: string): OpResult {
+    if (!this.seatOf.has(userId)) return { ok: false, reason: '非本房成员' };
+    if (!personaById(personaId)?.available) return { ok: false, reason: '打法不可用' };
+    this.trusteePersonas[userId] = personaId;
+    this.hooks?.onRoomMeta?.(this.id, { trusteePersonas: { ...this.trusteePersonas } });
     return { ok: true };
   }
 
@@ -653,6 +752,9 @@ export class RoomActor {
     return {
       room: this.id, phase: this.phase, maxRounds: this.maxRounds, settings: this.settings, names: this.names,
       seats: this.roomView().seats.map((s) => (s ? { userId: s.userId, isBot: s.isBot } : null)),
+      // FR-Admin-10 上帝全知视角：携带完整台态（纯只读投影，不含 seed/令牌；wall 已 materialize 为实牌），供 admin 监控页复用回放牌桌俯视图
+      gameId: this.gameId,
+      state: st ?? null,
       game: st
         ? { round: st.round, phase: st.phase, currentSeat: st.currentSeat, wallLen: st.wall.length, legalBySeat: [0, 1, 2, 3].map((seat) => legalActions(st, seat)) }
         : null,
@@ -701,6 +803,14 @@ export class RoomActor {
       log.warn(`非法操作: room=${this.id} user=${userId} seat=${seat} action=${action.type} kind=${kind}`);
       return { ok: false, reason: `非法操作:${kind}` };
     }
+    return this.execSeatAction(seat, action) ? { ok: true } : { ok: false, reason: '执行失败' };
+  }
+
+  /** BL-032 内部执行（已校验合法性后）：真人/托管/截止代打共用同一落库与广播路径 */
+  private execSeatAction(seat: number, action: Action): boolean {
+    if (this.phase !== 'playing' || !this.state) return false;
+    const kind = actionKind(action);
+    if (kind && !legalActions(this.state, seat).includes(kind)) return false;
     const { state, events } = applyAction(this.state, action);
     this.state = state;
     this.lastActionAt = Date.now();
@@ -709,7 +819,75 @@ export class RoomActor {
     this.recordAction(seat, action, events);
     this.noteTerminal(events);
     this.broadcastGame(events);
-    return { ok: true };
+    return true;
+  }
+
+  // ============ BL-032 服务端权威截止（回合/响应窗） ============
+
+  /** 当前窗锚点键：同窗内视图广播（如 pendingChi）不得重置截止；换窗必变 */
+  private computeDeadlineKey(): string | null {
+    const st = this.state;
+    if (!st || this.phase !== 'playing' || this.seating) return null;
+    if (st.phase === 'draw' || st.phase === 'discard') return `T:${st.round}:${st.currentSeat}:${st.discards.length}`;
+    if (st.phase === 'response' && st.lastDiscard) return `R:${st.round}:${st.discards.length}:${st.lastDiscard.seat}:${st.lastDiscard.tile}`;
+    return null;
+  }
+
+  /** 每次状态广播后对齐截止窗：同窗保留原定时器（不重置），换窗重建，无窗清除 */
+  private syncDeadline(): void {
+    const key = this.computeDeadlineKey();
+    if (this.deadline && this.deadlineKey === key && this.deadlineTimer) return; // 窗内广播不重置
+    if (this.deadlineTimer) { clearTimeout(this.deadlineTimer); this.deadlineTimer = undefined; }
+    this.deadline = null;
+    this.deadlineKey = key ?? '';
+    const st = this.state;
+    if (!key || !st) return;
+    const isTurn = key.startsWith('T:');
+    const seats = isTurn
+      ? [st.currentSeat]
+      : Object.entries(st.pending).filter(([, p]) => p === null).map(([s]) => Number(s));
+    if (seats.length === 0) return; // 响应窗无待响应者（不应出现）→ 不挂定时器
+    const totalMs = isTurn ? this.turnMs : this.respMs;
+    if (totalMs <= 0) return; // <=0=关闭截止（测试隔离）
+    this.deadline = { kind: isTurn ? 'turn' : 'resp', seats, at: Date.now() + totalMs, totalMs };
+    this.deadlineTimer = setTimeout(() => this.onDeadline(), totalMs);
+  }
+
+  /** 截止到期：服务端代打——回合窗=摸（如需）＋摸切优先出牌；响应窗=逐家自动过。动作入事件流与落库，回放可复现 */
+  private onDeadline(): void {
+    this.deadlineTimer = undefined;
+    const st = this.state;
+    if (!st || this.phase !== 'playing' || !this.deadline) return;
+    if (this.computeDeadlineKey() !== this.deadlineKey) return; // 窗已换（竞态保护）
+    const d = this.deadline;
+    if (d.kind === 'turn') {
+      const seat = st.currentSeat;
+      if (st.phase === 'draw') {
+        log.info(`回合截止代摸: room=${this.id} seat=${seat}`);
+        this.execSeatAction(seat, { type: 'draw', seat });
+      }
+      const cur = this.state;
+      if (cur && cur.phase === 'discard' && cur.currentSeat === seat) {
+        const p = cur.players.find((x) => x.seat === seat);
+        const tile = cur.lastDrawn?.seat === seat
+          ? cur.lastDrawn.tile // 摸切优先：刚摸的那张
+          : Object.keys(p?.concealed ?? {}).sort()[0]; // 无摸牌张（如碰/杠后）→ 手牌首张
+        if (tile) {
+          log.info(`回合截止代打: room=${this.id} seat=${seat} tile=${tile}`);
+          this.execSeatAction(seat, { type: 'discard', seat, tile });
+        }
+      }
+    } else {
+      for (const seat of d.seats) {
+        const cur = this.state;
+        if (!cur || cur.phase !== 'response') break;
+        if (cur.pending[seat] === null) {
+          log.info(`响应截止自动过: room=${this.id} seat=${seat}`);
+          this.execSeatAction(seat, { type: 'respond', seat, move: 'pass' });
+        }
+      }
+    }
+    this.syncDeadline(); // 代打被拒（竞态）时重挂同窗截止，防永久停摆
   }
 
   /** BL-026：缓存终局事件（win/exhaustive/zhahu），供重连/晚挂载客户端补发结算浮层 */
@@ -827,6 +1005,8 @@ export class RoomActor {
     this.clearSeatingTimers(); // 散场清仪式计时
     this.stopStallWatchdog(); // 散场停停滞看门狗
     this.seating = null;
+    if (this.deadlineTimer) { clearTimeout(this.deadlineTimer); this.deadlineTimer = undefined; } // BL-032 散场清截止计时
+    this.deadline = null;
     for (const t of this.trusteeTimers.values()) clearTimeout(t); // 散场清离线计时
     this.trusteeTimers.clear();
     const standings: FinalStanding[] = [];
@@ -849,6 +1029,7 @@ export class RoomActor {
   private broadcastGame(events?: GameEvent[]): void {
     if (!this.state) return;
     if (events && events.length) for (const c of this.connOf.values()) c.send({ t: 'event', events });
+    this.syncDeadline(); // BL-032：状态变更后对齐截止窗（先于视图下发，保证视图带最新 deadline）
     const names = this.names.map((x) => x ?? '');
     const wi = wallInfo(this.state); // BL-017 physical 模式四边牌墙栈高
     for (const [userId, conn] of this.connOf) {
@@ -857,6 +1038,8 @@ export class RoomActor {
       const view = redact(this.state, seat, this.id, this.maxRounds, names, this.settings);
       if (this.seating) view.seating = this.seatingSnapshot(); // 局间摸牌位骰阶段随 gameView 下发
       if (wi) view.wallInfo = wi;
+      view.serverNow = Date.now(); // BL-032：客户端钟差同步
+      view.deadline = this.deadline ? { ...this.deadline, seats: [...this.deadline.seats] } : null;
       conn.send({ t: 'gameView', view });
     }
   }

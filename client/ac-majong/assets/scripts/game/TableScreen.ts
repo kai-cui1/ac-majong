@@ -68,18 +68,11 @@ export class TableScreen extends Screen {
   private wallLegendTween: Tween<Node> | null = null;
   private lastRoom: RoomView | null = null;
 
-  // 响应倒计时（FR-对局-13）
-  private cdTotal = 0;
-  private cdRemain = 0;
-  private cdRunning = false;
+  // BL-032 deadline 同步显示：服务端权威截止驱动响应条/出牌环/状态栏⏱（客户端不再自动 pass，超时动作由服务端产出）
+  private cdSec = 0; // 当前相关截止整秒（状态栏⏱）
   private cdBar: Node | null = null;
-  private cdOnTimeout: (() => void) | null = null;
-  private cdTimer: ReturnType<typeof setInterval> | null = null;
-  // 当前响应窗锚点（局序+弃牌序+弃牌）：窗内任何广播重建不得重置倒计时（2026-09-18 bugfix）
-  private cdRespKey = '';
-  // 自己回合展示倒计时（仅视觉：状态栏⏱ + 出牌钮环）
-  private turnCd = 0;
-  private turnTimer: ReturnType<typeof setInterval> | null = null;
+  private uiTimer: ReturnType<typeof setInterval> | null = null;
+  private turnRingRatio = 0; // 出牌钮金环剩余比（自己回合窗）
   // BL-014：发牌音去重（每局仅在 round 变化时播一次）
   private lastSoundRound = -1;
 
@@ -135,10 +128,14 @@ export class TableScreen extends Screen {
     if (this.net.room?.phase !== 'seating' && this.net.view?.seating) this.renderSeating(this.net.view.seating, this.lastRoom);
     // 还原度截图自检演示态：?settleDemo=win 直开结算浮层（mock 数据对齐 result.html 原型演示态）
     if (typeof location !== 'undefined' && location.search.includes('settleDemo=win')) this.demoSettlement();
+    // BL-034 自检演示态：?tableDemo=1 mock 视图直渲牌桌（南家徽章/明牌行/右下簇位置核对）
+    if (typeof location !== 'undefined' && location.search.includes('tableDemo=1')) this.demoTable();
+    this.startUiTick(); // BL-032：deadline 同步显示 tick
   }
   onExit(): void {
-    this.stopCountdown();
-    this.stopTurnCd();
+    this.stopUiTick();
+    if (this.cdBar && this.cdBar.isValid) this.cdBar.destroy();
+    this.cdBar = null;
     game.off(Game.EVENT_SHOW, this.resumeCeremony);
     this.hideSeating();
   }
@@ -149,6 +146,7 @@ export class TableScreen extends Screen {
     // BL-023：诊断包上下文（报错时随包带出，免截图猜现场）
     Diag.setCtx({ screen: 'table', room: this.net.room?.room ?? null, round: v.round, phase: v.phase, cur: v.currentSeat, mySeat: v.you?.seat });
     Diag.note('view:' + v.phase);
+    this.net.sampleViewClock(v.serverNow); // BL-032：deadline 同步显示钟采样
     this.selectedIdx = null; // 视图刷新（手牌可能变化）时清除选中
     if (v.phase !== 'settled' && v.phase !== 'exhaustive') { this.revealed = null; this.settleRound = -1; } // 新局开始收起摊牌
     // BL-026：结算相位但浮层缺失（晚进入/晚挂载/重连漏事件）→ 请求服务端补发终局事件重建浮层
@@ -178,7 +176,7 @@ export class TableScreen extends Screen {
   private renderStatus(v: ViewState): void {
     this.statusBar.destroyAllChildren();
     const low = v.wallRemaining <= 8;
-    const cd = this.cdRunning ? this.cdRemain : this.turnCd;
+    const cd = this.cdSec; // BL-032：deadline 同步整秒（自己响应窗优先，否则当前行动家回合窗）
     const segs: { pre: string; val: string; post?: string; valColor?: Color }[] = [
       { pre: '🀄 ', val: windName(v.round), valColor: Theme.color.textSecondary },
       { pre: '房 ', val: v.room },
@@ -254,8 +252,8 @@ export class TableScreen extends Screen {
     const RT = { w: 16, h: 22 }; // 摊牌牌面尺寸
     const edgeW = revTiles ? revTiles.length * (RT.w + 1) : o.concealedCount * (EDGE_H.w + 1);
     const totalW = meldW + (meldW ? 10 : 0) + edgeW;
-    // 明牌在左
-    if (meldW) body.getChildByName('Melds')?.setPosition(-totalW / 2 + meldW / 2, 6, 0);
+    // 明牌在左（BL-035：wrap 名=Melds${seat}，与 drawMelds/pop 动画查找一致；旧名 'Melds' 失配致副露停 body 中心与牌背重叠）
+    if (meldW) body.getChildByName(`Melds${o.seat}`)?.setPosition(-totalW / 2 + meldW / 2, 6, 0);
     // 牌侧横条在右（终局摊牌时为面牌横排）
     const edge = this.mk(body, 'Edge', -totalW / 2 + meldW + (meldW ? 10 : 0) + edgeW / 2, 0);
     if (revTiles) {
@@ -322,7 +320,7 @@ export class TableScreen extends Screen {
         e.setPosition(0, edgeH / 2 - i * pitch - EDGE_V.h / 2, 0);
       }
     }
-    if (meldH) body.getChildByName('Melds')?.setPosition(meldX, 0, 0);
+    if (meldH) body.getChildByName(`Melds${o.seat}`)?.setPosition(meldX, 0, 0); // BL-035：同北家，旧名失配致侧家副露压牌背竖条
   }
 
   /** 中央公共牌河：北顶/南底居中换行 + 西左/东右换行 + 风圈盘 */
@@ -497,7 +495,7 @@ export class TableScreen extends Screen {
         t.setPosition(-fw / 2 + 4 + i * 17 + 8, 0, 0);
       });
     }
-    // 明牌行自 x=-160 右排；超宽（徽章左缘 115）时降为侧家规格防遮
+    // 明牌行自 x=-160 右排；超宽（听牌钮左缘 115）时降为侧家规格防遮
     const meldsNode = this.mk(this.southTop, 'Melds', 0, 0);
     let meldW = this.drawMelds(meldsNode, me.melds ?? [], MELD_ME, 'h', me.seat, this.pendChiFor(v, me.seat));
     if (meldW > 271) {
@@ -513,9 +511,11 @@ export class TableScreen extends Screen {
       myZi: me.zi,
     });
     // BL-021：未听牌时徽章改显保底台数（不再显 0）；听牌后仍显预览台数（天然含保底，不双计）
-    const badge = uiButton(preview.tenpai ? `💡 ${preview.tai}台 ▴` : `💡 保底 ${preview.secured}台 ▴`, () => this.toggleScorePop(preview), { variant: 'action', width: 96, height: 26, fontSize: 12 });
+    // BL-034（2026-09-22 用户报障重叠）：徽章自明牌行右端移至右下角（出牌钮右侧、手牌行上沿带，绝对 y-140），
+    // 避让自己明牌区右延与下家牌背列；原型 game.html .score-badge 同批
+    const badge = uiButton(preview.tenpai ? `💡 ${preview.tai}台 ▴` : `💡 保底 ${preview.secured}台 ▴`, () => this.toggleScorePop(preview), { variant: 'action', width: 88, height: 26, fontSize: 12 });
     badge.setParent(this.southTop);
-    badge.setPosition(216, 0, 0);
+    badge.setPosition(370, -36, 0);
     const listen = uiButton(this.listening ? '听牌✓' : '听牌', () => this.toggleListen(), { variant: 'secondary', width: 50, height: 26, fontSize: 12 });
     listen.setParent(this.southTop);
     listen.setPosition(140, 0, 0);
@@ -889,7 +889,7 @@ export class TableScreen extends Screen {
     if (!g) return;
     g.clear();
     if (!on) return;
-    const ratio = this.turnCd > 0 ? this.turnCd / 15 : 0;
+    const ratio = this.turnRingRatio; // BL-032：剩余比由 tickDeadline 按服务端 deadline 计算
     g.strokeColor = Theme.color.gold;
     g.lineWidth = 4;
     g.circle(0, 0, 32);
@@ -907,7 +907,6 @@ export class TableScreen extends Screen {
     const tile = v ? expandSorted(v.you.concealed)[this.selectedIdx] : undefined;
     this.selectedIdx = null;
     if (!tile) return;
-    this.stopCountdown();
     this.net.discard(this.mySeat, tile);
   }
 
@@ -954,7 +953,6 @@ export class TableScreen extends Screen {
       const cy = panelH / 2 - titleH - rowH / 2 - i * rowH;
       const row = uiButton('', () => {
         panel.destroy();
-        this.stopCountdown();
         r.onPick();
       }, { variant: 'action', width: panelW - 24, height: rowH - 6 });
       row.setParent(panel);
@@ -1013,7 +1011,7 @@ export class TableScreen extends Screen {
     const pop = uiPanel(w, h, { variant: 'panel', radius: Theme.radius.lg });
     pop.name = 'ScorePop';
     pop.setParent(this.overlay);
-    pop.setPosition(RIGHT - 12 - w / 2, -40, 0);
+    pop.setPosition(RIGHT - 8 - w / 2, -121 + h / 2, 0); // BL-034：锚定右下角徽章正上方（底边 -121 起向上展开）
     const title = uiLabel('💡 台数预览', { size: 11, color: Theme.color.gold, bold: true });
     title.setParent(pop);
     title.setPosition(0, h / 2 - 16, 0);
@@ -1070,32 +1068,44 @@ export class TableScreen extends Screen {
     }
   }
 
-  // ============ 倒计时 ============
+  // ============ BL-032 deadline 同步显示 ============
 
-  private startCountdown(sec: number, onTimeout: () => void): void {
-    this.stopCountdown();
-    this.cdTotal = sec;
-    this.cdRemain = sec;
-    this.cdOnTimeout = onTimeout;
-    this.cdRunning = true;
-    // CdBar 挂在 overlay 而非 ActionBar：renderActions 每帧 destroyAllChildren(ActionBar) 会误销毁倒计时条，
-    // 遗留的 this.cdBar 指向已销毁节点，下一秒 tick 调 getComponent 即报 _components null。位置等效 ActionBar(0,-30)+子(0,24)=(0,-6)。
-    this.cdBar = this.mk(this.overlay, 'CdBar', 0, -6);
-    this.cdBar.addComponent(Graphics);
-    this.drawCdBar(1);
-    this.cdTimer = setInterval(() => this.tickCountdown(), 1000);
+  /** 250ms UI tick：按 view.deadline（服务端权威）刷新响应条/出牌环/⏱；超时动作由服务端产出，客户端只读显示 */
+  private startUiTick(): void {
+    if (this.uiTimer) return;
+    this.uiTimer = setInterval(() => this.tickDeadline(), 250);
   }
-  private tickCountdown(): void {
-    if (!this.cdRunning) return;
-    this.cdRemain -= 1;
-    this.refreshStatusCd();
-    if (this.cdRemain <= 0) {
-      this.stopCountdown();
-      this.cdOnTimeout?.();
-      return;
+  private stopUiTick(): void {
+    if (this.uiTimer) { clearInterval(this.uiTimer); this.uiTimer = null; }
+  }
+  private tickDeadline(): void {
+    const v = this.net.view;
+    if (!v || !this.node?.isValid) return;
+    const d = v.deadline ?? null;
+    const remain = d ? Math.max(0, d.at - this.net.viewNow()) : 0;
+    // 状态栏⏱：自己的响应窗优先；否则当前行动家回合窗（无窗=0）
+    const relevant = !!d && (d.kind === 'resp' ? d.seats.includes(this.mySeat) : true);
+    const sec = relevant ? Math.ceil(remain / 1000) : 0;
+    if (sec !== this.cdSec) {
+      this.cdSec = sec;
+      this.renderStatus(v);
+      if (sec >= 1 && sec <= 5) AudioManager.instance.play('countdown'); // BL-014：最后 5 秒逐秒警告
     }
-    if (this.cdRemain <= 5) AudioManager.instance.play('countdown'); // BL-014：最后 5 秒逐秒警告
-    this.drawCdBar(this.cdRemain / this.cdTotal);
+    // 响应条（仅自己的响应窗）
+    if (d && d.kind === 'resp' && d.seats.includes(this.mySeat)) {
+      if (!this.cdBar || !this.cdBar.isValid) {
+        // CdBar 挂在 overlay 而非 ActionBar：renderActions 每帧 destroyAllChildren(ActionBar) 会误销毁倒计时条
+        this.cdBar = this.mk(this.overlay, 'CdBar', 0, -6);
+        this.cdBar.addComponent(Graphics);
+      }
+      this.drawCdBar(remain / Math.max(1, d.totalMs));
+    } else if (this.cdBar) {
+      if (this.cdBar.isValid) this.cdBar.destroy();
+      this.cdBar = null;
+    }
+    // 出牌钮金环（自己回合窗）
+    this.turnRingRatio = d && d.kind === 'turn' && d.seats.includes(this.mySeat) ? remain / Math.max(1, d.totalMs) : 0;
+    this.drawTurnRing(v.phase === 'discard' && v.currentSeat === this.mySeat);
   }
   private drawCdBar(ratio: number): void {
     if (!this.cdBar || !this.cdBar.isValid) { this.cdBar = null; return; }
@@ -1108,29 +1118,6 @@ export class TableScreen extends Screen {
     g.fillColor = Theme.color.gold;
     g.roundRect(-90, -2, 180 * Math.max(0, ratio), 4, 2);
     g.fill();
-  }
-  private stopCountdown(): void {
-    this.cdRunning = false;
-    this.cdOnTimeout = null;
-    if (this.cdTimer) { clearInterval(this.cdTimer); this.cdTimer = null; }
-    if (this.cdBar) { if (this.cdBar.isValid) this.cdBar.destroy(); this.cdBar = null; }
-  }
-  private startTurnCd(): void {
-    this.stopTurnCd();
-    this.turnCd = 15;
-    this.turnTimer = setInterval(() => {
-      this.turnCd = Math.max(0, this.turnCd - 1);
-      this.refreshStatusCd();
-      this.drawTurnRing(true);
-    }, 1000);
-  }
-  private stopTurnCd(): void {
-    this.turnCd = 0;
-    if (this.turnTimer) { clearInterval(this.turnTimer); this.turnTimer = null; }
-  }
-  private refreshStatusCd(): void {
-    const v = this.net.view;
-    if (v) this.renderStatus(v);
   }
 
   private actionBarNode(): Node {
@@ -1148,13 +1135,9 @@ export class TableScreen extends Screen {
     const legal = v.you.legal;
     const myTurn = v.currentSeat === this.mySeat;
     if (v.phase === 'draw' && myTurn && legal.includes('draw')) {
-      this.stopTurnCd();
       this.net.draw(this.mySeat);
       return;
     }
-    // my-turn 展示倒计时（仅视觉）
-    if (v.phase === 'discard' && myTurn) this.startTurnCd();
-    else this.stopTurnCd();
 
     const bar = this.actionBarNode();
     bar.destroyAllChildren();
@@ -1184,7 +1167,7 @@ export class TableScreen extends Screen {
     }
     bar.active = acts.length > 0;
     if (acts.length > 0) this.hideWallLegend(); // 操作浮层出现即隐藏开牌点图例，避免重叠
-    if (!acts.length) { this.stopCountdown(); return; }
+    if (!acts.length) return;
     // 浮层面板（加高：文案/倒计时条/按钮三层互不遮挡）
     const panel = uiPanel(360, 112, { variant: 'panel', radius: Theme.radius.lg });
     panel.setParent(bar);
@@ -1198,18 +1181,7 @@ export class TableScreen extends Screen {
       btn.setPosition(bx, -16, 0);
       bx += 62;
     }
-    // 仅响应期才有「过」与响应倒计时；自己回合的杠/胡按钮不启动 pass 倒计时（避免非法 pass）
-    // 倒计时锚定当前响应窗：窗内视图广播/浮层重建均不重置（防重复点吃/碰刷倒计时 bug）
-    if (hasOpt && v.lastDiscard) {
-      const key = `${v.round}:${v.discards.length}:${v.lastDiscard.seat}:${v.lastDiscard.tile}`;
-      if (!this.cdRunning || this.cdRespKey !== key) {
-        this.startCountdown(8, () => this.net.respond(this.mySeat, 'pass'));
-        this.cdRespKey = key;
-      }
-    } else {
-      this.cdRespKey = '';
-      this.stopCountdown();
-    }
+    // BL-032：响应条/⏱ 由 tickDeadline 按服务端 deadline 同步刷新（窗锚点在服务端，客户端无本地倒计时状态）
   }
 
   /** 自己回合杠：单解直发，多解弹选择器 */
@@ -1225,7 +1197,6 @@ export class TableScreen extends Screen {
   }
 
   private sendKong(kind: 'added' | 'concealed', tile: string): void {
-    this.stopCountdown();
     if (kind === 'added') this.net.kongAdded(this.mySeat, tile);
     else this.net.kongConcealed(this.mySeat, tile);
   }
@@ -1369,10 +1340,13 @@ export class TableScreen extends Screen {
       const pitch = Math.min(16, (rowTop - rowBottom - subN * 11 - 34) / Math.max(1, w0.detail.length));
       let ly = rowTop;
       for (const d of w0.detail) {
-        const nm = uiLabel(`${d.name}${d.count != null && d.count > 1 ? ` ×${d.count}` : ''}`, { size: 10.5, color: Theme.color.textSecondary, align: 'left', anchorX: 0, width: 200 });
+        // BL-036：子/连庄加成行显性化（金色＋口径后缀），与原型 .rs-row.addrow 同批
+        const isAdd = d.name === '子' || d.name === '连庄';
+        const addSuffix = d.name === '子' ? '（每家付方各加）' : d.name === '连庄' ? '（涉庄付方加）' : '';
+        const nm = uiLabel(`${d.name}${d.count != null && d.count > 1 ? ` ×${d.count}` : ''}${addSuffix}`, { size: 10.5, color: isAdd ? Theme.color.gold : Theme.color.textSecondary, align: 'left', anchorX: 0, width: 200 });
         nm.setParent(panel);
         nm.setPosition(LC.l, ly, 0);
-        const tv = uiLabel(`+${d.tai}`, { size: 10.5, color: Theme.color.goldLight, bold: true, align: 'right', anchorX: 1, width: 60 });
+        const tv = uiLabel(`+${d.tai}`, { size: 10.5, color: isAdd ? Theme.color.gold : Theme.color.goldLight, bold: true, align: 'right', anchorX: 1, width: 60 });
         tv.setParent(panel);
         tv.setPosition(LC.r, ly, 0);
         ly -= pitch;
@@ -1397,7 +1371,7 @@ export class TableScreen extends Screen {
       const tvv = uiLabel(`${T0} 台`, { size: 11.5, color: Theme.color.goldLight, bold: true, align: 'right', anchorX: 1, width: 60 });
       tvv.setParent(panel);
       tvv.setPosition(LC.r, totalY, 0);
-      const ziNote = uiLabel('子/连庄加成按付方逐家计入（右列子注）', { size: 8.5, color: Theme.color.textMuted });
+      const ziNote = uiLabel('付方台 = 底番 + 3×(胡方子+付方子) + 庄连庄 2N−1（仅涉庄付方）', { size: 8.5, color: Theme.color.textMuted });
       ziNote.setParent(panel);
       ziNote.setPosition((LC.l + LC.r) / 2, totalY - 13, 0);
       // 右列：积分变动（.rs-seat 三色：正绿/负浅红/零灰；子注右对齐含零项）
@@ -1405,30 +1379,42 @@ export class TableScreen extends Screen {
       cr.setParent(panel);
       cr.setPosition((RC.l + RC.r) / 2, colTop, 0);
       let ry = rowTop;
+      // BL-036：底番反算（修正旧子注把含加成合计误标为「底」）：B = T0 − 胡方子×3 − 胡方涉庄连庄加成
+      const wz = ziOf(w0.seat);
+      const winnerInvolved = w0.seat === dealerSeat || (payerSeats.length === 1 && payerSeats[0] === dealerSeat);
+      const winBonus = winnerInvolved && lz >= 1 ? 2 * lz - 1 : 0;
+      const baseTai = T0 - 3 * wz - winBonus;
       for (const seat of [0, 1, 2, 3]) {
         const dv = ev.delta[seat] ?? 0;
         const nm = uiLabel(`${this.nameOf(v!, seat)}${seat === meSeat ? '（我）' : ''}`, { size: 10.5, color: Theme.color.textSecondary, align: 'left', anchorX: 0, width: 150 });
         nm.setParent(panel);
         nm.setPosition(RC.l, ry, 0);
+        // BL-036：庄/子状态徽 chip 接名字后（红 庄·连N / 金 子N / 灰 子0），与原型 .rs-dchip/.rs-zchip 同批
+        let chipX = RC.l + (this.nameOf(v!, seat).length + (seat === meSeat ? 3 : 0)) * 10.5 + 6;
+        if (seat === dealerSeat) chipX = this.settleChip(panel, chipX, ry, lz >= 1 ? `庄·连${lz}` : '庄', 'dlr');
+        this.settleChip(panel, chipX, ry, `子${ziOf(seat)}`, ziOf(seat) > 0 ? 'zi' : 'zi0');
         const dColor = dv > 0 ? new Color(159, 233, 176, 255) : dv < 0 ? new Color(243, 177, 177, 255) : Theme.color.textMuted;
         const tv = uiLabel(`${dv >= 0 ? '+' : ''}${dv}`, { size: 10.5, color: dColor, bold: true, align: 'right', anchorX: 1, width: 60 });
         tv.setParent(panel);
         tv.setPosition(RC.r, ry, 0);
-        // 子/庄明细子注：胡方=收付构成；付方=底台+胡方子+自身子（含 0，对齐原型）+连庄（涉庄时）
-        let subTxt = '';
+        // BL-036：子注升级算番公式（加项金色分段）：胡方=合计拆解；付方=底+胡方子+自身子+连庄=付台
+        const segs: { t: string; gold?: boolean }[] = [];
         if (seat === w0.seat) {
-          subTxt = payerSeats.length === 1 ? `胡 ${T0} 台 · 收点炮方 1 家` : `胡 ${T0} 台 · 自摸收 ${payerSeats.length} 家`;
+          segs.push({ t: `胡 ${T0} 台 = 底 ${baseTai}` });
+          if (wz > 0) segs.push({ t: ` + 自身子 ${wz}×3`, gold: true });
+          if (winBonus > 0) segs.push({ t: ` + 连庄 ${lz}(+${winBonus})`, gold: true });
+          segs.push({ t: payerSeats.length === 1 ? ' · 收点炮方 1 家' : ' · 按付方子逐家收' });
         } else if (dv < 0) {
           const zi = ziOf(seat);
-          const wz = ziOf(w0.seat);
-          const parts = [seat === dealerSeat ? `庄家·底 ${T0}` : `底 ${T0}`, wz > 0 ? `胡方子 ${wz}(+${3 * wz})` : `胡方子 0`, zi > 0 ? `自身子 ${zi}(+${3 * zi})` : `自身子 0`];
-          if ((seat === dealerSeat || w0.seat === dealerSeat) && lz >= 1) parts.push(`连庄 ${lz}(+${2 * lz - 1})`);
-          subTxt = parts.join('·');
+          const payBonus = (seat === dealerSeat || w0.seat === dealerSeat) && lz >= 1 ? 2 * lz - 1 : 0;
+          segs.push({ t: `底 ${baseTai}` });
+          if (wz > 0) segs.push({ t: ` + 胡方子 ${wz}×3`, gold: true });
+          if (zi > 0) segs.push({ t: ` + 自身子 ${zi}×3`, gold: true });
+          if (payBonus > 0) segs.push({ t: ` + 连庄 ${lz}(+${payBonus})`, gold: true });
+          segs.push({ t: ` = ${-dv} 台` });
         }
-        if (subTxt) {
-          const nt = uiLabel(subTxt, { size: 8.5, color: Theme.color.textMuted, align: 'right', anchorX: 1, width: 283 });
-          nt.setParent(panel);
-          nt.setPosition(RC.r, ry - 11, 0);
+        if (segs.length) {
+          this.drawFormula(panel, segs, RC.r, ry - 11);
           ry -= 28;
         } else ry -= 17;
       }
@@ -1442,7 +1428,7 @@ export class TableScreen extends Screen {
       desc.setParent(panel);
       desc.setPosition(0, hands ? 60 : 10, 0);
     }
-    // 各家手牌区（终局摊牌）：标题与牌行拉开 + 上分隔线；2×2 牌面行（对齐 result.html .rs-hands，牌面用设计素材风格）
+    // 各家手牌区（终局摊牌）：标题与牌行拉开 + 上分隔线；2×2 牌面行（对齐 result.html BL-033：名称移至牌行上方、牌行享整列宽）
     if (hands) {
       const ht = uiLabel('各家手牌', { size: 11, color: Theme.color.gold, bold: true });
       ht.setParent(panel);
@@ -1453,22 +1439,27 @@ export class TableScreen extends Screen {
       hg.moveTo(-pw / 2 + 18, -ph / 2 + 99);
       hg.lineTo(pw / 2 - 18, -ph / 2 + 99);
       hg.stroke();
-      const RT = { w: 13, h: 18 };
-      const pitchX = 15; // 牌宽 13 + 间隙 2（对齐原型 .rs-tiles gap 2）
+      const RT = { w: 13, h: 18 }; // 对齐原型 .rs-tiles img 13×18
+      const PITCH = 15; // 牌宽 13 + 间隙 2；17 张=253 ≤ 列宽 283 不溢面板
+      const colW = pw / 2 - 27; // 单列牌行可用宽（左列 -pw/2+18..-9 / 右列 9..pw/2-18）
       const winSeat = ev.type === 'win' ? ev.winners[0]!.seat : -1;
       const payerSeat = ev.type === 'win' ? ([0, 1, 2, 3].find((s) => (ev.delta[s] ?? 0) < 0) ?? -1) : -1;
       for (let i = 0; i < 4; i++) {
         const seat = i;
         const cellLeft = i % 2 === 0 ? -pw / 2 + 18 : 9;
-        const cy = -ph / 2 + (i < 2 ? 84 : 61);
+        const cy = -ph / 2 + (i < 2 ? 80 : 47); // 牌行中心；名称行在其上 cy+16（原型：名称在牌行上方）
         const role = seat === winSeat ? '（胡）' : seat === payerSeat ? '（炮）' : '';
-        const nm = uiLabel(`${this.nameOf(v!, seat)}${role}`, { size: 8.5, color: Theme.color.textMuted, align: 'right', anchorX: 1, width: 60 });
+        const nm = uiLabel(`${this.nameOf(v!, seat)}${role}`, { size: 8.5, color: Theme.color.textMuted, align: 'left', anchorX: 0, width: colW });
         nm.setParent(panel);
-        nm.setPosition(cellLeft + 60, cy, 0);
-        expandSorted(hands[seat] ?? {}).forEach((t, j) => {
+        nm.setPosition(cellLeft, cy + 16, 0);
+        // 整手全景（2026-09-22 用户确认）：暗牌(revealed) + 已副露展开（杠计 4 张）= 17 张基准
+        const melds = seat === v!.you.seat ? (v!.you.melds ?? []) : (v!.others.find((o) => o.seat === seat)?.melds ?? []);
+        const tiles = [...expandSorted(hands[seat] ?? {}), ...melds.flatMap((m) => [...m.tiles].sort())];
+        const pitch = tiles.length > 1 ? Math.min(PITCH, (colW - RT.w) / (tiles.length - 1)) : PITCH; // 超 17 张极端例自动压缩牌距，绝不溢面板
+        tiles.forEach((t, j) => {
           const tn = createTileNode(t, RT.w, RT.h);
           tn.setParent(panel);
-          tn.setPosition(cellLeft + 66 + j * pitchX + RT.w / 2, cy, 0);
+          tn.setPosition(cellLeft + j * pitch + RT.w / 2, cy, 0);
         });
       }
     }
@@ -1487,37 +1478,104 @@ export class TableScreen extends Screen {
     }
   }
 
-  /** ?settleDemo=win 演示态：mock 视图+摊牌+win 事件（数据对齐 result.html 原型演示态：你胡 18台/点炮方 -18） */
+  /** BL-036 结算庄/子状态徽 chip（对齐原型 .rs-dchip/.rs-zchip）：pill 底+小字；x 为左缘入参，返回下一 chip 左缘 */
+  private settleChip(parent: Node, x: number, y: number, text: string, kind: 'dlr' | 'zi' | 'zi0'): number {
+    const w = text.length * 8.5 + 10;
+    const n = new Node(`Chip${text}`);
+    const g = n.addComponent(Graphics);
+    if (kind === 'dlr') { g.fillColor = new Color(176, 48, 48, 255); g.strokeColor = Theme.color.goldLight; }
+    else if (kind === 'zi') { g.fillColor = rgba(212, 165, 55, 0.14); g.strokeColor = rgba(212, 165, 55, 0.45); }
+    else { g.fillColor = rgba(255, 255, 255, 0.05); g.strokeColor = rgba(255, 255, 255, 0.14); }
+    g.lineWidth = 1;
+    g.roundRect(-w / 2, -6.5, w, 13, 6);
+    g.fill();
+    g.stroke();
+    const lb = uiLabel(text, { size: 8.5, color: kind === 'dlr' ? new Color(255, 255, 255, 255) : kind === 'zi' ? Theme.color.goldLight : Theme.color.textMuted, bold: true });
+    lb.setParent(n);
+    n.setParent(parent);
+    n.setPosition(x + w / 2, y, 0);
+    return x + w + 4;
+  }
+
+  /** BL-036 算番公式子注：分段着色（加项金/其余灰）右对齐；估宽会致分段重叠/溢右缘，改渲染后按 Label 实宽校准一次 */
+  private drawFormula(parent: Node, segs: { t: string; gold?: boolean }[], xRight: number, y: number): void {
+    const labels = segs.map((s) => {
+      const n = uiLabel(s.t, { size: 8.5, color: s.gold ? Theme.color.gold : Theme.color.textMuted, align: 'left', anchorX: 0 });
+      n.setParent(parent);
+      n.setPosition(xRight, y, 0);
+      return n;
+    });
+    // Label 实宽在首帧渲染后才可用：双 rAF 待首帧渲染完成后按实宽右对齐重排（估宽会致分段重叠/溢右缘）
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      if (!parent.isValid) return;
+      const widths = labels.map((n) => (n.isValid ? n.getComponent(UITransform)!.contentSize.width : 0));
+      let x = xRight - widths.reduce((a, b) => a + b, 0);
+      labels.forEach((n, i) => {
+        if (n.isValid) n.setPosition(x, y, 0);
+        x += widths[i]!;
+      });
+    }));
+  }
+
+  /** ?settleDemo=win 演示态：mock 视图+摊牌+win 事件（对齐 result.html 原型 BL-036 演示：你胡 15台=底11+子3+连庄1、付方子2 付 21；含 17 张整手全景行） */
   private demoSettlement(): void {
+    const kong = (t: string) => ({ type: 'kong_exposed', tiles: [t, t, t, t] });
     const mockView = {
       room: '688144', round: 1, maxRounds: 8,
       names: ['凯叔', '机器人1', '机器人2', '机器人3'],
-      phase: 'settled', dealerSeat: 1, currentSeat: 0, wallRemaining: 20, lianzhuangCount: 0,
-      you: { seat: 0, zi: 0, score: 0, concealed: {} },
-      others: [{ seat: 1, zi: 0, concealedCount: 13 }, { seat: 2, zi: 0, concealedCount: 13 }, { seat: 3, zi: 0, concealedCount: 13 }],
+      phase: 'settled', dealerSeat: 0, currentSeat: 0, wallRemaining: 20, lianzhuangCount: 1,
+      you: { seat: 0, zi: 1, score: 0, concealed: {}, melds: [] },
+      others: [
+        { seat: 1, zi: 0, concealedCount: 1, melds: [kong('W6'), kong('T2'), kong('B9'), kong('Z1')] }, // 四杠极端例：1+16=17 张
+        { seat: 2, zi: 0, concealedCount: 13, melds: [] },
+        { seat: 3, zi: 2, concealedCount: 13, melds: [] },
+      ],
       discards: [],
     } as unknown as ViewState;
     this.revealed = [
       { W6: 3, B9: 3, T4: 3, B8: 3, T1: 2 },
-      { W2: 1, W3: 1, W5: 1, T2: 1, T3: 1, T6: 1, T7: 1, Z1: 1, Z4: 1, Z5: 1, Z6: 1 },
-      { W7: 2, T3: 1, T4: 1, T5: 1, T6: 1, Z2: 2, Z5: 1, Z7: 1 },
-      { W6: 1, W8: 1, T2: 1, T4: 1, T5: 1, Z3: 1, Z4: 1, Z6: 1 },
+      { Z2: 1 },
+      { W7: 3, T3: 1, T4: 1, T5: 1, T6: 1, B3: 1, B5: 1, Z2: 2, Z7: 1 },
+      { W6: 1, W8: 1, W9: 1, T2: 1, T4: 1, T5: 1, B1: 1, B7: 1, Z4: 1, Z5: 1, Z6: 3 },
     ];
     const ev = {
       type: 'win',
       winners: [{
-        seat: 0, tai: 18, detail: [
-          { name: '见花', count: 3, tai: 3, tiles: ['H1', 'H2', 'H3'] },
+        seat: 0, tai: 15, detail: [
+          { name: '见花', count: 2, tai: 2 },
           { name: '无字', tai: 1 },
           { name: '门清自摸', tai: 3 },
           { name: '胡九筒', tai: 5 },
-          { name: '3九筒', tai: 5 },
-          { name: '对碰', tai: 1 },
+          { name: '子', count: 1, tai: 3 },
+          { name: '连庄', count: 1, tai: 1 },
         ],
       }],
-      delta: [18, 0, 0, -18],
+      delta: [21, 0, 0, -21],
     } as unknown as Extract<GameEvent, { type: 'win' }>;
     this.showSettlement(ev, true, mockView);
+  }
+
+  /** ?tableDemo=1 演示态：mock 视图直渲牌桌（BL-034 徽章右下角位置自检；含明牌两组吃+花牌） */
+  private demoTable(): void {
+    const mockView = {
+      room: '843952', round: 4, maxRounds: 8,
+      names: ['凯叔', '机器人1', '机器人2', '机器人3'],
+      phase: 'discard', dealerSeat: 3, currentSeat: 0, wallRemaining: 21, lianzhuangCount: 1,
+      you: {
+        seat: 0, zi: 0, score: 74,
+        concealed: { W1: 1, W2: 1, W3: 1, W4: 1, W5: 1, T2: 2, T3: 2, B5: 2, Z1: 1, Z2: 1 },
+        melds: [{ type: 'chi', tiles: ['B1', 'B2', 'B3'], called: 'B3' }, { type: 'chi', tiles: ['T4', 'T5', 'T6'], called: 'T4' }],
+        flowers: ['H1', 'H3'], drawn: 'Z1', legal: ['discard'],
+      },
+      others: [
+        { seat: 1, zi: 1, score: -22, concealedCount: 13, melds: [{ type: 'chi', tiles: ['T4', 'T5', 'T6'], called: 'T5' }], flowersCount: 0 },
+        { seat: 2, zi: 0, score: -30, concealedCount: 13, melds: [{ type: 'pon', tiles: ['Z5', 'Z5', 'Z5'] }], flowersCount: 1 },
+        { seat: 3, zi: 1, score: -22, concealedCount: 13, melds: [{ type: 'chi', tiles: ['B1', 'B2', 'B3'], called: 'B2' }], flowersCount: 0 },
+      ],
+      discards: [{ seat: 3, tile: 'Z5' }, { seat: 0, tile: 'W9' }, { seat: 1, tile: 'B9' }],
+      lastDiscard: { seat: 3, tile: 'Z5' },
+    } as unknown as ViewState;
+    this.render(mockView);
   }
 
   /** 解散牌局二次确认：结果页「解散牌局」易误点，先弹确认框，确认后才真正解散 */

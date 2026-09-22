@@ -73,6 +73,27 @@ describe('MemoryGameStore · 房间 + 一局记录往返', () => {
     expect(r?.closedAt).toBeInstanceOf(Date);
   });
 
+  it('BL-031/FR-AI-11：updateRoomMeta 增量落库并读回（局数/玩法/Bot打法/托管预设）', async () => {
+    const store = new MemoryGameStore();
+    await store.createRoom({
+      roomId: 'R3', hostOpenid: 'o', maxRounds: 8,
+      initialScore: { 0: 22, 1: 22, 2: 22, 3: 22 }, finalScore: null, status: 'idle',
+    });
+    await store.updateRoomMeta('R3', { maxRounds: 16, settings: { wallMode: 'random', breakDice: false } });
+    await store.updateRoomMeta('R3', { botPersonas: { 1: 'efficiency-novice' }, trusteePersonas: { o: 'efficiency-normal' } });
+    const r = await store.getRoom('R3');
+    expect(r?.maxRounds).toBe(16);
+    expect(r?.settings?.wallMode).toBe('random');
+    expect(r?.botPersonas).toEqual({ 1: 'efficiency-novice' });
+    expect(r?.trusteePersonas).toEqual({ o: 'efficiency-normal' });
+    // 未提供的字段保持不变
+    await store.updateRoomMeta('R3', { botPersonas: { 2: 'trustee' } });
+    const r2 = await store.getRoom('R3');
+    expect(r2?.maxRounds).toBe(16);
+    expect(r2?.trusteePersonas).toEqual({ o: 'efficiency-normal' });
+    expect(r2?.botPersonas).toEqual({ 2: 'trustee' });
+  });
+
   it('事件溯源：驱动一局 → 存业务事实 → 读回 → replay 精确还原最终状态', async () => {
     const store = new MemoryGameStore();
     let live = createTable(0, 555);

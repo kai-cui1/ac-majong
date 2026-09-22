@@ -8,6 +8,7 @@ import type { IdentityProvider } from './identity';
 import { RoomManager } from './roomManager';
 import { buildReplayBundle } from '@ac-majong/persistence';
 import type { GameHooks, RoomRestore, RoomTimings } from './roomActor';
+import { normalizeRoomSettings } from './roomActor'; // BL-032 建房参数归一（值导入）
 import type { GameStore, RealtimeStore, MemberEventRow, ScoreMap } from '@ac-majong/persistence';
 import { toRoundSnapshot } from '@ac-majong/persistence';
 import { MemoryGameStore, MemoryRealtime } from '@ac-majong/persistence';
@@ -122,6 +123,16 @@ export function startGateway(opts: GatewayOptions): Gateway {
           await persistence.store.updateRoomSeating(roomId, seating);
         } catch (err) {
           log.error(`仪式日志落库失败: room=${roomId}`, err);
+        }
+      })();
+    },
+    // BL-031/FR-AI-11/FR-房间-12：房间元信息增量落库（局数/玩法/Bot打法/托管预设，弱依赖 fire-and-forget）
+    onRoomMeta(roomId, patch) {
+      void (async () => {
+        try {
+          await persistence.store.updateRoomMeta(roomId, patch);
+        } catch (err) {
+          log.error(`房间元信息落库失败: room=${roomId}`, err);
         }
       })();
     },
@@ -287,8 +298,8 @@ async function handleMsg(
     case 'create': {
       if (!session.userId) return send(session, { t: 'error', reason: '未鉴权' });
       const maxRounds = msg.maxRounds ?? 8; // 0 = 不限（无限续局至房主解散，见 PRD 03 FR-房间-01）
-      const rs = msg.settings; // BL-017/BL-020/BL-018 玩法参数（缺省字段补默认：先看吃再碰/公开房间默认开）
-      const settings = { wallMode: rs?.wallMode ?? ('random' as const), breakDice: rs?.breakDice ?? false, chiFirstView: rs?.chiFirstView ?? true, isPublic: rs?.isPublic ?? true };
+      // BL-017/BL-020/BL-018/BL-032 玩法参数归一：缺省补默认 + 时间档钳制（turnSec/respSec 钳到最近档位）
+      const settings = normalizeRoomSettings(msg.settings);
       // BL-016：房号全局唯一、永不复用（内存活跃房 + rooms 历史表双重查重，FR-房间-07）
       const roomId = await rooms.genUniqueId();
       const room = rooms.create(session.userId, conn, maxRounds, session.profile?.nickname, undefined, roomId, settings);
@@ -379,7 +390,7 @@ async function handleMsg(
       if (!session.roomId || !session.userId) return send(session, { t: 'error', reason: '无房间' });
       const room = rooms.get(session.roomId);
       const before = room ? room.roomView().seats.map((s) => s?.userId ?? null) : [];
-      const r = room?.addBot(session.userId, msg.count ?? 1) ?? { ok: false, reason: '无房间' };
+      const r = room?.addBot(session.userId, msg.count ?? 1, msg.personaId) ?? { ok: false, reason: '无房间' };
       // BL-016：Bot 入座补记成员流水（服务重启重建时恢复 Bot 座位；弱依赖）
       if (r.ok && room) {
         const after = room.roomView().seats;
@@ -394,6 +405,21 @@ async function handleMsg(
     case 'removeBot': {
       if (!session.roomId || !session.userId) return send(session, { t: 'error', reason: '无房间' });
       const r = rooms.get(session.roomId)?.removeBot(session.userId, msg.seat) ?? { ok: false, reason: '无房间' };
+      return send(session, { t: 'ack', seq: msg.seq, ok: r.ok, reason: r.reason });
+    }
+    case 'updateBotPersona': {
+      if (!session.roomId || !session.userId) return send(session, { t: 'error', reason: '无房间' });
+      const r = rooms.get(session.roomId)?.updateBotPersona(session.userId, msg.seat, msg.personaId) ?? { ok: false, reason: '无房间' };
+      return send(session, { t: 'ack', seq: msg.seq, ok: r.ok, reason: r.reason });
+    }
+    case 'updateRoom': {
+      if (!session.roomId || !session.userId) return send(session, { t: 'error', reason: '无房间' });
+      const r = rooms.get(session.roomId)?.updateRoom(session.userId, { maxRounds: msg.maxRounds, settings: msg.settings }) ?? { ok: false, reason: '无房间' };
+      return send(session, { t: 'ack', seq: msg.seq, ok: r.ok, reason: r.reason });
+    }
+    case 'setTrusteePersona': {
+      if (!session.roomId || !session.userId) return send(session, { t: 'error', reason: '无房间' });
+      const r = rooms.get(session.roomId)?.setTrusteePersona(session.userId, msg.personaId) ?? { ok: false, reason: '无房间' };
       return send(session, { t: 'ack', seq: msg.seq, ok: r.ok, reason: r.reason });
     }
     case 'nextRound': {
@@ -630,6 +656,8 @@ export async function rebuildRoomFromStore(
     winCount,
     ledgerScores: memberScores,
     absentUsers: phase === 'playing' ? seats.filter((u): u is string => !!u && !u.startsWith('bot-')) : [],
+    botPersonas: roomRow.botPersonas ?? undefined,
+    trusteePersonas: roomRow.trusteePersonas ?? undefined,
   };
   const room = rooms.createRestored(roomId, roomRow.hostOpenid, roomRow.maxRounds, restore, undefined, roomRow.settings ?? undefined);
   seats.forEach((u, i) => {

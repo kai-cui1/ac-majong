@@ -6,6 +6,7 @@ import type {
   InitialStateRow,
   MemberEventRow,
   RealtimeStore,
+  RoomMetaPatch,
   RoomRow,
   ScoreMap,
   SessionData,
@@ -55,6 +56,14 @@ export class MemoryGameStore implements GameStore {
   async updateRoomSeating(roomId: string, seating: unknown): Promise<void> {
     const r = this.rooms.get(roomId);
     if (r) r.seating = clone(seating);
+  }
+  async updateRoomMeta(roomId: string, patch: RoomMetaPatch): Promise<void> {
+    const r = this.rooms.get(roomId);
+    if (!r) return;
+    if (patch.maxRounds != null) r.maxRounds = patch.maxRounds;
+    if (patch.settings !== undefined) r.settings = patch.settings ?? null;
+    if (patch.botPersonas !== undefined) r.botPersonas = clone(patch.botPersonas ?? null) ?? null;
+    if (patch.trusteePersonas !== undefined) r.trusteePersonas = clone(patch.trusteePersonas ?? null) ?? null;
   }
   async closeRoom(roomId: string, finalScore: ScoreMap, closedAt: Date): Promise<void> {
     const r = this.rooms.get(roomId);

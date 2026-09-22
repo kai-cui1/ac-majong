@@ -32,14 +32,14 @@
       <div class="tile">🀄</div>
       <div>
         <h1>AC 麻将 · Admin 后台原型</h1>
-        <div class="sub">高保真原型 v0.1 · 一期（BL-015）· 桌面控制台 / Ant Design 5 风格</div>
+        <div class="sub">高保真原型 v0.2 · 一期已交付 + 二期进行中（BL-015）· 桌面控制台 / Ant Design 5 风格</div>
       </div>
     </div>
 
     <div class="nav-note">
       <b>说明</b>：Admin 为<b>独立运营后台系统</b>（<span class="mono">admin-server</span> + <span class="mono">admin-web</span>），面向管理员，与玩家侧移动端（<a href="../_index.html">玩家原型导航</a>）是两套设计语言。
       本原型对应 PRD <a href="../../../1-prd/10-Admin后台.md">10-Admin后台</a> 与技术方案 <a href="../../../3-技术文档/AC麻将-Admin后台技术方案.md">Admin后台技术方案</a>。<br>
-      <b>角色</b>：super（全部）· operator（查询 + 仲裁）· viewer（只读）。导航示例以 super 视角展示全部菜单；🔒 标记为 super 专属。一期<b>用户管理纯只读</b>、<b>仲裁纯记录留痕不回写</b>。
+      <b>角色</b>：super（全部）· operator（查询 + 仲裁 + 诊断/监控）· viewer（只读）。导航示例以 super 视角展示全部菜单；🔒 为受限入口（「诊断」=operator+、「系统」=super）。一期<b>用户管理纯只读</b>、<b>仲裁纯记录留痕不回写</b>。
     </div>
 
     <div class="grid">
@@ -59,6 +59,14 @@
         <div class="ico">▶️</div>
         <div><div class="nm">回放仲裁 ★核心</div><div class="ds">逐帧回放播放器（全信息）· 动作序列 · 仲裁结论录入（留痕）</div><div class="rl"><span class="tag tag-gray">查看 viewer+</span> <span class="tag tag-blue">仲裁 operator+</span></div></div>
       </a>
+      <a class="pcard" href="diag.html">
+        <div class="ico">🩺</div>
+        <div><div class="nm">诊断包受理 <span class="tag tag-blue">二期</span></div><div class="ds">粘贴 ac-diag JSON · 现场 ctx / 消息环 / 报错栈 · 跳回放仲裁</div><div class="rl"><span class="tag tag-blue">operator+</span></div></div>
+      </a>
+      <a class="pcard" href="monitor.html">
+        <div class="ico">📡</div>
+        <div><div class="nm">实时房间监控 <span class="tag tag-blue">二期</span></div><div class="ds">上帝全知视角：牌墙实牌 / 四家暗牌 / 牌河 / 副露花子分（复用回放牌桌俯视图）· 在等谁 / stall · 不可达降级</div><div class="rl"><span class="tag tag-blue">operator+</span></div></div>
+      </a>
       <a class="pcard" href="admins.html">
         <div class="ico">🛡️</div>
         <div><div class="nm">管理员管理</div><div class="ds">创建/停用管理员 · 分配角色 · 重置密码 · 超管 bootstrap</div><div class="rl"><span class="tag tag-purple">super</span></div></div>
@@ -70,9 +78,9 @@
     </div>
 
     <div class="foot">
-      📁 文件清单：admin.css（设计系统）· login / users / rooms / replay / admins / audit .html<br>
+      📁 文件清单：admin.css（设计系统）· login / users / rooms / replay / diag / monitor / admins / audit .html<br>
       设计语言：桌面控制台（AntD 5：深色侧栏 + 蓝色主色 + 卡片/表格/抽屉）· 保真度：高保真（组件/间距/状态/文案）<br>
-      下一步：技术方案 schema/API 已定稿 → 编码 P2-a（脚手架 admin-server + admin-web）
+      进度：一期 P2-a 已交付（admin-server + admin-web + 真库冒烟绿）；二期 <b>FR-Admin-09 诊断包受理</b> / <b>FR-Admin-10 实时房间监控</b> 进行中
     </div>
   </div>
 </body>

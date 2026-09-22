@@ -7,6 +7,7 @@ import type {
   GameStore,
   InitialStateRow,
   MemberEventRow,
+  RoomMetaPatch,
   RoomRow,
   ScoreMap,
   UserRow,
@@ -62,6 +63,8 @@ export class MysqlGameStore implements GameStore {
       memberScores: r.member_scores == null ? null : parseJson<ScoreMap>(r.member_scores),
       settings: r.settings == null ? null : parseJson<RoomRow['settings']>(r.settings),
       seating: r.seating == null ? null : parseJson<unknown>(r.seating),
+      botPersonas: r.bot_personas == null ? null : parseJson<Record<number, string>>(r.bot_personas),
+      trusteePersonas: r.trustee_personas == null ? null : parseJson<Record<string, string>>(r.trustee_personas),
       finalScore: r.final_score == null ? null : parseJson<ScoreMap>(r.final_score),
       status: r.status, createdAt: r.created_at, closedAt: r.closed_at,
     };
@@ -79,6 +82,29 @@ export class MysqlGameStore implements GameStore {
   }
   async updateRoomSeating(roomId: string, seating: unknown): Promise<void> {
     await this.pool.execute(`UPDATE rooms SET seating = ? WHERE room_id = ?`, [json(seating), roomId]);
+  }
+  async updateRoomMeta(roomId: string, patch: RoomMetaPatch): Promise<void> {
+    const sets: string[] = [];
+    const vals: (string | number | null)[] = [];
+    if (patch.maxRounds != null) {
+      sets.push('max_rounds = ?');
+      vals.push(patch.maxRounds);
+    }
+    if (patch.settings !== undefined) {
+      sets.push('settings = ?');
+      vals.push(json(patch.settings ?? null));
+    }
+    if (patch.botPersonas !== undefined) {
+      sets.push('bot_personas = ?');
+      vals.push(json(patch.botPersonas ?? null));
+    }
+    if (patch.trusteePersonas !== undefined) {
+      sets.push('trustee_personas = ?');
+      vals.push(json(patch.trusteePersonas ?? null));
+    }
+    if (sets.length === 0) return;
+    vals.push(roomId);
+    await this.pool.execute(`UPDATE rooms SET ${sets.join(', ')} WHERE room_id = ?`, vals);
   }
   async closeRoom(roomId: string, finalScore: ScoreMap, closedAt: Date): Promise<void> {
     await this.pool.execute(
@@ -172,6 +198,8 @@ export class MysqlGameStore implements GameStore {
       memberScores: r.member_scores == null ? null : parseJson<ScoreMap>(r.member_scores),
       settings: r.settings == null ? null : parseJson<RoomRow['settings']>(r.settings),
       seating: r.seating == null ? null : parseJson<unknown>(r.seating),
+      botPersonas: r.bot_personas == null ? null : parseJson<Record<number, string>>(r.bot_personas),
+      trusteePersonas: r.trustee_personas == null ? null : parseJson<Record<string, string>>(r.trustee_personas),
       finalScore: r.final_score == null ? null : parseJson<ScoreMap>(r.final_score),
       status: r.status, createdAt: r.created_at, closedAt: r.closed_at,
     }));

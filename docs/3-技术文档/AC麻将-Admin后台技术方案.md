@@ -61,11 +61,11 @@ apps/admin-web/
    │  ├─ client.ts       fetch 封装（credentials:include + 写操作带 x-csrf-token + ApiError）
    │  └─ hooks.ts        TanStack Query hooks（按后端一一对应）+ downloadReplayBundle
    ├─ store/auth.ts      Zustand：admin / role / csrfToken / ready + login/logout/restore + hasRole
-   ├─ layout/AppLayout.tsx 主框架：固定深色 Sider（分组菜单按角色渲染）+ Header（面包屑 / env / 管理员 / 登出）+ Outlet
+   ├─ layout/AppLayout.tsx 主框架：固定深色 Sider（分组菜单按角色渲染）+ Header（面包屑 / 管理员 / 登出）+ Outlet
    └─ pages/             Login / Users / Rooms / Replay / Admins / Audit（6 页；对局并入 Rooms，无独立 Games 页）
 ```
 
-> 实现约定：**回放播放器内聚在 `pages/Replay.tsx`**（未单列 `components/replay/`）——逐帧游标 + 牌面渲染 + 动作序列 + 仲裁面板同页；牌面用 **Unicode 麻将牌区**（U+1F000..，与原型 `replay.html` 同款）而非 tiles 贴图，避免 admin-web 引客户端资源（架构 §4）。**「房间 / 对局」合并为 `Rooms.tsx` 一页**（局列表在房间详情抽屉内，点「回放」跳 `/replay/:gameId`），无独立 Games 页。admin-web 不 import `packages/*`，仅经 REST 消费后端。
+> 实现约定：**回放播放器内聚在 `pages/Replay.tsx`**（未单列 `components/replay/`）——逐帧游标 + 牌面渲染 + 动作序列 + 仲裁面板同页；牌面用**游戏同款贴图**（`client/ac-majong/assets/resources/tiles` 的 44 张 PNG 拷入 `apps/admin-web/public/tiles/`，静态资源非代码依赖，回归架构 §6.2「复用牌面贴图」原意）；TileId→文件名映射在 admin-web 内复刻纯函数（同 `password.ts` 复刻 scrypt，不跨 app import）；**回放与实时监控共享 `<TableBoard>` 组件**。**「房间 / 对局」合并为 `Rooms.tsx` 一页**（局列表在房间详情抽屉内，点「回放」跳 `/replay/:gameId`），无独立 Games 页。admin-web 不 import `packages/*`，仅经 REST 消费后端。
 
 ## 3. 数据层（Drizzle，P2-a）
 
@@ -182,6 +182,10 @@ apps/admin-web/
 | PATCH | `/api/admins/:id` | S | `{role?,status?,password?}` | `{admin}` + audit |
 | GET | `/api/audit` | S | query `adminId,action,targetType,from,to,page,size` | 分页 `AuditLog[]` |
 | GET | `/api/audit/:id` | S | — | `AuditLog`（含 before/after） |
+| POST | `/api/diag/intake` | O | `{at,ctx,ring,errors[]}`（ac-diag 诊断包） | 规范化结构 + 派生 `gameId` + audit（FR-Admin-09，见 §10.2） |
+| GET | `/api/monitor/rooms/:roomId` | O | — | `{available, live?:inspect（含全量 state）, fallback?:room 事实}` + audit（FR-Admin-10，见 §10.3） |
+
+> 另：game-server 侧新增**内部只读端点** `GET /internal/rooms/:id/inspect`（预共享密钥 `x-internal-token`、`INTERNAL_PORT` 仅内网），**不属 admin `/api`**、不经 nginx 对外，仅供 admin-server 服务端调用（详 §10.3）。
 
 ## 6. 回放帧服务（`lib/replay.ts`）
 
@@ -204,7 +208,7 @@ apps/admin-web/
 }
 ```
 
-- **前端**：`pages/Replay.tsx` 用 **Unicode 麻将牌区**（U+1F000..，与原型 `replay.html` 同款，不引客户端 tiles 资源）渲染 `state`；播放器控制帧游标（前进 / 后退 / 跳转 / 播放 / 自动播）+ 动作序列点选跳帧 + 仲裁录入面板（operator+）+ 导出回放包按钮。数据量：一局约百~数百帧，单帧全信息，响应体约数百 KB，可接受；如需再做增量/压缩优化。
+- **前端**：`pages/Replay.tsx` 用**游戏同款牌面贴图**（`public/tiles/*.png`，与原型 `replay.html`/`monitor.html` 同款，回放/监控共享 `<TableBoard>`）渲染 `state`；播放器控制帧游标（前进 / 后退 / 跳转 / 播放 / 自动播）+ 动作序列点选跳帧 + 仲裁录入面板（operator+）+ 导出回放包按钮。数据量：一局约百~数百帧，单帧全信息，响应体约数百 KB，可接受；如需再做增量/压缩优化。
 
 ## 7. 审计切面（`lib/audit.ts`）
 
@@ -214,8 +218,9 @@ apps/admin-web/
 
 ## 8. 配置与部署
 
-- **环境变量**（admin-server）：`PORT`、`DATABASE_URL`、`REDIS_URL`、`SESSION_SECRET`、`SESSION_TTL_SEC`、`ADMIN_BOOTSTRAP_USERNAME`、`ADMIN_BOOTSTRAP_PASSWORD`、`LOG_LEVEL`、`CSRF_ENABLED`、`RATE_LIMIT_ENABLED`、`COOKIE_SECURE`。
-- **起服约定**：monorepo 内 `@ac-majong/persistence` 的 `exports` 指向 **TS 源码**（`./src/index.ts`），故 admin-server 与 game-server 一律经 **tsx** 起服（`node dist` 无法解析 TS 依赖）；`pnpm --filter @ac-majong/admin-server start` = `tsx --env-file-if-exists=.env src/index.ts`（自动载入 `.env`）。**本地冒烟流程**：`cd deploy && docker compose up -d`（首启自动执行 `schema.sql` 建游戏表）→ `pnpm --filter @ac-majong/persistence db:migrate`（建 admin 三表）→ `cp .env.example .env` → `pnpm --filter @ac-majong/admin-server start`（bootstrap 超管）→ `pnpm --filter @ac-majong/admin-web dev`（vite，dev proxy `/api`→8090）。P2-b 待 persistence 产 dist + 修 exports 后可统一回 `node dist`。
+- **环境变量**（admin-server）：`PORT`、`DATABASE_URL`、`REDIS_URL`、`SESSION_SECRET`、`SESSION_TTL_SEC`、`ADMIN_BOOTSTRAP_USERNAME`、`ADMIN_BOOTSTRAP_PASSWORD`、`LOG_LEVEL`、`CSRF_ENABLED`、`RATE_LIMIT_ENABLED`、`COOKIE_SECURE`；**二期新增** `GAME_INTERNAL_URL`、`INTERNAL_TOKEN`（FR-Admin-10 服务端调 game-server 内部端点，密钥仅服务端持有、绝不下发前端）。
+- **环境变量**（game-server，FR-Admin-10 新增）：`INTERNAL_TOKEN`（预共享密钥，与 admin-server 一致）、`INTERNAL_PORT`（内部 inspect 端点端口，默认 8085，仅内网可达、生产不对公网开放）。
+- **起服约定**：monorepo 内 `@ac-majong/persistence` 的 `exports` 指向 **TS 源码**（`./src/index.ts`），故 admin-server 与 game-server 一律经 **tsx** 起服（`node dist` 无法解析 TS 依赖）；`pnpm --filter @ac-majong/admin-server start` = `tsx --env-file-if-exists=.env src/index.ts`（自动载入 `.env`）。本地可在仓库根目录用 [`./run/start-admin.sh`](../../run/start-admin.sh) 同时启动后端与 Vite 前端；首次迁移、环境配置、日志级别、端口与退出排障统一见 [联机架构方案 §10.5「本地管理后台启动」](./AC麻将-联机架构方案.md#105-本地管理后台启动开发用途)。该脚本仅供开发，不替代下述生产部署。P2-b 待 persistence 产 dist + 修 exports 后可统一回 `node dist`。
 - **部署**：三容器（game-server / admin-server / admin-web 静态）；**nginx 同源反代**——同域下 `/` → admin-web 静态、`/api` → admin-server，使会话 cookie 同源（免跨域/SameSite 麻烦）。admin 不挂微信云托管公网默认域名，走内网 / IP 白名单 / 独立域名 + HTTPS（呼应 BL-009 合规）。
 - **CSP/CORS**：同源无需宽松 CORS；`@fastify/cors` 仅放行同源；生产强制 HTTPS + `Secure`/`HttpOnly`/`SameSite=Lax` cookie。
 
@@ -235,15 +240,21 @@ apps/admin-web/
 - **导出回放包**：`GET /api/games/:gameId/replay-bundle`（operator+）返回自包含、离线可确定性重演的 `ReplayBundle`（含 settings/seating/names/snapshot/actions），供申诉取证下载。
 - **统一契约**：Admin 回放播放器与导出共用同一 bundle；玩家侧 BL-024 导出 UI 待补期间，Admin 导出即为运营即时取证通道。
 
-### 10.2 BL-023 客户端诊断包受理（**二期**）
-- Admin 新增「诊断包受理/解析」面：运营粘贴玩家复制的诊断包 JSON（`{errors:[{at,msg,stack,ctx,ring}]}`）→ 结构化展示（现场 ctx：screen/room/round/phase/cur/mySeat + 消息环 ring + 报错栈）→ 凭 `ctx.room`/`ctx.round` 一键跳「回放仲裁」定位对应局。
-- **纯解析、无上报管线**（低成本）；「客户端自动上报→入库→Admin 列表」为更重的后续档，涉及隐私/存储，另议。
+### 10.2 BL-023 客户端诊断包受理（**二期·进行中**，FR-Admin-09）
+- **入口**：admin-web 新页 `pages/Diag.tsx`（原型 `diag.html`，sider「诊断」组 operator+）：粘贴玩家「复制诊断包」得到的 `ac-diag` JSON。
+- **受理端点**：`POST /api/diag/intake`（operator+，带 CSRF）——admin-server 用 zod 校验并**规范化**：`{at, ctx{screen,room,round,phase,cur,mySeat}, ring[≤60], errors[≤5]{at,msg,stack,ctx,ring}}`；超限 ring/stack 截断并标 `truncated`，缺字段容错。响应 = 规范化结构 + 派生 `gameId`（`{room}-g{round}`，对齐现有回放 gameId 形态；round 缺则 null）。
+- **审计**：记一条 `diag.intake`（target=game/room，after 仅记 room/round/errors 数/truncated，**不落诊断包本体**——含玩家昵称/openid，避免敏感全文入库）。
+- **联动**：前端据 `gameId` 一键跳「回放仲裁」；room 有而 round 缺时跳房间详情。
+- **无上报管线、不落库诊断包本体**（纯受理/解析）；「客户端自动上报→入库→列表」为更重的后续档，涉隐私/存储，另议。
 
-### 10.3 BL-022 实时房间监控（**二期**，需受控跨系统调用）
-- **需求**：运营对 `status=playing` 的卡顿房，查看 `inspect()` 实时态（在等谁 / legalBySeat / stall.idleMs / seating 演示阶段）——这些是 game-server 内存态，MySQL 无。
-- **通道（已定：内网鉴权端点）**：game-server 暴露一个**内网、鉴权、只读**的 inspect 端点（如 `GET /internal/rooms/:id/inspect`，共享密钥/mTLS + 仅内网可达），admin-server **服务端**调用后转呈前端；不复用 dev-only 无鉴权 `/dev/*`（生产不开）。
-- **边界修订**：这是对「admin 不介入实时链路」的**受控例外**——仅只读、网络隔离、独立鉴权、调用记审计；admin 仍不持有 WS/RoomManager、不写实时态。见架构文档 §4 依赖规则修订。
-- **降级**：game-server 不可达/房已回收时，回退展示 MySQL 已落库事实（rooms.status/member_scores）并标注「实时态不可用」。
+### 10.3 BL-022 实时房间监控（**二期·进行中**，FR-Admin-10，受控跨系统调用）
+- **需求（上帝全知视角）**：运营对 `status=playing` 卡顿房如上帝俯瞰牌局——查 `RoomActor.inspect()` 的**实时全量台态**（牌墙实牌 / 四家暗牌 / 牌河 / 副露花子分 / 在等谁 / 响应意图）+ 运维摘要（legalBySeat / stall.idleMs / seating / timers）。game-server 单实例进程内存态，MySQL 无。
+- **game-server 侧（inspect 扩全量 + 新内部端点）**：① `RoomActor.inspect()` 由「运维摘要」**扩展携带完整 `state: TableState`**（`wall` / `players[].{concealed,melds,flowers,zi,score}` / `discards` / `pending` / `lastDiscard` / `currentSeat` / `dealerSeat` / `phase` / `round`）；纯只读投影，不含令牌/seed（wall 已 materialize）。② 新增**内网 + 预共享密钥 + 只读** HTTP 端点（独立于 dev-only 无鉴权 `/dev/*`）：`GET /internal/rooms/:id/inspect` → `RoomActor.inspect()`（房不存在 404）；鉴权校验请求头 `x-internal-token` == 环 `INTERNAL_TOKEN`（不符 401）；监听 `INTERNAL_PORT`（默认 8085）、仅内网可达。只读无副作用：仅调 `inspect()`，不触 WS/RoomManager 写路径、不影响对局。
+- **admin-server 侧（服务端代理）**：`lib/gameInspect.ts` 用 `GAME_INTERNAL_URL`+`INTERNAL_TOKEN` 服务端 fetch 内部端点（超时/不重试或有限重试）；路由 `GET /api/monitor/rooms/:roomId`（operator+）转呈。**审计节流**：`monitor.inspect` 仅在「开启监控 / 手动刷新」时记一条（who/room/result），**自动轮询不逐条记**（避免 2s 轮询刷屏）。**密钥只在服务端，绝不下发前端**。
+- **admin-web 侧（复用回放牌桌 · 游戏同款贴图）**：`pages/Monitor.tsx` **复用回放页牌桌俯视图**——抽共享 `<TableBoard state={TableState}>`（Replay/Monitor 两页共用，与回放全信息一致，见 §6），牌面用**游戏同款贴图**（`public/tiles/*.png`）；牌桌布局**对齐 game.html**：四家手牌**横排**（西/东亦横排、窄单元内换行 2 排，不再竖排、便于一眼读）、**弃牌按家分区**（北弃上/南弃下横排、西弃左/东弃右、中央信息块 = 牌墙剩余/当前座/phase）+ 副露 + **花牌独立区**（每家花牌从手牌移出、单列 `.flower-area` 金牌边小盒，取自 `PlayerState.flowers` 独立字段，对齐 game.html）+ 子/分 + 当前座高亮（`pinfo` 玩家条 + active-glow）+ 独立牌墙实牌区；**CSS 网格 3×3** 布局（`grid-template-areas` 杜绝重叠）+ `min-width` 兜底。右栏运维摘要（在等谁 / stall / pending / timers / seating）。**实时机制 = 快照轮询 ~2s**（admin 不持 WS、非推送动画流）：每次拉全量台态整桌重渲染、跟随牌局推进。现有 `Replay.tsx` 一并升级为贴图 + 同布局。
+- **降级**：game-server 不可达 / 房已回收 / 非 playing → 响应 `{available:false, fallback:{rooms.status/member_scores 已落库事实}}`，前端牌桌区标注「实时台态不可用」；审计 result=fail。
+- **边界（受控例外）**：对「admin 不介入实时链路」的**受控只读例外**——仅只读、网络隔离、独立预共享密钥、调用记审计；admin 仍不持有 WS/RoomManager、不写实时态。见架构 §4 依赖规则修订。
+- **单实例约束**：`RoomManager` 房间态在单进程内存（多实例路由未接线），故内部端点须由**持有该房的 game-server 进程**提供；当前单实例直连即可，多实例需路由层（不在本次范围）。
 
 ---
 
@@ -256,3 +267,12 @@ apps/admin-web/
 | 2026-09-21 | **P2-a 数据层落地**（编码）：`buildReplayBundle` 已下沉 `persistence/src/replayBundle.ts`（入参收窄 `ReplaySource`）、game-server `diag.ts`/`wsGateway.ts` 改引 persistence；新增 `persistence/src/admin/`（schema/gameSchema/types/adminStore/gameQueries/index）与 `createAdminPersistence`；`drizzle-kit generate` 产出 `drizzle/0000_admin_init.sql`（三表）；admin.integration.test（DB_IT 门控）。门禁：typecheck 全 Done / engine179 client-core100 game-server115 persistence8+7skip / persistence build 声明产出正常。§3.1-3.4 写实至实现 |
 | 2026-09-21 | **P2-a admin-server 脚手架落地**（编码）：新建 `apps/admin-server`（Fastify 5 + @fastify/cookie/session(Redis store)/csrf-protection/rate-limit + zod）；`buildApp(deps)` 依赖注入；lib（password scrypt / rbac / sessionStore / audit / errors / replay / query）+ routes（auth/users/rooms/games[含回放帧·导出包·仲裁]/admins/audit）；index.ts bootstrap 超管 + 优雅退出；.env.example。inject 集成测 8 例全绿（健康/登录成败/401/RBAC 403·200/回放帧/导出包权限/仲裁+审计）。门禁：全量 typecheck 6 包 Done / test engine179 persistence8+7skip client-core100 admin-server8 game-server117 / build 4 包 Done。§2.1 写实至实现 |
 | 2026-09-21 | **P2-a admin-web 脚手架落地**（编码）：新建 `apps/admin-web`（Vite 6 + React 18 + AntD 5 + TanStack Query v5 + Zustand + React Router 6）；`api/`（types / client[带 CSRF] / hooks）+ `store/auth` + `layout/AppLayout`（固定深色侧栏、分组菜单按角色渲染）+ `pages/`（Login/Users/Rooms/Replay/Admins/Audit 6 页，**对局并入 Rooms**、无独立 Games 页）+ `theme.ts`/`index.css` 对齐原型 token；**回放播放器内聚 `pages/Replay.tsx`**（逐帧游标 + 动作序列点选 + 仲裁录入 + 导出回放包），牌面用 **Unicode 麻将牌区**（非 tiles 贴图、不单列 `components/replay/`）。后端收尾：users 剥离 passHash、`/me` 补发 csrfToken（供刷新后写操作）。门禁：全量 typecheck **7 项目** Done / test engine179·persistence8+7skip·client-core100·admin-server8·game-server117 / build 全 Done（**admin-web vite build** 产出 dist）。§2.2/§6 写实至实现；**users.html / rooms.html 原型同批对齐**（用户表移除每行 房间数/对局数/累计台数 并入抽屉、房间详情改抽屉；累计台数/赢家台数/仲裁标记/玩法参数等富字段标注归 **P2-b** 聚合，P2-a 只读镜像不算聚合） |
+| 2026-09-21 | **顶栏移除「内网 · 只读一期」环境标**（UI 微调）：用户反馈该标签置于顶栏不妥，`AppLayout.tsx` Header 去掉该 `Tag`（并移除未用的 `Tag` 引入）；同批删 `users.html`/`rooms.html` 原型的 `.env-tag` 与 `admin.css` 的 `.env-tag` 死样式；§2.2 Header 描述同步去「env」。admin-web typecheck/build 复核绿；vite dev HMR 即时生效、无需重启 |
+| 2026-09-21 | 同步 BL-015 Admin 后台本地启动文档：§8 增加 `run/start-admin.sh` 一键启动入口，并指向联机架构方案 §10.5 的前置配置、迁移、日志选项与排障说明；本次仅改文档，不变更运行行为 |
+| 2026-09-21 | **二期技术方案（FR-Admin-09/10）**：用户拍板二期先只做这两项。决策：FR-Admin-10 端点鉴权=预共享密钥 header（`INTERNAL_TOKEN`）、FR-Admin-09 解析=后端 POST 受理。§5 API 表新增 `POST /api/diag/intake`（O）与 `GET /api/monitor/rooms/:roomId`（O）+ game-server 内部 `GET /internal/rooms/:id/inspect`（不属 /api、仅内网）；§8 补 admin `GAME_INTERNAL_URL`/`INTERNAL_TOKEN` 与 game-server `INTERNAL_TOKEN`/`INTERNAL_PORT`；§10.2 写实诊断包 `{at,ctx,ring≤60,errors≤5}` zod 规范化+截断+派生 gameId+`diag.intake` 审计（不落本体）；§10.3 写实 game-server 内网鉴权只读端点 + admin `lib/gameInspect.ts` 服务端代理 + `monitor.inspect` 审计 + 不可达降级 MySQL 事实 + 单实例约束。同步架构 §4 受控例外与《可维护性与诊断》§5 |
+| 2026-09-21 | **FR-Admin-10 升级「上帝全知视角」**（文档折回）：§10.3 需求改为实时全量台态；game-server 侧 `inspect()` 扩展携带完整 `state: TableState`（wall 实牌 / players concealed·melds·flowers·zi·score / discards / pending，纯只读投影、不含 seed）；新增 admin-web 侧 bullet——`pages/Monitor.tsx` 复用回放牌桌俯视图、抽共享 `<TableBoard>`（补齐牌墙实牌渲染，现有 Replay.tsx 仅渲染 wall.length）；§5 API 表 `/api/monitor` 响应标注含全量 state。决策：牌墙未来摸牌顺序全量展示、复用回放俯视图。同批 PRD §2.1 + monitor.html 原型 + 可维护性 §6 |
+| 2026-09-21 | **牌面贴图化 + 实时口径**（文档折回#2）：用户要求监控/回放牌面用游戏同款图案风格。查实牌面为 44 张独立 PNG（`client/ac-majong/assets/resources/tiles` 与原型 `res/tiles`），且**架构 §6.2 原本就要求「复用牌面贴图」**——与本方案 §6/§2.2 当初选的 Unicode 相矛盾，本批回归贴图。§2.2/§6 将牌面渲染由 **Unicode 麻将牌区 → 游戏同款贴图**（拷入 `admin-web/public/tiles/`、TileId→文件名映射内复刻、回放/监控共享 `<TableBoard>`）；§10.3 admin-web 侧改为贴图渲染 + **实时机制定为快照轮询 ~2s**（admin 不持 WS、非推送）、admin-server 侧补**审计节流**（开启监控/手动刷新记一条、自动轮询不逐条记）。决策：监控页+回放页**统一贴图**、实时**快照轮询 ~2s**。同批重做 monitor.html + replay.html 原型（贴图渲染）+ PRD §2.1 + 架构 §6.2 |
+| 2026-09-22 | **牌桌布局对齐游戏（用户批注）**（文档折回#3）：用户批注要求 ① 西/东家手牌（含碰吃杠）横过来（竖排占空间、难一眼读）② 弃牌区参考游戏按家分区（非单一总牌河）。§10.3 admin-web 侧 `<TableBoard>` 布局写实为：四家手牌全横排（西/东窄单元内换行 2 排）、弃牌按家分区（北弃上/南弃下横排、西弃左/东弃右、中央信息块）、CSS 网格 3×3 + `min-width` 兜底防重叠。同批重做 monitor.html + replay.html 原型（浏览器视觉核验 0 重叠/0 溢出/贴图正常）+ PRD §2.1 |
+| 2026-09-22 | **牌桌·花牌独立区（用户批注）**（文档折回#4）：每家花牌从手牌移出、单列 `.flower-area`（金牌边小盒，对齐 game.html；取自 `PlayerState.flowers` 独立字段——花牌摸到即亮出补牌、本就不属打牌手牌）。§10.3 admin-web `<TableBoard>` 布局补花牌独立区。同批修 monitor.html（四家均补花牌区）+ replay.html（北/南补花牌区演示）原型 + PRD §2.1 |
+| 2026-09-22 | **FR-Admin-10 编码落地（c2）**：按本节设计实现全链路——**game-server** `inspect()` 扩全量 `state:TableState`+`gameId`、新增内网 `GET /internal/rooms/:id/inspect`（`internal.ts`：`x-internal-token`==`INTERNAL_TOKEN` 常量时间比较、`INTERNAL_PORT` 默认 8085、仅配 `INTERNAL_TOKEN` 时启动、只读不碰写链）；**admin-server** `config` 加 `GAME_INTERNAL_URL`/`INTERNAL_TOKEN`、`lib/gameInspect.ts`（服务端 fetch+3s 超时、密钥不下发）、`routes/monitor.ts`（`GET /api/monitor/rooms/:roomId` operator+、审计节流 `?audit=1`、降级 `{available:false,fallback}`）、`deps`+`app` 注入注册；**admin-web** 拷 44 贴图入 `public/tiles/`、`components/tiles.ts`（复刻 TileAtlas 映射）、共享 `components/<TableBoard>`（`variant`：monitor=pinfo 富玩家条 / replay=name 简标签，各自忠实还原对应原型；`WallStrip` 独立导出供监控上帝视角牌墙实牌序）、`pages/Monitor.tsx`（`useMonitorRoom` 2s 轮询+审计节流）、重构 `Replay.tsx` 复用 `<TableBoard>`（移除 Unicode 牌桌）。**测试**：game-server `internal.test.ts`（401/200/404）+ diag inspect 断言扩全量态、admin-server monitor 4 用例（403/降级/可用/审计节流）。**全量门禁绿**（typecheck 7 / test 全过 / build 全过），未碰对局链路。实现备注：`gameId` 仅在注入 hooks（生产）时由 `beginGame` 赋值。 |
+| 2026-09-22 | **FR-Admin-09 编码落地（c1）**：按 §10.2 实现——**admin-server** 新建 `routes/diag.ts`（`POST /api/diag/intake` operator+ + CSRF、zod 规范化 `{at,ctx,ring,errors}`：ring 取最近 ≤60、errors ≤5、stack>4000/msg>500 截断标 `truncated`、缺字段容错、派生 `gameId={room}-g{round}`）、`withAudit` 记 `diag.intake`（after 仅 room/round/errors数/ring数/truncated，**不落本体**）、app 注册；**admin-web** 新建 `pages/Diag.tsx`（对照 diag.html：粘贴→受理并解析/填入示例/清空→现场 ctx Descriptions + 跳回放/房间 + 消息环 tag + 报错表展开栈）+ `useDiagIntake` hook + DTO + 路由/侧栏「诊断」组接入。**测试**：admin-server +4 用例（viewer 403 / 规范化截断+gameId / round 缺→gameId null / 审计只记摘要不落本体）。**同批修正** PRD §2.1 `gameId={room}:g{round}` 冒号笔误 → 连字符（与原型 diag.html `212817-g2` 及 beginGame 真实形态一致）。全量门禁绿。 |

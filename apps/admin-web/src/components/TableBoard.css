@@ -1,0 +1,73 @@
+/* 共享牌桌 <TableBoard>（回放 / 实时监控复用）：游戏同款绿呢俯视图 + 贴图牌面 + 四家横排手牌 + 弃牌按家分区 + 花牌独立区。
+   1:1 对齐高保真原型 admin/monitor.html + admin/replay.html；所有选择器 scope 在 .table-board 下，避免与 AntD/全局样式冲突。
+   --mono 复用 index.css :root 定义；--primary 此处补齐（AntD 主色）。 */
+.table-board { --primary: #1677ff; }
+
+/* ===== 牌面：游戏同款贴图（tile-faces.html .tile 风格）===== */
+.table-board .tile { background:#fffdf5; border:1px solid #a08050; border-radius:3px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,.12);
+  flex-shrink:0; display:inline-flex; align-items:center; justify-content:center; margin:1px; }
+.table-board .tile img { display:block; width:100%; height:100%; object-fit:contain; }
+.table-board .tile.back { background:linear-gradient(to bottom,#f7f0dc 0%,#efe5c8 26%,#23538f 32%,#0d2857 100%); border-color:rgba(0,0,0,.35); }
+.table-board .tile.hit { outline:2px solid var(--primary); outline-offset:-1px; }
+.table-board .t-sm { width:30px; height:40px; }   /* 南/北家手牌 */
+.table-board .t-xs { width:22px; height:29px; }   /* 副露 · 牌墙 */
+.table-board .t-rv { width:16px; height:21px; }   /* 弃牌 · 花牌 */
+.table-board .t-side { width:18px; height:24px; } /* 西/东家横排手牌 */
+
+/* ===== 牌桌（CSS 网格 3×3：结构性防重叠 + min-width 兜底）===== */
+.table-board .board { background:radial-gradient(ellipse at center,#1a6b40,#0d4a2a); border:1px solid rgba(212,165,55,.15); border-radius:12px; padding:14px;
+  display:grid; grid-template-columns:auto minmax(228px,1fr) auto; grid-template-rows:auto auto auto;
+  grid-template-areas:"north north north" "west river east" "south south south";
+  gap:12px 18px; align-items:center; justify-items:center; min-height:400px; min-width:580px; }
+.table-board .board.replay { min-height:360px; }
+.table-board .seat { display:flex; flex-direction:column; align-items:center; gap:5px; min-width:0; }
+.table-board .seat-n { grid-area:north; } .table-board .seat-s { grid-area:south; }
+.table-board .seat-w { grid-area:west; }  .table-board .seat-e { grid-area:east; }
+.table-board .seat .hand { display:flex; flex-wrap:wrap; gap:1px; justify-content:center; }
+.table-board .seat-w .hand, .table-board .seat-e .hand { max-width:140px; }  /* 西/东横排、窄单元内换行 2 排 */
+.table-board .seat .melds { display:flex; gap:8px; justify-content:center; flex-wrap:wrap; }
+.table-board .meld-item { display:flex; flex-direction:column; align-items:center; gap:1px; }
+.table-board .meld-lbl { font-size:9px; color:#cfe6d6; letter-spacing:1px; }
+
+/* ===== 花牌独立区（对齐 game.html .flower-area）===== */
+.table-board .seat .exposed { display:flex; gap:8px; justify-content:center; align-items:center; flex-wrap:wrap; }
+.table-board .flower-area { display:flex; gap:3px; align-items:center; padding:2px 5px; background:rgba(255,245,230,.08); border-radius:6px; border:1px solid rgba(212,165,55,.14); }
+.table-board .flower-lbl { font-size:8px; color:#d4a537; letter-spacing:1px; }
+.table-board .seat.off .pinfo { opacity:.5; filter:grayscale(.6); }
+.table-board .seat.off .name { color:#8a939e; }
+
+/* ===== pinfo 富玩家条（监控 variant）===== */
+.table-board .pinfo { display:inline-flex; align-items:center; gap:5px; background:rgba(0,0,0,.55); border:1px solid rgba(212,165,55,.15);
+  border-radius:20px; padding:2px 10px 2px 2px; white-space:nowrap; backdrop-filter:blur(4px); }
+.table-board .pinfo .av { width:22px; height:22px; border-radius:50%; background:linear-gradient(135deg,#d4a537,#a87f1f); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; color:#3d1f0d; flex-shrink:0; }
+.table-board .pinfo .nm { font-size:11px; color:#f5e6c8; font-weight:600; }
+.table-board .pinfo .sc { font-size:10px; color:#d4a537; font-weight:700; font-family:var(--mono); }
+.table-board .pinfo .zi { font-size:9px; color:#9bb0a2; font-family:var(--mono); border-left:1px solid rgba(212,165,55,.18); padding-left:5px; }
+.table-board .pinfo .bdg { font-size:9px; font-weight:700; padding:1px 5px; border-radius:6px; }
+.table-board .pinfo .bdg.dealer { color:#fff; background:#c0392b; border:1px solid #e8c76a; }
+.table-board .pinfo .bdg.bot { color:#04263f; background:#4a9eff; }
+.table-board .pinfo .bdg.off { color:#ccc; background:rgba(255,255,255,.14); }
+.table-board .pinfo.active { border-color:#d4a537; animation:tb-glow 1.8s ease-in-out infinite; }
+@keyframes tb-glow { 0%,100%{box-shadow:0 0 6px rgba(212,165,55,.2);} 50%{box-shadow:0 0 14px rgba(212,165,55,.45);} }
+
+/* ===== name 简标签（回放 variant）===== */
+.table-board .seat .name { color:#f5e6c8; font-size:12px; display:flex; gap:6px; align-items:center; justify-content:center; }
+.table-board .seat .name .badge { background:#d4a537; color:#3d1f0d; border-radius:3px; padding:0 4px; font-size:10px; font-weight:700; }
+.table-board .seat .name .badge.win { background:#c0392b; color:#fff; }
+
+/* ===== 中央分区牌河（对齐 game.html center-river：各家弃牌贴自己方位）===== */
+.table-board .river { grid-area:river; width:100%; display:flex; flex-direction:column; align-items:center; gap:6px; }
+.table-board .river-row { display:flex; flex-wrap:wrap; gap:2px; justify-content:center; }
+.table-board .river-mid { display:flex; align-items:center; justify-content:center; gap:6px; width:100%; }
+.table-board .river-side { display:flex; flex-wrap:wrap; gap:2px; width:66px; align-content:start; }
+.table-board .river-e { justify-content:flex-end; }
+.table-board .river-center { background:rgba(0,0,0,.3); border:1px solid rgba(212,165,55,.22); border-radius:8px; padding:6px 8px;
+  color:#cfe6d6; font-size:10px; text-align:center; line-height:1.7; min-width:64px; }
+.table-board .river-center b { color:#f5e6c8; font-family:var(--mono); }
+.table-board .river-tag { color:#8fa79a; font-size:9px; letter-spacing:1px; }
+
+/* ===== 牌墙实牌区（上帝视角：未来摸牌顺序全露）===== */
+.table-board .wall-strip { background:#0d4a2a; border-radius:8px; padding:10px 12px; }
+.table-board .wall-strip .cap { color:#cfe6d6; font-size:12px; margin-bottom:6px; }
+.table-board .wall-strip .cap b { color:#f5e6c8; font-family:var(--mono); }
+.table-board .tiles { display:flex; flex-wrap:wrap; }

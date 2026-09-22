@@ -361,7 +361,7 @@ export class LobbyScreen extends Screen {
 
   /** 建房弹层（还原 home.html 创建房间横屏双列弹层）：左=局数 2×2（主+副双行）；右=房间与玩法设置开关（BL-020 先看吃再碰默认开 + BL-017 两开关默认开）+ 创建并分享 + modal-hint */
   private openCreate(): void {
-    const m = uiModal('创建房间', { width: 720, height: 300 });
+    const m = uiModal('创建房间', { width: 720, height: 380 }); // BL-032：左列增时间档两行，加高
     const tip = uiLabel('选择局数上限', { size: 11, color: Theme.color.textMuted });
     tip.setParent(m.panel);
     tip.setPosition(-205, 104, 0);
@@ -422,6 +422,18 @@ export class LobbyScreen extends Screen {
     let chiFirstView = true;
     let physical = true;
     let breakDice = true;
+    // BL-032 时间档（左列局数下方）：思考 10/15/20/30 默认 15；响应 5/8/10/15 默认 8；服务端钳制到档位
+    let turnSec = 15;
+    let respSec = 8;
+    const segTitle = uiLabel('时间档（超时服务端代打）', { size: 10, color: Theme.color.textMuted });
+    segTitle.setParent(m.panel);
+    segTitle.setPosition(-205, -22, 0);
+    const rowT = this.makeSegRow('思考时间', '自己回合摸/打最长等待', [10, 15, 20, 30], turnSec, (v) => { turnSec = v; });
+    rowT.setParent(m.panel);
+    rowT.setPosition(-205, -46, 0);
+    const rowR = this.makeSegRow('响应时间', '吃/碰/杠/胡/过最长等待', [5, 8, 10, 15], respSec, (v) => { respSec = v; });
+    rowR.setParent(m.panel);
+    rowR.setPosition(-205, -86, 0);
     const rowPub = this.makePlayRow('公开房间', '开=进大厅列表可被发现；关=仅房号可入', isPublic, (on) => { isPublic = on; }, 340, 44);
     rowPub.setParent(m.panel);
     rowPub.setPosition(180, 84, 0);
@@ -441,13 +453,13 @@ export class LobbyScreen extends Screen {
     const status = uiLabel('', { size: 11, color: Theme.color.textSecondary });
     const statusLbl = status.getComponent(Label)!;
     status.setParent(m.panel);
-    status.setPosition(-205, -40, 0);
-    const submit = uiButton('创建并分享', () => void this.doCreate(rounds, { wallMode: physical ? 'physical' : 'random', breakDice, chiFirstView, isPublic }, m, statusLbl), { variant: 'primary', width: 240, height: 38, fontSize: 15 });
+    status.setPosition(-205, -120, 0);
+    const submit = uiButton('创建并分享', () => void this.doCreate(rounds, { wallMode: physical ? 'physical' : 'random', breakDice, chiFirstView, isPublic, turnSec, respSec }, m, statusLbl), { variant: 'primary', width: 240, height: 38, fontSize: 15 });
     submit.setParent(m.panel);
-    submit.setPosition(-205, -80, 0);
+    submit.setPosition(-205, -154, 0);
     const hint = uiLabel('创建后生成 6 位房间号，可分享微信好友', { size: 10, color: Theme.color.textMuted });
     hint.setParent(m.panel);
-    hint.setPosition(-205, -112, 0);
+    hint.setPosition(-205, -182, 0);
 
     m.root.setParent(this.node!);
   }
@@ -477,7 +489,51 @@ export class LobbyScreen extends Screen {
     return row;
   }
 
-  private async doCreate(maxRounds: number, settings: { wallMode: 'physical' | 'random'; breakDice: boolean; chiFirstView: boolean; isPublic: boolean }, m: Modal, statusLbl: Label): Promise<void> {
+  /** BL-032 时间档行（还原 home.html .play-row+.seg）：暗底金细边 + 名称/副文案左对齐双行 + 右侧分段 pill（组内互斥） */
+  private makeSegRow(name: string, sub: string, values: number[], initial: number, onChange: (v: number) => void): Node {
+    const w = 300;
+    const h = 36;
+    const row = uiPanel(w, h, { variant: 'panel', radius: Theme.radius.md });
+    row.name = `SegRow_${name}`;
+    const nameL = uiLabel(name, { size: 10.5, color: Theme.color.textPrimary, bold: true, align: 'left' });
+    nameL.setParent(row);
+    nameL.getComponent(UITransform)!.anchorX = 0;
+    nameL.setPosition(-w / 2 + 10, 7, 0);
+    const subL = uiLabel(sub, { size: 8, color: Theme.color.textMuted, align: 'left' });
+    subL.setParent(row);
+    subL.getComponent(UITransform)!.anchorX = 0;
+    subL.setPosition(-w / 2 + 10, -8, 0);
+    const pills: { node: Node; g: Graphics; lb: Label; v: number }[] = [];
+    const paint = (p: { g: Graphics; lb: Label }, sel: boolean): void => {
+      p.g.clear();
+      p.g.lineWidth = 1;
+      p.g.fillColor = sel ? new Color(212, 165, 55, 45) : new Color(0, 0, 0, 89);
+      p.g.strokeColor = sel ? Theme.color.gold : new Color(212, 165, 55, 64);
+      p.g.roundRect(-16, -11, 32, 22, 6);
+      p.g.fill();
+      p.g.stroke();
+      p.lb.color = sel ? Theme.color.goldLight : Theme.color.textSecondary;
+    };
+    values.forEach((v, i) => {
+      const node = new Node(`Seg_${v}`);
+      node.addComponent(UITransform).setContentSize(32, 22);
+      const g = node.addComponent(Graphics);
+      const lbNode = uiLabel(`${v}秒`, { size: 9, color: Theme.color.textSecondary, bold: true });
+      lbNode.setParent(node);
+      const p = { node, g, lb: lbNode.getComponent(Label)!, v };
+      paint(p, v === initial);
+      node.on(Node.EventType.TOUCH_END, () => {
+        onChange(v);
+        for (const x of pills) paint(x, x.v === v);
+      });
+      pills.push(p);
+      node.setParent(row);
+      node.setPosition(25 + i * 36, 0, 0);
+    });
+    return row;
+  }
+
+  private async doCreate(maxRounds: number, settings: { wallMode: 'physical' | 'random'; breakDice: boolean; chiFirstView: boolean; isPublic: boolean; turnSec: number; respSec: number }, m: Modal, statusLbl: Label): Promise<void> {
     statusLbl.string = '创建中…';
     statusLbl.color = Theme.color.textSecondary;
     try {

@@ -65,6 +65,18 @@ export class NetService {
       : p.serverNow;
   }
 
+  /** BL-032 gameView 服务端钟采样点（单调本地钟+服务端锚点，deadline 同步显示用） */
+  private viewClock: { server: number; local: number } | null = null;
+  sampleViewClock(serverNow?: number): void {
+    if (serverNow == null) return;
+    this.viewClock = { server: serverNow, local: this.monotonicNow() };
+  }
+  /** BL-032 按最近采样推算的当前服务端时刻；无采样回退本地墙钟 */
+  viewNow(): number {
+    const c = this.viewClock;
+    return c ? c.server + Math.max(0, this.monotonicNow() - c.local) : Date.now();
+  }
+
   /** 回前台请求当前权威快照，不补播后台错过的步骤。 */
   refreshRoom(): void {
     if (this.lastRoom && !this.reconnecting) this.client?.join(this.lastRoom);
@@ -284,6 +296,7 @@ export class NetService {
     this._profile = null;
     this.lastRoom = null;
     this.ceremonyClock = null;
+    this.viewClock = null;
     this.clearSession();
   }
 
@@ -329,10 +342,10 @@ export class NetService {
   pickSeat(seat: number, ceremonyToken?: CeremonyToken): void {
     this.client?.pickSeat(seat, ceremonyToken);
   }
-  /** 房主为空位放入 Bot 陪玩（FR-房间-08）；等待房间视图刷新后返回 */
-  async addBot(count = 1): Promise<RoomView> {
+  /** 房主为空位放入 Bot 陪玩（FR-房间-08）；BL-031：可指定打法 personaId（FR-AI-03）。等待房间视图刷新后返回 */
+  async addBot(count = 1, personaId?: string): Promise<RoomView> {
     if (!this.client) throw new Error('未连接');
-    this.client.addBot(count);
+    this.client.addBot(count, personaId);
     const m = await this.client.waitForNext((x) => x.t === 'roomView');
     return (m as Extract<ServerMsg, { t: 'roomView' }>).room;
   }
@@ -340,9 +353,22 @@ export class NetService {
   removeBot(seat: number): void {
     this.client?.removeBot(seat);
   }
+  /** BL-031（FR-AI-03）：房主改已添加 Bot 的打法；roomView 广播驱动刷新 */
+  updateBotPersona(seat: number, personaId: string): void {
+    this.client?.updateBotPersona(seat, personaId);
+  }
+  /** BL-031（FR-房间-12）：房主开局前改房间局数/玩法（开局后服务端拒绝）；roomView 广播驱动刷新 */
+  updateRoom(patch: { maxRounds?: number; settings?: Partial<RoomSettings> }): void {
+    this.client?.updateRoom(patch);
+  }
+  /** BL-031（FR-AI-04/10）：玩家预设自己掉线托管所用打法（个人级，持久化 FR-AI-11） */
+  setTrusteePersona(personaId: string): void {
+    this.client?.setTrusteePersona(personaId);
+  }
   /** 离开当前房间（回大厅）；保留连接与会话 */
   leave(): void {
     this.ceremonyClock = null;
+    this.viewClock = null;
     this.client?.leave();
     if (this.client) { this.client.view = null; this.client.room = null; } // 清陈旧视图缓存（BL-016：防重进切页误判）
   }

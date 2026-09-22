@@ -9,24 +9,43 @@
     .rp-meta { display:flex; gap:20px; flex-wrap:wrap; align-items:center; }
     .rp-meta .m { font-size:13px; color:var(--text-2); }
     .rp-meta .m b { color:var(--text); font-family:var(--mono); }
-    /* 牌面 */
-    .mtile { display:inline-flex; width:22px; height:30px; background:#fffef5; border:1px solid #d8c79a; border-bottom-width:2px;
-      border-radius:3px; align-items:center; justify-content:center; font-size:17px; line-height:1; color:#2b2b2b; margin:1px; }
-    .mtile.back { background:linear-gradient(145deg,#2f7d4f,#1c5c37); border-color:#174d2e; color:transparent; }
-    .mtile.hit { outline:2px solid var(--primary); }
+    /* 牌面：游戏同款贴图（与 monitor.html 共享 <TableBoard> 风格；tile-faces.html .tile） */
+    .tile { background:#fffdf5; border:1px solid #a08050; border-radius:3px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,.12);
+      flex-shrink:0; display:inline-flex; align-items:center; justify-content:center; margin:1px; }
+    .tile img { display:block; width:100%; height:100%; object-fit:contain; }
+    .tile.back { background:linear-gradient(to bottom,#f7f0dc 0%,#efe5c8 26%,#23538f 32%,#0d2857 100%); border-color:rgba(0,0,0,.35); }
+    .tile.back img { visibility:hidden; }
+    .tile.hit { outline:2px solid var(--primary); outline-offset:-1px; }
+    .t-sm { width:30px; height:40px; }   /* 南/北家手牌 */
+    .t-xs { width:22px; height:29px; }   /* 西/东家手牌 · 副露 */
+    .t-rv { width:16px; height:21px; }   /* 弃牌 */
+    .t-side { width:18px; height:24px; }   /* 西/东家横排手牌 */
     .tiles { display:flex; flex-wrap:wrap; }
-    /* 牌桌回放板 */
-    .board { background:radial-gradient(ellipse at center,#1a6b40,#0d4a2a); border-radius:12px; padding:16px; position:relative; min-height:360px; }
-    .seat { position:absolute; }
-    .seat .name { color:#f5e6c8; font-size:12px; margin-bottom:4px; display:flex; gap:6px; align-items:center; }
+    /* 牌桌回放板（对齐 game.html + 与 monitor.html 共享 <TableBoard>：四家横排 + 弃牌按家分区） */
+    .board { background:radial-gradient(ellipse at center,#1a6b40,#0d4a2a); border-radius:12px; padding:14px;
+      display:grid; grid-template-columns:auto minmax(228px,1fr) auto; grid-template-rows:auto auto auto;
+      grid-template-areas:"north north north" "west river east" "south south south";
+      gap:12px 18px; align-items:center; justify-items:center; min-height:360px; min-width:580px; }
+    .seat { display:flex; flex-direction:column; align-items:center; gap:5px; min-width:0; }
+    .seat .name { color:#f5e6c8; font-size:12px; display:flex; gap:6px; align-items:center; justify-content:center; }
     .seat .name .badge { background:#d4a537; color:#3d1f0d; border-radius:3px; padding:0 4px; font-size:10px; font-weight:700; }
-    .seat-n { top:12px; left:50%; transform:translateX(-50%); text-align:center; }
-    .seat-s { bottom:12px; left:50%; transform:translateX(-50%); text-align:center; }
-    .seat-w { left:14px; top:50%; transform:translateY(-50%); }
-    .seat-e { right:14px; top:50%; transform:translateY(-50%); text-align:right; }
-    .river { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:min(300px, 46%); }
-    .river .rt { background:rgba(0,0,0,.25); border-radius:8px; padding:8px; }
-    .river .rt .cap { color:#cfe6d6; font-size:11px; margin-bottom:4px; text-align:center; }
+    .seat-n { grid-area:north; } .seat-s { grid-area:south; }
+    .seat-w { grid-area:west; }  .seat-e { grid-area:east; }
+    .seat .hand { display:flex; flex-wrap:wrap; gap:1px; justify-content:center; }
+    .seat-w .hand, .seat-e .hand { max-width:140px; }
+    /* 花牌独立区（对齐 game.html .flower-area：花牌摸到即亮出补牌、不属打牌手牌） */
+    .seat .exposed { display:flex; gap:8px; justify-content:center; align-items:center; flex-wrap:wrap; }
+    .flower-area { display:flex; gap:3px; align-items:center; padding:2px 5px; background:rgba(255,245,230,.08); border-radius:6px; border:1px solid rgba(212,165,55,.14); }
+    .flower-lbl { font-size:8px; color:#d4a537; letter-spacing:1px; }
+    /* 中央分区牌河（对齐 game.html center-river：各家弃牌贴自己方位） */
+    .river { grid-area:river; width:100%; display:flex; flex-direction:column; align-items:center; gap:6px; }
+    .river-row { display:flex; flex-wrap:wrap; gap:2px; justify-content:center; }
+    .river-mid { display:flex; align-items:center; justify-content:center; gap:6px; width:100%; }
+    .river-side { display:flex; flex-wrap:wrap; gap:2px; width:66px; align-content:start; }
+    .river-e { justify-content:flex-end; }
+    .river-center { background:rgba(0,0,0,.3); border:1px solid rgba(212,165,55,.22); border-radius:8px; padding:6px 8px; color:#cfe6d6; font-size:10px; text-align:center; line-height:1.7; min-width:64px; }
+    .river-center b { color:#f5e6c8; font-family:var(--mono); }
+    .river-tag { color:#8fa79a; font-size:9px; letter-spacing:1px; }
     /* 控制条 */
     .ctrl { display:flex; align-items:center; gap:10px; padding:12px 16px; border-top:1px solid var(--split); }
     .ctrl .cb { width:34px; height:34px; border:1px solid var(--border); border-radius:var(--radius); background:#fff; cursor:pointer; font-size:15px; }
@@ -62,6 +81,9 @@
         <a class="menu-item" href="users.html"><span class="ico">👥</span> 用户管理</a>
         <a class="menu-item" href="rooms.html"><span class="ico">🚪</span> 房间 / 对局</a>
         <a class="menu-item active" href="replay.html"><span class="ico">▶️</span> 回放仲裁</a>
+        <div class="menu-group">诊断 <span class="role-hint" style="color:rgba(255,255,255,.3);border-color:rgba(255,255,255,.2)">operator</span></div>
+        <a class="menu-item" href="diag.html"><span class="ico">🩺</span> 诊断包受理 <span class="lock">🔒</span></a>
+        <a class="menu-item" href="monitor.html"><span class="ico">📡</span> 实时房间监控 <span class="lock">🔒</span></a>
         <div class="menu-group">系统 <span class="role-hint" style="color:rgba(255,255,255,.3);border-color:rgba(255,255,255,.2)">super</span></div>
         <a class="menu-item" href="admins.html"><span class="ico">🛡️</span> 管理员管理 <span class="lock">🔒</span></a>
         <a class="menu-item" href="audit.html"><span class="ico">📜</span> 审计日志 <span class="lock">🔒</span></a>
@@ -103,39 +125,39 @@
                 <div class="board">
                   <div class="seat seat-n">
                     <div class="name">北 · seat3 <span class="badge">Bot</span></div>
-                    <div class="tiles">
-                      <span class="mtile">🀇</span><span class="mtile">🀈</span><span class="mtile">🀉</span><span class="mtile">🀙</span><span class="mtile">🀚</span>
-                      <span class="mtile">🀐</span><span class="mtile">🀑</span><span class="mtile">🀒</span><span class="mtile">🀄</span><span class="mtile">🀅</span>
-                    </div>
+                    <div class="hand" data-size="t-sm" data-tiles="W1 W2 W3 B1 B2 T1 T2 T3 Z5 Z6"></div>
+                    <div class="exposed"><div class="flower-area"><span class="flower-lbl">花</span><span class="hand" data-size="t-rv" data-tiles="H5"></span></div></div>
                   </div>
                   <div class="seat seat-w">
                     <div class="name">西 · seat1</div>
-                    <div class="tiles" style="flex-direction:column">
-                      <span class="mtile">🀊</span><span class="mtile">🀋</span><span class="mtile">🀛</span><span class="mtile">🀜</span><span class="mtile">🀓</span>
+                    <div class="hand" data-size="t-side" data-tiles="W4 W5 B3 B4 T4"></div>
+                  </div>
+                  <!-- 中央分区牌河：北弃(顶) / 西弃(左) · 信息 · 东弃(右) / 南弃(底) -->
+                  <div class="river">
+                    <div class="river-tag">北 · seat3 弃</div>
+                    <div class="river-row" data-size="t-rv" data-tiles="Z7 T7"></div>
+                    <div class="river-mid">
+                      <div>
+                        <div class="river-tag" style="text-align:center">西 · seat1 弃</div>
+                        <div class="river-side river-w" data-size="t-rv" data-tiles="W8 B7"></div>
+                      </div>
+                      <div class="river-center">牌墙剩余 <b>62</b><br>结束 <b>win</b><br>赢家 <b>seat0</b></div>
+                      <div>
+                        <div class="river-tag" style="text-align:center">东 · seat2 弃</div>
+                        <div class="river-side river-e" data-size="t-rv" data-tiles="Z2 T1"></div>
+                      </div>
                     </div>
+                    <div class="river-tag">南 · seat0 弃</div>
+                    <div class="river-row" data-size="t-rv" data-tiles="B1! W1"></div>
                   </div>
                   <div class="seat seat-e">
                     <div class="name">东 · seat2 <span class="badge">庄</span></div>
-                    <div class="tiles" style="flex-direction:column;justify-content:flex-end">
-                      <span class="mtile">🀌</span><span class="mtile">🀍</span><span class="mtile">🀞</span><span class="mtile">🀔</span><span class="mtile">🀕</span>
-                    </div>
-                  </div>
-                  <div class="river">
-                    <div class="rt">
-                      <div class="cap">中央牌河（公开弃牌）· 剩牌墙 62</div>
-                      <div class="tiles" style="justify-content:center">
-                        <span class="mtile">🀆</span><span class="mtile">🀎</span><span class="mtile">🀟</span><span class="mtile">🀖</span>
-                        <span class="mtile hit">🀙</span><span class="mtile">🀁</span><span class="mtile">🀐</span><span class="mtile">🀇</span>
-                      </div>
-                    </div>
+                    <div class="hand" data-size="t-side" data-tiles="W6 W7 B6 T5 T6"></div>
                   </div>
                   <div class="seat seat-s">
-                    <div class="name" style="justify-content:center">南 · seat0（赢家）</div>
-                    <div class="tiles" style="justify-content:center">
-                      <span class="mtile">🀇</span><span class="mtile">🀇</span><span class="mtile">🀇</span><span class="mtile">🀈</span><span class="mtile">🀉</span>
-                      <span class="mtile">🀊</span><span class="mtile">🀋</span><span class="mtile">🀌</span><span class="mtile">🀙</span><span class="mtile">🀙</span>
-                      <span class="mtile hit">🀙</span><span class="mtile">🀀</span><span class="mtile">🀀</span><span class="mtile">🀀</span>
-                    </div>
+                    <div class="name">南 · seat0（赢家）</div>
+                    <div class="hand" data-size="t-sm" data-tiles="W1 W1 W1 W2 W3 W4 W5 W6 B1 B2 B1! Z1 Z1 Z1"></div>
+                    <div class="exposed"><div class="flower-area"><span class="flower-lbl">花</span><span class="hand" data-size="t-rv" data-tiles="H1 H2"></span></div></div>
                   </div>
                 </div>
               </div>
@@ -218,5 +240,29 @@
       </div>
     </div>
   </div>
+  <!-- 牌面渲染：TileId → res/tiles/<name>.png（与 monitor.html 同款，复刻 TileAtlas.ts 映射；'!'=高亮） -->
+  <script>
+    const WIND = { 1: 'wind_east', 2: 'wind_south', 3: 'wind_west', 4: 'wind_north' };
+    const DRAGON = { 5: 'dragon_zhong', 6: 'dragon_fa', 7: 'dragon_bai' };
+    const FLOWER = ['flower_spring', 'flower_summer', 'flower_autumn', 'flower_winter', 'flower_plum', 'flower_orchid', 'flower_bamboo', 'flower_chrys'];
+    function asset(id) {
+      const s = id.charAt(0), r = Number(id.slice(1));
+      if (s === 'W') return 'wan_' + r;
+      if (s === 'T') return 'tiao_green_' + r;
+      if (s === 'B') return 'tong_blue_' + r;
+      if (s === 'Z') return r <= 4 ? WIND[r] : DRAGON[r];
+      if (s === 'H') return FLOWER[r - 1];
+      return 'wan_1';
+    }
+    document.querySelectorAll('[data-tiles]').forEach((el) => {
+      const sz = el.dataset.size || 't-sm';
+      el.innerHTML = el.dataset.tiles.trim().split(/\s+/).map((tok) => {
+        if (tok === 'BACK') return '<span class="tile back ' + sz + '"></span>';
+        const hit = tok.endsWith('!') ? ' hit' : '';
+        const id = tok.replace('!', '');
+        return '<span class="tile ' + sz + hit + '"><img src="../res/tiles/' + asset(id) + '.png" alt="' + id + '"/></span>';
+      }).join('');
+    });
+  </script>
 </body>
 </html>

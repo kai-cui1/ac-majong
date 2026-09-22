@@ -1,12 +1,15 @@
+import { useCallback, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from './client';
 import type {
   AdminDTO,
   ArbitrationDTO,
   AuditDTO,
+  DiagIntakeResult,
   GameDTO,
   GameSummary,
   MemberEventDTO,
+  MonitorResponse,
   Page,
   ReplayData,
   RoomDTO,
@@ -72,6 +75,27 @@ export interface AuditQuery { adminId?: number; action?: string; targetType?: st
 export const useAudit = (params: AuditQuery) =>
   useQuery({ queryKey: ['audit', params], queryFn: () => api.get<Page<AuditDTO>>('/api/audit', params) });
 
+/**
+ * FR-Admin-10 实时房间监控：快照轮询 ~2s（admin 不持 WS、非推送）。
+ * 审计节流——仅「开启监控 / 手动刷新」记一条（换房首拉或 refreshWithAudit 带 ?audit=1），自动轮询不逐条记（避免 2s 刷屏）。
+ */
+export function useMonitorRoom(roomId: string | null, autoRefresh: boolean) {
+  const auditedRoom = useRef<string | null>(null);
+  const q = useQuery({
+    queryKey: ['monitor', roomId],
+    queryFn: () => {
+      const audit = auditedRoom.current !== roomId;
+      auditedRoom.current = roomId;
+      return api.get<MonitorResponse>(`/api/monitor/rooms/${enc(roomId!)}`, audit ? { audit: '1' } : undefined);
+    },
+    enabled: !!roomId,
+    refetchInterval: autoRefresh ? 2000 : false,
+    refetchOnWindowFocus: false,
+  });
+  const refreshWithAudit = useCallback(() => { auditedRoom.current = null; void q.refetch(); }, [q]);
+  return { data: q.data, isFetching: q.isFetching, error: q.error, refreshWithAudit };
+}
+
 /** 导出回放包（GET，带 cookie 触发浏览器下载；无需 CSRF） */
 export function downloadReplayBundle(gameId: string): void {
   window.location.assign(`/api/games/${enc(gameId)}/replay-bundle`);
@@ -115,3 +139,7 @@ export const useUpdateArbitration = () => {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['arbitrations'] }),
   });
 };
+
+/** FR-Admin-09 诊断包受理：POST 粘贴的 ac-diag JSON（已 JSON.parse），后端 zod 规范化 + 记审计（不落本体） */
+export const useDiagIntake = () =>
+  useMutation({ mutationFn: (pkg: unknown) => api.post<DiagIntakeResult>('/api/diag/intake', pkg) });

@@ -119,3 +119,48 @@ export interface ReplayData {
   };
   frames: ReplayFrame[];
 }
+
+/** FR-Admin-10 实时房间监控：game-server inspect() 全量台态（上帝全知视角），经 admin-server 内网代理转呈 */
+export interface MonitorInspect {
+  room: string;
+  phase: string;
+  maxRounds: number;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  settings: any;
+  names: Record<number, string>;
+  seats: ({ userId: string; isBot: boolean } | null)[];
+  gameId: string | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  state: any; // 完整 TableState 投影（牌墙实牌/四家暗牌/牌河/副露花子分/响应意图），Monitor.tsx 按 <TableBoard> BoardState 消费
+  game: { round: number; phase: string; currentSeat: number; wallLen: number; legalBySeat: unknown[] } | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  seating: any;
+  timers: { trusteePending: string[]; offlineSince: [string, number][]; seatingInputActive: boolean };
+  stall: { lastActionAt: number; idleMs: number };
+}
+/** 监控响应：可用=全量台态；不可用=降级为 MySQL 已落库事实（rooms.status / member_scores） */
+export type MonitorResponse =
+  | { available: true; roomId: string; inspect: MonitorInspect }
+  | { available: false; roomId: string; reason: string; fallback: { status: string; memberScores: Record<number, number> | null } | null };
+
+/** FR-Admin-09 诊断包受理：后端 zod 校验/规范化后回传的结构（不落诊断包本体） */
+export interface NormDiagError {
+  at: number | null;
+  msg: string | null;
+  stack: string | null;
+  stackTruncated: boolean;
+  ctx: Record<string, unknown> | null;
+  ring: string[];
+}
+export interface DiagIntakeResult {
+  at: number | null;
+  ctx: { screen: string | null; room: string | null; round: number | null; phase: string | null; cur: number | null; mySeat: number | null };
+  ring: string[];
+  ringTruncated: boolean;
+  errors: NormDiagError[];
+  errorsTruncated: boolean;
+  truncated: boolean;
+  /** 派生回放 gameId `{room}-g{round}`；room 或 round 缺则 null */
+  gameId: string | null;
+  room: string | null;
+}

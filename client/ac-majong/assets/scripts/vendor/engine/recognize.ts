@@ -33,7 +33,8 @@ function colorSuit(a: HandAnalysis): MatchedPattern[] {
     out.push(P('将一色'));
   if (a.suits.length === 1 && !a.hasHonor) out.push(P('清一色'));
   if (a.suits.length === 1 && a.hasHonor) out.push(P('混一色'));
-  if (a.suits.length >= 1 && a.suits.length <= 2) out.push(P('缺一门'));
+  // 缺一门（D-33，2026-09-22 用户确认）：数牌至多两门且**整手（含副露）无字牌**；有字不计
+  if (a.suits.length >= 1 && a.suits.length <= 2 && !a.hasHonor) out.push(P('缺一门'));
   return out;
 }
 
@@ -160,12 +161,24 @@ function menqingZimo(a: HandAnalysis, hand: Hand): MatchedPattern[] {
   return [];
 }
 
-/** 听牌型：独独 / 1独 / 对碰（全求人的单钓不计独独） */
-function waitType(hand: Hand, quanQiuren: boolean): MatchedPattern[] {
+/**
+ * 听牌型：独独 / 1独 / 对碰（全求人的单钓不计独独）。
+ * 八对半三种特殊听法（§2.3，2026-09-21 定案）按胡前暗牌中 winTile 的张数分类，不套标准型作将/卡张判据：
+ *  - 胡前1张（单张补对，6对＋1刻＋1单）→ 独独2台；
+ *  - 胡前2张（8对补第三张）或 3张（5对＋2刻补第四张）→ 1独1台。
+ */
+function waitType(hand: Hand, a: HandAnalysis, quanQiuren: boolean): MatchedPattern[] {
   const ready = { ...hand.concealed };
   const n = (ready[hand.winTile] ?? 0) - 1;
   if (n <= 0) delete ready[hand.winTile];
   else ready[hand.winTile] = n;
+
+  if (a.winKind === 'pairs8') {
+    const readyCount = ready[hand.winTile] ?? 0; // 胡前暗牌中 winTile 张数
+    if (readyCount <= 1) return [P('独独')]; // 型1：单张补对
+    return [P('1独')]; // 型2（=3，两刻补第四张）／型3（=2，八对补第三张）
+  }
+
   const wt = classifyWait(ready, hand.melds.length, hand.winTile);
   if (wt === '独独') return quanQiuren ? [] : [P('独独')];
   return wt ? [P(wt)] : [];
@@ -186,6 +199,6 @@ export function recognizePatterns(hand: Hand, a: HandAnalysis): MatchedPattern[]
     ...kongs(a),
     ...bonusWin(hand),
     ...menqingZimo(a, hand),
-    ...waitType(hand, quanQiuren),
+    ...waitType(hand, a, quanQiuren),
   ];
 }

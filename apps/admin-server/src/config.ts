@@ -20,6 +20,10 @@ export interface AdminConfig {
   rateLimit: boolean;
   /** 会话 cookie Secure 属性；同源 nginx HTTPS 用 'auto' + trustProxy */
   cookieSecure: boolean | 'auto';
+  /** FR-Admin-10：game-server 内网 inspect 端点基址（如 http://game-server:8085）；未配置则实时监控降级为已落库事实 */
+  gameInternalUrl?: string;
+  /** FR-Admin-10：内网预共享密钥（须与 game-server INTERNAL_TOKEN 一致）；只在服务端，绝不下发前端 */
+  internalToken?: string;
 }
 
 const num = (v: string | undefined, d: number): number => (v == null || v === '' ? d : Number(v));
@@ -42,5 +46,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AdminConfig {
     csrf: bool(env.CSRF_ENABLED, true),
     rateLimit: bool(env.RATE_LIMIT_ENABLED, true),
     cookieSecure: env.COOKIE_SECURE === '1' ? true : env.COOKIE_SECURE === '0' ? false : 'auto',
+    gameInternalUrl: env.GAME_INTERNAL_URL || undefined,
+    internalToken: env.INTERNAL_TOKEN || undefined,
   };
 }

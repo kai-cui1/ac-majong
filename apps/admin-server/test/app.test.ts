@@ -5,6 +5,7 @@ import { buildApp } from '../src/app';
 import type { AdminConfig } from '../src/config';
 import type { AppDeps } from '../src/deps';
 import type { ReplayService } from '../src/lib/replay';
+import type { GameInspect } from '../src/lib/gameInspect';
 import { hashPassword } from '../src/lib/password';
 
 const config: AdminConfig = {
@@ -26,6 +27,8 @@ let app: FastifyInstance;
 let audits: AuditRec[];
 let superCookie = '';
 let viewerCookie = '';
+// FR-Admin-10 可控监控 mock 状态：默认 enabled=false（降级）；用例切 enabled/payload 验证可用/降级/审计节流
+const monitorState = { enabled: false, payload: null as unknown };
 
 function cookieOf(res: { headers: Record<string, string | string[] | undefined> }): string {
   const sc = res.headers['set-cookie'];
@@ -76,7 +79,16 @@ beforeAll(async () => {
     bundle: async (gameId: string) => ({ v: 1, exportedAt: 0, room: { id: 'R1' }, game: { gameId }, snapshot: {}, actions: [], names: {} }),
   } as unknown as ReplayService;
 
-  const deps: AppDeps = { config, admin, game, replay };
+  // FR-Admin-10 监控代理：可控 mock（enabled=false → 抛错降级；用例切 monitorState 验证可用/降级/审计节流）
+  const monitor = {
+    get enabled() { return monitorState.enabled; },
+    inspect: async () => {
+      if (!monitorState.enabled) throw new Error('monitor_unreachable');
+      return monitorState.payload;
+    },
+  } as unknown as GameInspect;
+
+  const deps: AppDeps = { config, admin, game, replay, monitor };
   app = await buildApp({ deps });
 });
 
@@ -142,5 +154,88 @@ describe('admin-server 应用（inject · 假依赖）', () => {
     expect(ok.statusCode).toBe(200);
     expect(ok.json().status).toBe('resolved');
     expect(audits.some((a) => a.action === 'arbitration.create' && a.result === 'success')).toBe(true);
+  });
+
+  it('FR-Admin-10 监控：viewer → 403（需 operator+）', async () => {
+    expect((await app.inject({ method: 'GET', url: '/api/monitor/rooms/123456', headers: { cookie: viewerCookie } })).statusCode).toBe(403);
+  });
+
+  it('FR-Admin-10 监控：不可达/未配置 → 降级 available:false + fallback', async () => {
+    monitorState.enabled = false;
+    const r = await app.inject({ method: 'GET', url: '/api/monitor/rooms/123456', headers: { cookie: superCookie } });
+    expect(r.statusCode).toBe(200);
+    const b = r.json();
+    expect(b.available).toBe(false);
+    expect(b.reason).toBeTruthy();
+  });
+
+  it('FR-Admin-10 监控：可用 → available:true 转呈 inspect 全量台态', async () => {
+    monitorState.enabled = true;
+    monitorState.payload = { room: '123456', phase: 'playing', gameId: '123456-g1', names: {}, seats: [], state: { wall: ['W1'], players: [], discards: [] }, game: null, seating: null, timers: { trusteePending: [], offlineSince: [], seatingInputActive: false }, stall: { lastActionAt: 0, idleMs: 0 } };
+    const r = await app.inject({ method: 'GET', url: '/api/monitor/rooms/123456', headers: { cookie: superCookie } });
+    expect(r.statusCode).toBe(200);
+    const b = r.json();
+    expect(b.available).toBe(true);
+    expect(b.inspect.state.wall).toEqual(['W1']);
+    monitorState.enabled = false;
+  });
+
+  it('FR-Admin-10 监控：审计节流——?audit=1 记一条、自动轮询不记，降级 result=fail', async () => {
+    monitorState.enabled = false;
+    const count = (): number => audits.filter((a) => a.action === 'monitor.inspect').length;
+    const before = count();
+    await app.inject({ method: 'GET', url: '/api/monitor/rooms/123456', headers: { cookie: superCookie } });
+    expect(count()).toBe(before); // 无 audit：自动轮询不逐条记
+    await app.inject({ method: 'GET', url: '/api/monitor/rooms/123456?audit=1', headers: { cookie: superCookie } });
+    expect(count()).toBe(before + 1); // 开启/手动刷新记一条
+    expect(audits.filter((a) => a.action === 'monitor.inspect').pop()!.result).toBe('fail'); // 降级 → fail
+  });
+
+  it('FR-Admin-09 诊断包：viewer → 403（需 operator+）', async () => {
+    const r = await app.inject({ method: 'POST', url: '/api/diag/intake', headers: { cookie: viewerCookie }, payload: { at: 1, ctx: {}, ring: [], errors: [] } });
+    expect(r.statusCode).toBe(403);
+  });
+
+  it('FR-Admin-09 诊断包：受理规范化 + 派生 gameId + 截断标记', async () => {
+    const bigRing = Array.from({ length: 80 }, (_, i) => `msg:m${i}`);
+    const manyErrors = Array.from({ length: 8 }, (_, i) => ({ at: i, msg: `err ${i}`, stack: 'x'.repeat(5000) }));
+    const pkg = { at: 1758460867000, ctx: { screen: 'table', room: '212817', round: 2, phase: 'exhaustive', cur: 3, mySeat: 0 }, ring: bigRing, errors: manyErrors };
+    const r = await app.inject({ method: 'POST', url: '/api/diag/intake', headers: { cookie: superCookie }, payload: pkg });
+    expect(r.statusCode).toBe(200);
+    const b = r.json();
+    expect(b.gameId).toBe('212817-g2'); // 连字符，对齐 beginGame
+    expect(b.room).toBe('212817');
+    expect(b.ring).toHaveLength(60); // 截断至 60
+    expect(b.ring[59]).toBe('msg:m79'); // 取最近（尾部）
+    expect(b.ringTruncated).toBe(true);
+    expect(b.errors).toHaveLength(5); // 截断至 5
+    expect(b.errorsTruncated).toBe(true);
+    expect(b.errors[0].stackTruncated).toBe(true); // stack>4000 截断
+    expect(b.truncated).toBe(true);
+    expect(b.ctx.round).toBe(2);
+  });
+
+  it('FR-Admin-09 诊断包：round 缺 → gameId null（前端据 room 跳房间详情）', async () => {
+    const r = await app.inject({ method: 'POST', url: '/api/diag/intake', headers: { cookie: superCookie }, payload: { at: 1, ctx: { room: '212817' }, ring: [], errors: [] } });
+    expect(r.statusCode).toBe(200);
+    const b = r.json();
+    expect(b.gameId).toBe(null);
+    expect(b.room).toBe('212817');
+  });
+
+  it('FR-Admin-09 诊断包：记 diag.intake 审计（只记 room/round/errors 数，不落本体）', async () => {
+    const before = audits.filter((a) => a.action === 'diag.intake').length;
+    await app.inject({ method: 'POST', url: '/api/diag/intake', headers: { cookie: superCookie }, payload: { at: 1, ctx: { room: '999', round: 3 }, ring: ['view:table', 'msg:x'], errors: [{ at: 1, msg: 'boom' }] } });
+    const recs = audits.filter((a) => a.action === 'diag.intake');
+    expect(recs.length).toBe(before + 1);
+    const last = recs[recs.length - 1]!;
+    expect(last.result).toBe('success');
+    const after = last.afterJson as { room: string; round: number; errors: number; ring: number };
+    expect(after.room).toBe('999');
+    expect(after.round).toBe(3);
+    expect(after.errors).toBe(1);
+    // 不落本体：审计 after 不含 ring/errors 内容明细
+    expect(JSON.stringify(last.afterJson)).not.toContain('view:table');
+    expect(JSON.stringify(last.afterJson)).not.toContain('boom');
   });
 });

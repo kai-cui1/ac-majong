@@ -81,3 +81,49 @@ describe('听牌型分类（TC-18~TC-22，规格书 9.4）', () => {
     expect(classifyWait(ready, 4, 'B5')).toBe('对碰');
   });
 });
+
+describe('听牌型分类·单听优先新口径（TC-1D-01~06 + §9.5，规格书 9.4/9.5）', () => {
+  it('TC-1D-01 44556+99 胡6 → 不计1独（原有同牌不足为据）', () => {
+    const ready = { W4: 2, W5: 2, W6: 1, B9: 2 };
+    expect(waitingTiles(ready, 3).sort()).toEqual(['W3', 'W6']);
+    expect(classifyWait(ready, 3, 'W6')).toBe(null);
+  });
+  it('TC-1D-02 5678 胡5/胡8 → 均1独（新胡张作将）', () => {
+    const ready = { W5: 1, W6: 1, W7: 1, W8: 1 };
+    expect(waitingTiles(ready, 4).sort()).toEqual(['W5', 'W8']);
+    expect(classifyWait(ready, 4, 'W5')).toBe('1独');
+    expect(classifyWait(ready, 4, 'W8')).toBe('1独');
+  });
+  it('TC-1D-03 2345678 胡2/5/8 → 均1独（新胡张作将）', () => {
+    const ready = { W2: 1, W3: 1, W4: 1, W5: 1, W6: 1, W7: 1, W8: 1 };
+    expect(waitingTiles(ready, 3).sort()).toEqual(['W2', 'W5', 'W8']);
+    expect(classifyWait(ready, 3, 'W2')).toBe('1独');
+    expect(classifyWait(ready, 3, 'W5')).toBe('1独');
+    expect(classifyWait(ready, 3, 'W8')).toBe('1独');
+  });
+  it('TC-1D-04 56789+99 胡4/胡7 → 不计1独（须整手剩余成副）', () => {
+    const ready = { W5: 1, W6: 1, W7: 1, W8: 1, W9: 1, B9: 2 };
+    expect(waitingTiles(ready, 3).sort()).toEqual(['W4', 'W7']);
+    expect(classifyWait(ready, 3, 'W4')).not.toBe('1独');
+    expect(classifyWait(ready, 3, 'W7')).not.toBe('1独');
+  });
+  it('TC-1D-05 45+B33 胡W3/W6 → 不计1独（同点不同花色）', () => {
+    const ready = { W4: 1, W5: 1, B3: 2 };
+    expect(waitingTiles(ready, 4).sort()).toEqual(['W3', 'W6']);
+    expect(classifyWait(ready, 4, 'W3')).toBe(null);
+    expect(classifyWait(ready, 4, 'W6')).toBe(null);
+  });
+  it('TC-1D-06 单听双角色 4556999+123456+789 只听5万 → 独独（多摆法不升级）', () => {
+    const ready = { W4: 1, W5: 2, W6: 1, W9: 3, B1: 1, B2: 1, B3: 1, B4: 1, B5: 1, B6: 1, T7: 1, T8: 1, T9: 1 };
+    expect(waitingTiles(ready, 0)).toEqual(['W5']);
+    expect(classifyWait(ready, 0, 'W5')).toBe('独独');
+  });
+  it('§9.5 W1112233344+B123+T123 听W2/W3/W4/W5：胡W2→1独（卡张）、胡W3→1独（作将）、胡W4/W5→无附加（整手属1独型）', () => {
+    const ready = { W1: 3, W2: 2, W3: 3, W4: 2 };
+    expect(waitingTiles(ready, 2).sort()).toEqual(['W2', 'W3', 'W4', 'W5']);
+    expect(classifyWait(ready, 2, 'W2')).toBe('1独'); // 1(2)3+123+123+44 卡张见证
+    expect(classifyWait(ready, 2, 'W3')).toBe('1独'); // 111+234+234+33 将牌见证
+    expect(classifyWait(ready, 2, 'W4')).toBe(null); // 仅作刻第三张，且整手有卡张见证→不归对碰
+    expect(classifyWait(ready, 2, 'W5')).toBe(null); // 仅 W345 端部，无见证
+  });
+});

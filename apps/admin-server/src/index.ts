@@ -4,6 +4,7 @@ import { createLogger, setLogLevel } from './logger';
 import { buildApp } from './app';
 import { createRedisSessionStore } from './lib/sessionStore';
 import { createReplayService } from './lib/replay';
+import { createGameInspect } from './lib/gameInspect';
 import { hashPassword } from './lib/password';
 
 /**
@@ -30,7 +31,7 @@ async function main(): Promise<void> {
 
   const sessionHandle = config.redisUrl ? createRedisSessionStore(config.redisUrl, config.sessionTtlSec) : undefined;
   const app = await buildApp({
-    deps: { config, admin: p.admin, game: p.game, replay: createReplayService(p.game) },
+    deps: { config, admin: p.admin, game: p.game, replay: createReplayService(p.game), monitor: createGameInspect(config) },
     sessionStore: sessionHandle?.store,
   });
 

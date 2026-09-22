@@ -57,8 +57,8 @@
 | 能力 | Admin 集成 | 阶段 | 关键改动 |
 |---|---|---|---|
 | **BL-024 回放包** | 回放仲裁页「导出回放包」（申诉取证）与 Admin 回放器**共用同一 `ReplayBundle`** | **一期** | `buildReplayBundle` 从 `apps/game-server/src/diag.ts` **下沉 `@ac-majong/persistence`** 供 game/admin 共用（消除跨 app import）；dev `/dev/export/:gameId` 保留 |
-| **BL-023 诊断包** | 「诊断包受理/解析」面：粘贴 `ac-diag` JSON → 结构化展示（ctx/ring/stack）→ 凭 room/round 跳回放仲裁 | 二期 | 数据来源为现有 `__AC__.diag.copy()` / 玩家设置页「复制诊断包」；纯解析、无上报管线 |
-| **BL-022 实时观测** | 「实时房间监控」：卡顿 playing 房查 `inspect()` 实时态 | 二期 | game-server 新增**内网鉴权只读** inspect 端点（非 dev `/dev/*`）供 admin-server 服务端调用；停滞看门狗 warn 仍走服务端日志 |
+| **BL-023 诊断包** | 「诊断包受理」页（FR-Admin-09）：粘贴 `ac-diag` JSON → 后端 `POST /api/diag/intake` 规范化受理（记审计、不落本体）→ 结构化展示（ctx/ring/stack）→ 凭 room/round 派生 gameId 跳回放仲裁 | 二期·进行中 | 数据来源现有 `__AC__.diag.copy()` / 设置页「复制诊断包」；纯受理/解析、无上报管线 |
+| **BL-022 实时观测** | 「实时房间监控」页（FR-Admin-10，**上帝全知视角**）：卡顿 playing 房查 `inspect()` **实时全量台态**（牌墙实牌/四家暗牌/牌河/副露花子分/在等谁/响应意图），复用回放牌桌俯视图（共享 `<TableBoard>`）+ 不可达降级 MySQL 事实 | 二期·进行中 | `inspect()` 扩展携带完整 `state: TableState`（纯只读投影、不含 seed）；game-server 新增**内网预共享密钥只读** inspect 端点 `GET /internal/rooms/:id/inspect`（`x-internal-token`、`INTERNAL_PORT`，非 dev `/dev/*`）供 admin-server 服务端代理（`lib/gameInspect.ts`）+审计；停滞看门狗 warn 仍走服务端日志 |
 
 - **边界**：Admin 对游戏数据以**只读**为主（经 persistence / 内网鉴权端点），不写实时态、不持有 WS/RoomManager；BL-022 的内网鉴权端点为「admin 不介入实时链路」的**受控例外**（架构 §4）。
 
@@ -75,3 +75,5 @@
 | 2026-09-21 | BL-023 玩家出口落地：设置弹层「复制诊断包」（FR-设置-05，SettingsModal 增行+回显 2s）+ 原型 settings.html 同批；BL-024 玩家/仲裁导出 UI 改挂 Admin（BL-015），客户端不做入口 |
 | 2026-09-21 | **诊断包首战（BL-026 定位）**：用户报障附 `ac-diag` 包（screen=table/round=2/phase=exhaustive/ring 仅 view:exhaustive/errors 空）→ 免截图直接定位「结算浮层仅事件驱动、重入者无浮层看似卡死」；修复见 BL-026（网关§15/PRD06 FR-断线-07） |
 | 2026-09-21 | **BL-024 `buildReplayBundle` 下沉已执行**（Admin P2-a 编码第一步）：新增 `packages/persistence/src/replayBundle.ts` 并从 index 导出；game-server `diag.ts`/`wsGateway.ts` 改从 `@ac-majong/persistence` 引入（消除跨 app import）；BL-024 测试随包迁至 `persistence/test/replayBundle.test.ts`（diag.test 仅留 BL-022 4 例）。门禁：typecheck 全 Done / game-server 115 / persistence 8+3skip 全绿 |
+| 2026-09-21 | **二期开工（FR-Admin-09/10）**：§6 表 BL-023/BL-022 行转「二期·进行中」并写实具体机制——BL-023诊断包走后端 `POST /api/diag/intake` 规范化受理（记审计不落本体、派生 gameId 跳回放）；BL-022实时监控走 game-server 内网预共享密钥只读端点 `GET /internal/rooms/:id/inspect`（`x-internal-token`/`INTERNAL_PORT`）+ admin `lib/gameInspect.ts` 服务端代理 + 不可达降级。详 Admin 技术方案 §10.2/§10.3 |
+| 2026-09-21 | **FR-Admin-10 升级「上帝全知视角」**（文档折回）：§6 表 BL-022 行「Admin 集成」改为实时全量台态（牌墙实牌/四家暗牌/牌河/副露花子分/响应意图）、复用回放牌桌俯视图（共享 `<TableBoard>`）；关键改动补 `inspect()` 扩展携带完整 `state: TableState`（纯只读投影、不含 seed）。同批 PRD §2.1 + monitor.html 原型 + Admin 技术方案 §10.3 |

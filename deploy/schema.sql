@@ -19,6 +19,8 @@ CREATE TABLE IF NOT EXISTS rooms (
   member_scores  JSON        NULL,       -- {[seat]:score} 局中积分账本（每局末更新，BL-016 重进/重启恢复依据）
   settings       JSON        NULL,       -- BL-017 房间玩法参数 {wallMode,breakDice}
   seating        JSON        NULL,       -- BL-017 开局仪式日志（选位骰/选座/定庄骰/摸牌位骰）
+  bot_personas   JSON        NULL,       -- BL-031 {seat:personaId} Bot 打法（FR-AI-11 重进/重启恢复）
+  trustee_personas JSON      NULL,       -- BL-031 {userId:personaId} 托管打法预设（FR-AI-11）
   final_score    JSON        NULL,       -- {[seat]:score} 房间关闭定格（线下结算依据，D-32：不做账户余额）
   status         ENUM('idle','playing','closed') NOT NULL DEFAULT 'idle',
   created_at     DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
@@ -29,6 +31,7 @@ CREATE TABLE IF NOT EXISTS rooms (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 -- 存量库升级（BL-016）：ALTER TABLE rooms ADD COLUMN member_scores JSON NULL AFTER initial_score;
 -- 存量库升级（BL-017）：ALTER TABLE rooms ADD COLUMN settings JSON NULL AFTER member_scores, ADD COLUMN seating JSON NULL AFTER settings;
+-- 存量库升级（BL-031/FR-AI-11）：ALTER TABLE rooms ADD COLUMN bot_personas JSON NULL AFTER seating, ADD COLUMN trustee_personas JSON NULL AFTER bot_personas;
 -- 存量库升级（BL-017）：ALTER TABLE game_initial_states ADD COLUMN layout JSON NULL AFTER hands, ADD COLUMN break_group INT NULL AFTER layout;
 
 CREATE TABLE IF NOT EXISTS room_member_events (

@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AC 麻将 · Admin — 实时房间监控</title>
+  <link rel="stylesheet" href="admin.css">
+  <style>
+    /* ===== 牌面：游戏同款贴图（tile-faces.html .tile 风格）===== */
+    .tile { background:#fffdf5; border:1px solid #a08050; border-radius:3px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,.12);
+      flex-shrink:0; display:inline-flex; align-items:center; justify-content:center; margin:1px; }
+    .tile img { display:block; width:100%; height:100%; object-fit:contain; }
+    .tile.back { background:linear-gradient(to bottom,#f7f0dc 0%,#efe5c8 26%,#23538f 32%,#0d2857 100%); border-color:rgba(0,0,0,.35); }
+    .tile.back img { visibility:hidden; }
+    .tile.hit { outline:2px solid var(--primary); outline-offset:-1px; }
+    .t-sm { width:30px; height:40px; }   /* 南/北家手牌 */
+    .t-xs { width:22px; height:29px; }   /* 西/东家手牌 · 副露 · 牌墙 */
+    .t-rv { width:16px; height:21px; }   /* 弃牌 */
+    .t-side { width:18px; height:24px; }   /* 西/东家横排手牌 */
+    /* ===== 牌桌（游戏同款绿呢俯视图 · 对齐 game.html：四家横排 + 弃牌按家分区）===== */
+    .board { background:radial-gradient(ellipse at center,#1a6b40,#0d4a2a); border:1px solid rgba(212,165,55,.15); border-radius:12px; padding:14px;
+      display:grid; grid-template-columns:auto minmax(228px,1fr) auto; grid-template-rows:auto auto auto;
+      grid-template-areas:"north north north" "west river east" "south south south";
+      gap:12px 18px; align-items:center; justify-items:center; min-height:400px; min-width:580px; }
+    .seat { display:flex; flex-direction:column; align-items:center; gap:5px; min-width:0; }
+    .seat-n { grid-area:north; } .seat-s { grid-area:south; }
+    .seat-w { grid-area:west; }  .seat-e { grid-area:east; }
+    .seat .hand { display:flex; flex-wrap:wrap; gap:1px; justify-content:center; }
+    .seat-w .hand, .seat-e .hand { max-width:140px; }        /* 西/东横排、窄单元内换行 2 排，一眼可读 */
+    .seat .melds { display:flex; gap:8px; justify-content:center; flex-wrap:wrap; }
+    .meld-item { display:flex; flex-direction:column; align-items:center; gap:1px; }
+    .meld-lbl { font-size:9px; color:#cfe6d6; letter-spacing:1px; }
+    /* 花牌独立区（对齐 game.html .flower-area：花牌摸到即亮出补牌、不属打牌手牌） */
+    .seat .exposed { display:flex; gap:8px; justify-content:center; align-items:center; flex-wrap:wrap; }
+    .flower-area { display:flex; gap:3px; align-items:center; padding:2px 5px; background:rgba(255,245,230,.08); border-radius:6px; border:1px solid rgba(212,165,55,.14); }
+    .flower-lbl { font-size:8px; color:#d4a537; letter-spacing:1px; }
+    .seat.off .pinfo { opacity:.5; filter:grayscale(.6); }
+    /* pinfo 玩家条（游戏同款） */
+    .pinfo { display:inline-flex; align-items:center; gap:5px; background:rgba(0,0,0,.55); border:1px solid rgba(212,165,55,.15);
+      border-radius:20px; padding:2px 10px 2px 2px; white-space:nowrap; backdrop-filter:blur(4px); }
+    .pinfo .av { width:22px; height:22px; border-radius:50%; background:linear-gradient(135deg,#d4a537,#a87f1f); display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; color:#3d1f0d; flex-shrink:0; }
+    .pinfo .nm { font-size:11px; color:#f5e6c8; font-weight:600; }
+    .pinfo .sc { font-size:10px; color:#d4a537; font-weight:700; font-family:var(--mono); }
+    .pinfo .zi { font-size:9px; color:#9bb0a2; font-family:var(--mono); border-left:1px solid rgba(212,165,55,.18); padding-left:5px; }
+    .pinfo .bdg { font-size:9px; font-weight:700; padding:1px 5px; border-radius:6px; }
+    .pinfo .bdg.dealer { color:#fff; background:#c0392b; border:1px solid #e8c76a; }
+    .pinfo .bdg.bot { color:#04263f; background:#4a9eff; }
+    .pinfo .bdg.off { color:#ccc; background:rgba(255,255,255,.14); }
+    .pinfo.active { border-color:#d4a537; animation:glow 1.8s ease-in-out infinite; }
+    @keyframes glow { 0%,100%{box-shadow:0 0 6px rgba(212,165,55,.2);} 50%{box-shadow:0 0 14px rgba(212,165,55,.45);} }
+    /* ===== 中央分区牌河（对齐 game.html center-river：各家弃牌贴自己方位）===== */
+    .river { grid-area:river; width:100%; display:flex; flex-direction:column; align-items:center; gap:6px; }
+    .river-row { display:flex; flex-wrap:wrap; gap:2px; justify-content:center; }
+    .river-mid { display:flex; align-items:center; justify-content:center; gap:6px; width:100%; }
+    .river-side { display:flex; flex-wrap:wrap; gap:2px; width:66px; align-content:start; }
+    .river-e { justify-content:flex-end; }
+    .river-center { background:rgba(0,0,0,.3); border:1px solid rgba(212,165,55,.22); border-radius:8px; padding:6px 8px;
+      color:#cfe6d6; font-size:10px; text-align:center; line-height:1.7; min-width:64px; }
+    .river-center b { color:#f5e6c8; font-family:var(--mono); }
+    .river-tag { color:#8fa79a; font-size:9px; letter-spacing:1px; }
+    /* 牌墙实牌区 */
+    .wall-strip { background:#0d4a2a; border-radius:8px; padding:10px 12px; }
+    .wall-strip .cap { color:#cfe6d6; font-size:12px; margin-bottom:6px; }
+    @media (max-width:1280px){ .mn-cols{flex-direction:column;} .mn-side{width:100%!important;} }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside class="sider">
+      <div class="sider-logo"><div class="tile" style="width:auto;height:auto;background:none;border:none;box-shadow:none">🀄</div><div class="txt">AC 麻将<small>管理后台</small></div></div>
+      <nav class="menu">
+        <div class="menu-group">查证</div>
+        <a class="menu-item" href="users.html"><span class="ico">👥</span> 用户管理</a>
+        <a class="menu-item" href="rooms.html"><span class="ico">🚪</span> 房间 / 对局</a>
+        <a class="menu-item" href="replay.html"><span class="ico">▶️</span> 回放仲裁</a>
+        <div class="menu-group">诊断 <span class="role-hint" style="color:rgba(255,255,255,.3);border-color:rgba(255,255,255,.2)">operator</span></div>
+        <a class="menu-item" href="diag.html"><span class="ico">🩺</span> 诊断包受理 <span class="lock">🔒</span></a>
+        <a class="menu-item active" href="monitor.html"><span class="ico">📡</span> 实时房间监控 <span class="lock">🔒</span></a>
+        <div class="menu-group">系统 <span class="role-hint" style="color:rgba(255,255,255,.3);border-color:rgba(255,255,255,.2)">super</span></div>
+        <a class="menu-item" href="admins.html"><span class="ico">🛡️</span> 管理员管理 <span class="lock">🔒</span></a>
+        <a class="menu-item" href="audit.html"><span class="ico">📜</span> 审计日志 <span class="lock">🔒</span></a>
+      </nav>
+    </aside>
+
+    <div class="main">
+      <header class="header">
+        <div class="crumb">诊断 / <b>实时房间监控</b></div>
+        <div class="spacer"></div>
+        <div class="who"><span class="avatar">R</span> admin_root · <b>super</b> · <a href="login.html">登出</a></div>
+      </header>
+
+      <div class="content">
+        <h1 class="page-title">实时房间监控</h1>
+        <p class="page-desc">对 <span class="mono">status=playing</span> 房，经 game-server <b>内网预共享密钥只读 inspect 端点</b>抓进程内存 <b>实时全量台态</b>——<b>上帝全知视角</b>：<b>游戏同款牌面贴图 + 对齐游戏牌桌布局</b>（四家横排手牌全露、弃牌按家分区、牌墙实牌顺序、副露花子分、在等谁、响应意图），等同「一帧活的回放」，与回放页共享 <span class="mono">&lt;TableBoard&gt;</span>。<b>快照轮询 ~2s</b> 跟随牌局推进；<b>operator+</b>、只读、每次监控记审计；不可达时<b>降级</b>展示 MySQL 已落库事实。</p>
+
+        <!-- 查询条 -->
+        <div class="card"><div class="card-body">
+          <div class="toolbar">
+            <div class="field"><label>房号</label><input class="input" placeholder="212817" value="212817"></div>
+            <button class="btn btn-primary">查实时态</button>
+            <label class="muted" style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" checked> 自动刷新 2s</label>
+            <div class="grow"></div>
+            <span class="tag tag-green"><span class="dot dot-green"></span>实时态可用</span>
+            <span class="muted mono">抓取于 20:41:07</span>
+          </div>
+        </div></div>
+
+        <div class="row mn-cols" style="align-items:flex-start;gap:16px">
+          <!-- 左：实时牌桌（上帝全知 · 对齐游戏布局）+ 牌墙实牌 -->
+          <div class="grow">
+            <div class="card" style="margin-bottom:16px">
+              <div class="card-head">实时牌桌 · <span class="mono">inspect().state</span> <span class="sub">game-server 内存全量台态 · 无防透视 · 房间 212817 第 2 局 · 只读无操作按钮</span></div>
+              <div class="card-body" style="padding:16px">
+                <div class="board">
+                  <!-- 北 · seat3（当前行动 · Bot · 刚摸牌） -->
+                  <div class="seat seat-n">
+                    <div class="pinfo active"><span class="av">3</span><span class="nm">bot-3</span><span class="bdg bot">Bot</span><span class="sc">−12</span><span class="zi">子0</span></div>
+                    <div class="hand" data-size="t-sm" data-tiles="T1 T2 T3 B8 B9 Z4 Z6 W5 W6 B3!"></div>
+                    <div class="exposed">
+                      <div class="flower-area"><span class="flower-lbl">花</span><span class="hand" data-size="t-rv" data-tiles="H1"></span></div>
+                      <div class="melds"><div class="meld-item"><span class="hand" data-size="t-xs" data-tiles="T9 T9 T9"></span><span class="meld-lbl">碰</span></div></div>
+                    </div>
+                  </div>
+                  <!-- 西 · seat1（离线 · 托管） -->
+                  <div class="seat seat-w off">
+                    <div class="pinfo"><span class="av">张</span><span class="nm">老张</span><span class="bdg off">离线</span><span class="sc">−40</span><span class="zi">子0</span></div>
+                    <div class="hand" data-size="t-side" data-tiles="W4 W5 W6 T2 T3 B1 B2 B3 Z1 Z2 Z6 T8"></div>
+                    <div class="exposed">
+                      <div class="flower-area"><span class="flower-lbl">花</span><span class="hand" data-size="t-rv" data-tiles="H5 H6 H7"></span></div>
+                    </div>
+                  </div>
+                  <!-- 中央分区牌河：北弃(顶) / 西弃(左) · 信息 · 东弃(右) / 南弃(底) -->
+                  <div class="river">
+                    <div class="river-tag">北 · seat3 弃</div>
+                    <div class="river-row" data-size="t-rv" data-tiles="Z6 T8 B4"></div>
+                    <div class="river-mid">
+                      <div>
+                        <div class="river-tag" style="text-align:center">西 · seat1 弃</div>
+                        <div class="river-side river-w" data-size="t-rv" data-tiles="B2 Z1 H5"></div>
+                      </div>
+                      <div class="river-center">牌墙剩余 <b>42</b><br>当前 <b>seat3</b><br>phase <b>discard</b></div>
+                      <div>
+                        <div class="river-tag" style="text-align:center">东 · seat2 弃</div>
+                        <div class="river-side river-e" data-size="t-rv" data-tiles="T3 B6"></div>
+                      </div>
+                    </div>
+                    <div class="river-tag">南 · seat0 弃</div>
+                    <div class="river-row" data-size="t-rv" data-tiles="Z2 T1 W8!"></div>
+                  </div>
+                  <!-- 东 · seat2（庄） -->
+                  <div class="seat seat-e">
+                    <div class="pinfo"><span class="av">珍</span><span class="nm">阿珍</span><span class="bdg dealer">庄</span><span class="sc">+8</span><span class="zi">子2</span></div>
+                    <div class="hand" data-size="t-side" data-tiles="W7 W8 W9 T7 T8 B4 B5 Z3 Z7 W2"></div>
+                    <div class="exposed">
+                      <div class="flower-area"><span class="flower-lbl">花</span><span class="hand" data-size="t-rv" data-tiles="H8"></span></div>
+                      <div class="melds"><div class="meld-item"><span class="hand" data-size="t-xs" data-tiles="T4 T5 T6"></span><span class="meld-lbl">吃</span></div></div>
+                    </div>
+                  </div>
+                  <!-- 南 · seat0 -->
+                  <div class="seat seat-s">
+                    <div class="pinfo"><span class="av">凯</span><span class="nm">凯叔</span><span class="sc">+86</span><span class="zi">子3</span></div>
+                    <div class="hand" data-size="t-sm" data-tiles="W1 W1 W2 W3 T4 T5 B7 B8 B9 T6"></div>
+                    <div class="exposed">
+                      <div class="flower-area"><span class="flower-lbl">花</span><span class="hand" data-size="t-rv" data-tiles="H3 H4"></span></div>
+                      <div class="melds"><div class="meld-item"><span class="hand" data-size="t-xs" data-tiles="Z5 Z5 Z5"></span><span class="meld-lbl">碰</span></div></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 牌墙实牌顺序（真·全知：接下来会摸到什么） -->
+            <div class="card">
+              <div class="card-head">牌墙 · 剩余实牌顺序 <span class="sub">上帝视角：wall[] 摸牌顺序全露（游戏同款贴图）· 末尾 4 张死牌（荒庄不摸）</span></div>
+              <div class="card-body">
+                <div class="wall-strip">
+                  <div class="cap">剩余 <b class="mono">42</b> 张（可摸 38 + 死牌 4）· 下一张由 <b>seat3</b> 摸</div>
+                  <div class="tiles" data-size="t-xs" data-tiles="W3 T1 B9 Z2 H4 W8 T5 B2 Z7 H1 W6 T3 B8 Z5 H8 W1 T9 B4 Z4 H2 W9 T2 B7 Z6 H3 W4 T8 B1 Z1 H7 W7 T4 B6 H6 W5 T7 B3 H5 T6 W2 B5 Z3 BACK BACK BACK BACK"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 右：运维摘要（在等谁 / 停滞 / 响应 / timers / 仪式 / 审计） -->
+          <div class="mn-side" style="width:360px;flex-shrink:0">
+            <div class="card" style="margin-bottom:16px">
+              <div class="card-head">在等谁 · 停滞</div>
+              <div class="card-body">
+                <div class="alert alert-warn" style="margin-bottom:12px">当前行动 <b>seat3（bot-3）</b> 已 <b>38.2s</b> 未动作 · 局 phase <span class="tag tag-blue">discard</span> · round <span class="mono">2</span></div>
+                <div class="desc">
+                  <div class="k">stall.idleMs</div><div class="v"><span class="tag tag-red">38,200 ms</span></div>
+                  <div class="k">lastActionAt</div><div class="v mono">20:40:29</div>
+                  <div class="k">legalBySeat[3]</div><div class="v"><span class="tag">discard</span></div>
+                  <div class="k">牌墙剩余</div><div class="v mono">42（可摸 38）</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card" style="margin-bottom:16px">
+              <div class="card-head">响应意图 · timers</div>
+              <div class="card-body">
+                <div class="desc">
+                  <div class="k">pending 响应</div><div class="v muted">seat3 待响应 W8（可 pong / pass）· 其余 null</div>
+                  <div class="k">trusteePending</div><div class="v mono">[seat1]</div>
+                  <div class="k">offlineSince</div><div class="v mono">seat1 @ 20:40:10</div>
+                  <div class="k">seatingInputActive</div><div class="v">否</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card" style="margin-bottom:16px">
+              <div class="card-head">房间 / 仪式</div>
+              <div class="card-body">
+                <div class="desc">
+                  <div class="k">房间相位</div><div class="v"><span class="tag tag-green">playing</span></div>
+                  <div class="k">局数上限</div><div class="v mono">8</div>
+                  <div class="k">玩法</div><div class="v">physical · 摸牌位骰 开 · 先看吃再碰 开</div>
+                  <div class="k">庄家 / 连庄</div><div class="v">seat2 · 连庄 1</div>
+                  <div class="k">seating 仪式</div><div class="v muted">null（非仪式阶段）</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-head">调用审计 <span class="sub">开启监控 / 手动刷新记一次，自动轮询不逐条记</span></div>
+              <div class="card-body">
+                <div class="desc">
+                  <div class="k">who</div><div class="v mono">admin_root（super）</div>
+                  <div class="k">room</div><div class="v mono">212817</div>
+                  <div class="k">result</div><div class="v"><span class="tag tag-green">success</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 降级态示例 -->
+        <div class="card"><div class="card-head">降级态 <span class="sub">game-server 不可达 / 房已回收 / 非 playing</span></div>
+          <div class="card-body">
+            <div style="margin-bottom:12px"><span class="tag tag-gray">实时态不可用</span> <span class="muted">回退展示 MySQL 已落库事实（rooms.status / member_scores），牌桌区提示「实时台态不可用，无法呈现牌墙/手牌/牌河」</span></div>
+            <div class="desc">
+              <div class="k">rooms.status</div><div class="v"><span class="tag tag-gray">closed</span></div>
+              <div class="k">member_scores</div><div class="v mono">seat0 +86 · seat1 −12 · seat2 −40 · seat3 −34</div>
+              <div class="k">调用审计</div><div class="v muted">who=admin_root · room=212817 · result=fail（unreachable）→ 已降级</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 牌面渲染：TileId → res/tiles/<name>.png（复刻 TileAtlas.ts 映射；'!'=高亮/最新弃牌，BACK=牌背/死牌） -->
+  <script>
+    const WIND = { 1: 'wind_east', 2: 'wind_south', 3: 'wind_west', 4: 'wind_north' };
+    const DRAGON = { 5: 'dragon_zhong', 6: 'dragon_fa', 7: 'dragon_bai' };
+    const FLOWER = ['flower_spring', 'flower_summer', 'flower_autumn', 'flower_winter', 'flower_plum', 'flower_orchid', 'flower_bamboo', 'flower_chrys'];
+    function asset(id) {
+      const s = id.charAt(0), r = Number(id.slice(1));
+      if (s === 'W') return 'wan_' + r;
+      if (s === 'T') return 'tiao_green_' + r;
+      if (s === 'B') return 'tong_blue_' + r;
+      if (s === 'Z') return r <= 4 ? WIND[r] : DRAGON[r];
+      if (s === 'H') return FLOWER[r - 1];
+      return 'wan_1';
+    }
+    document.querySelectorAll('[data-tiles]').forEach((el) => {
+      const sz = el.dataset.size || 't-xs';
+      el.innerHTML = el.dataset.tiles.trim().split(/\s+/).map((tok) => {
+        if (tok === 'BACK') return '<span class="tile back ' + sz + '"></span>';
+        const hit = tok.endsWith('!') ? ' hit' : '';
+        const id = tok.replace('!', '');
+        return '<span class="tile ' + sz + hit + '"><img src="../res/tiles/' + asset(id) + '.png" alt="' + id + '"/></span>';
+      }).join('');
+    });
+  </script>
+</body>
+</html>

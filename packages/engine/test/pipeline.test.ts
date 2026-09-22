@@ -203,4 +203,10 @@ describe('BL-021 保底台数 v2（当前最佳拆解 recognize 口径）', () =
     const p2 = previewTai(c2, [], [], {});
     expect(p2.securedDetail.some((d) => d.name === '一条龙')).toBe(false);
   });
+  it('缺一门须无字（D-33）：两门数牌＋字牌 → 保底不计缺一门；同形无字 → 计', () => {
+    const withHonor = { W1: 1, W2: 1, W3: 1, T1: 1, T2: 1, T3: 1, Z1: 2 } as Record<string, number>;
+    expect(previewTai(withHonor, [], [], {}).securedDetail.some((d) => d.name === '缺一门')).toBe(false);
+    const noHonor = { W1: 1, W2: 1, W3: 1, T1: 1, T2: 1, T3: 1 } as Record<string, number>;
+    expect(previewTai(noHonor, [], [], {}).securedDetail.some((d) => d.name === '缺一门' && d.tai === 4)).toBe(true);
+  });
 });

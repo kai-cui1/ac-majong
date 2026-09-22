@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AC 麻将 · Admin — 诊断包受理</title>
+  <link rel="stylesheet" href="admin.css">
+</head>
+<body>
+  <div class="layout">
+    <aside class="sider">
+      <div class="sider-logo"><div class="tile">🀄</div><div class="txt">AC 麻将<small>管理后台</small></div></div>
+      <nav class="menu">
+        <div class="menu-group">查证</div>
+        <a class="menu-item" href="users.html"><span class="ico">👥</span> 用户管理</a>
+        <a class="menu-item" href="rooms.html"><span class="ico">🚪</span> 房间 / 对局</a>
+        <a class="menu-item" href="replay.html"><span class="ico">▶️</span> 回放仲裁</a>
+        <div class="menu-group">诊断 <span class="role-hint" style="color:rgba(255,255,255,.3);border-color:rgba(255,255,255,.2)">operator</span></div>
+        <a class="menu-item active" href="diag.html"><span class="ico">🩺</span> 诊断包受理 <span class="lock">🔒</span></a>
+        <a class="menu-item" href="monitor.html"><span class="ico">📡</span> 实时房间监控 <span class="lock">🔒</span></a>
+        <div class="menu-group">系统 <span class="role-hint" style="color:rgba(255,255,255,.3);border-color:rgba(255,255,255,.2)">super</span></div>
+        <a class="menu-item" href="admins.html"><span class="ico">🛡️</span> 管理员管理 <span class="lock">🔒</span></a>
+        <a class="menu-item" href="audit.html"><span class="ico">📜</span> 审计日志 <span class="lock">🔒</span></a>
+      </nav>
+    </aside>
+
+    <div class="main">
+      <header class="header">
+        <div class="crumb">诊断 / <b>诊断包受理</b></div>
+        <div class="spacer"></div>
+        <div class="who"><span class="avatar">R</span> admin_root · <b>super</b> · <a href="login.html">登出</a></div>
+      </header>
+
+      <div class="content">
+        <h1 class="page-title">诊断包受理</h1>
+        <p class="page-desc">粘贴玩家从<b>设置页「复制诊断包」</b>得到的 <span class="mono">ac-diag</span> JSON；后端<b>校验 / 规范化受理</b>（记审计、不落库本体），结构化展示现场上下文 / 消息环 / 报错栈，并可凭 room+round 一键跳「回放仲裁」。<b>operator+</b></p>
+
+        <!-- 1 粘贴受理 -->
+        <div class="card"><div class="card-head">1 · 粘贴诊断包</div>
+          <div class="card-body">
+            <textarea class="input" style="width:100%;height:132px;resize:vertical;font-family:var(--mono,monospace);font-size:12px;line-height:1.6" placeholder='{"at":1758460867000,"ctx":{"screen":"table","room":"212817","round":2,"phase":"exhaustive","cur":3,"mySeat":0},"ring":["view:table","msg:you.drawn","msg:discard",...],"errors":[{"at":...,"msg":"...","stack":"...","ctx":{...},"ring":[...]}]}'></textarea>
+            <div class="toolbar" style="margin-top:12px">
+              <button class="btn btn-primary">受理并解析</button>
+              <button class="btn">填入示例</button>
+              <button class="btn">清空</button>
+              <div class="grow"></div>
+              <span class="muted">受理记入审计（room / round / errors 数 / 受理人）· 不回传玩家 · 不落库诊断包本体</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2 解析结果（默认展示态：已受理示例包） -->
+        <div class="card"><div class="card-head">2 · 解析结果 <span class="sub">受理成功 · 已规范化（ring 截断至 60、stack 折叠）</span></div>
+          <div class="card-body">
+
+            <!-- 现场上下文 -->
+            <div class="desc" style="margin-bottom:14px">
+              <div class="k">screen</div><div class="v"><span class="tag tag-blue">table</span></div>
+              <div class="k">room</div><div class="v mono">212817</div>
+              <div class="k">round</div><div class="v">2</div>
+              <div class="k">phase</div><div class="v"><span class="tag tag-gold">exhaustive</span></div>
+              <div class="k">cur / mySeat</div><div class="v">seat3 / seat0</div>
+              <div class="k">诊断包时刻</div><div class="v">2026-09-21 20:41:07</div>
+            </div>
+            <div style="margin-bottom:20px">
+              <a class="btn btn-primary" href="replay.html">▶ 跳回放仲裁 · <span class="mono">212817-g2</span></a>
+              <span class="muted"> 凭 ctx.room + ctx.round 拼 gameId；room 有而 round 缺时跳房间详情</span>
+            </div>
+
+            <!-- 消息环 -->
+            <div class="card" style="box-shadow:none;border:1px solid var(--split);margin:0"><div class="card-head">消息环 ring <span class="sub">最近 ≤60 · 时间正序</span></div>
+              <div class="card-body">
+                <div style="display:flex;flex-wrap:wrap;gap:6px">
+                  <span class="tag tag-gray mono">view:table</span>
+                  <span class="tag tag-gray mono">msg:gameView</span>
+                  <span class="tag tag-gray mono">msg:you.drawn</span>
+                  <span class="tag tag-gray mono">act:discard W5</span>
+                  <span class="tag tag-gray mono">msg:responseNeeded</span>
+                  <span class="tag tag-gray mono">act:pass</span>
+                  <span class="tag tag-gray mono">msg:gameView</span>
+                  <span class="tag tag-gold mono">view:exhaustive</span>
+                  <span class="tag tag-red mono">err:1</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 报错列表 -->
+            <div class="card" style="box-shadow:none;border:1px solid var(--split);margin:16px 0 0"><div class="card-head">报错 errors <span class="sub">≤5 · 点击展开栈</span></div>
+              <div class="card-body flush">
+                <table class="table">
+                  <thead><tr><th>时刻</th><th>消息</th><th style="width:80px">栈</th></tr></thead>
+                  <tbody>
+                    <tr>
+                      <td class="nowrap">20:40:58</td>
+                      <td><span class="tag tag-red">TypeError</span> cannot read properties of undefined (reading 'settled')</td>
+                      <td><button class="btn btn-link">展开</button></td>
+                    </tr>
+                    <tr>
+                      <td class="nowrap">20:39:12</td>
+                      <td><span class="tag tag-gold">unhandledrejection</span> timeout waiting roomView</td>
+                      <td><button class="btn btn-link">展开</button></td>
+                    </tr>
+                  </tbody>
+                </table>
+                <div class="card-body" style="border-top:1px solid var(--split)">
+                  <div class="muted" style="margin-bottom:6px">栈（展开示例）</div>
+                  <pre class="mono" style="margin:0;font-size:12px;line-height:1.6;white-space:pre-wrap;color:var(--text-2)">at TableScreen.render (TableScreen.ts:412:28)
+at NetService.emit (NetService.ts:88:5)
+at ws.onmessage (ws.ts:31:11)</pre>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

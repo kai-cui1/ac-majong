@@ -97,6 +97,9 @@ importers:
 
   apps/game-server:
     dependencies:
+      '@ac-majong/ai':
+        specifier: workspace:*
+        version: link:../../packages/ai
       '@ac-majong/engine':
         specifier: workspace:*
         version: link:../../packages/engine
@@ -129,8 +132,27 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9(@types/node@22.20.2)
 
+  packages/ai:
+    dependencies:
+      '@ac-majong/engine':
+        specifier: workspace:*
+        version: link:../engine
+      '@ac-majong/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+    devDependencies:
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.9(@types/node@22.20.2)
+
   packages/client-core:
     dependencies:
+      '@ac-majong/ai':
+        specifier: workspace:*
+        version: link:../ai
       '@ac-majong/engine':
         specifier: workspace:*
         version: link:../engine
